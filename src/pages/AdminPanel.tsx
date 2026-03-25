@@ -768,92 +768,222 @@ function SettingsModule({ currentUser }: { currentUser: any }) {
 
 // ─── MODULE: 权限管理 ─────────────────────────────────────────────────
 function PermissionsModule() {
-  const { data: perms, loading, refetch } = useApiGet('/api/permissions');
-  const [local, setLocal] = useState<any[] | null>(null);
+  const { data: orgTree, loading: orgLoading } = useApiGet('/api/org/tree');
+  const { data: permDefs, loading: permLoading } = useApiGet('/api/permissions/definitions');
+
+  const [selectedUsers, setSelectedUsers] = useState<Set<string>>(new Set());
+  const [grantedKeys, setGrantedKeys] = useState<Set<string>>(new Set());
+  const [loadingPerms, setLoadingPerms] = useState(false);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState('');
+  const [expandedDepts, setExpandedDepts] = useState<Set<number>>(new Set());
+  const [deptMembers, setDeptMembers] = useState<Record<number, any[]>>({});
 
-  useEffect(() => { if (perms) setLocal(JSON.parse(JSON.stringify(perms))); }, [perms]);
+  const loading = orgLoading || permLoading;
 
-  const toggle = (key: string, role: string) => {
-    setLocal(prev => prev!.map(p => p.key === key ? { ...p, [role]: !p[role] } : p));
+  // 部门维度默认全部展开，并加载成员
+  useEffect(() => {
+    if (!orgTree?.length) return;
+    const topIds = orgTree.map((d: any) => d.id);
+    setExpandedDepts(new Set(topIds));
+    topIds.forEach((id: number) => loadDeptMembers(id));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orgTree]);
+
+  const loadDeptMembers = async (deptId: number) => {
+    if (deptMembers[deptId]) return;
+    const token = localStorage.getItem('token');
+    const res = await fetch(`/api/org/departments/${deptId}`, { headers: { Authorization: `Bearer ${token}` } });
+    const json = await res.json();
+    if (json.code === 0) setDeptMembers(prev => ({ ...prev, [deptId]: json.data.members || [] }));
+  };
+
+  const toggleDept = async (deptId: number) => {
+    const next = new Set(expandedDepts);
+    if (next.has(deptId)) next.delete(deptId);
+    else { next.add(deptId); await loadDeptMembers(deptId); }
+    setExpandedDepts(next);
+  };
+
+  const toggleAllInDept = (deptId: number) => {
+    const members = deptMembers[deptId] || [];
+    const ids = members.map((m: any) => m.id);
+    const allSelected = ids.every(id => selectedUsers.has(id));
+    const next = new Set(selectedUsers);
+    ids.forEach(id => allSelected ? next.delete(id) : next.add(id));
+    setSelectedUsers(next);
+  };
+
+  const toggleUser = (userId: string) => {
+    const next = new Set(selectedUsers);
+    next.has(userId) ? next.delete(userId) : next.add(userId);
+    setSelectedUsers(next);
+  };
+
+  useEffect(() => {
+    if (selectedUsers.size === 0) { setGrantedKeys(new Set()); return; }
+    const load = async () => {
+      setLoadingPerms(true);
+      const token = localStorage.getItem('token');
+      const firstId = [...selectedUsers][0];
+      const res = await fetch(`/api/permissions/user/${firstId}`, { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json());
+      setGrantedKeys(new Set(res.data || []));
+      setLoadingPerms(false);
+    };
+    load();
+  }, [selectedUsers]);
+
+  const togglePerm = (key: string) => {
+    const next = new Set(grantedKeys);
+    next.has(key) ? next.delete(key) : next.add(key);
+    setGrantedKeys(next);
   };
 
   const handleSave = async () => {
-    if (!local) return;
-    setSaving(true);
-    const res = await apiCall('/api/permissions', 'PUT', { permissions: local });
+    if (selectedUsers.size === 0) return;
+    setSaving(true); setMsg('');
+    const token = localStorage.getItem('token');
+    const grantedKeysArr = [...grantedKeys];
+    let ok = 0, fail = 0;
+    for (const userId of selectedUsers) {
+      const res = await fetch(`/api/permissions/user/${userId}`, {
+        method: 'PUT',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ grantedKeys: grantedKeysArr }),
+      }).then(r => r.json());
+      res.code === 0 ? ok++ : fail++;
+    }
     setSaving(false);
-    setMsg(res.code === 0 ? '✅ 权限配置已保存' : `❌ ${res.message}`);
-    if (res.code === 0) refetch();
+    setMsg(fail === 0 ? `✅ 已保存 ${ok} 人的权限` : `⚠️ ${ok} 成功，${fail} 失败`);
   };
 
-  const roles = [
-    { key: 'admin', label: '管理员', color: 'text-slate-600 bg-slate-100' },
-    { key: 'hr', label: 'HR', color: 'text-rose-600 bg-rose-50' },
-    { key: 'manager', label: '主管', color: 'text-blue-600 bg-blue-50' },
-    { key: 'employee', label: '员工', color: 'text-emerald-600 bg-emerald-50' },
-  ];
+  const renderTree = (nodes: any[]): React.ReactNode => nodes.map(dept => {
+    const members = deptMembers[dept.id] || [];
+    const isExpanded = expandedDepts.has(dept.id);
+    const allSel = members.length > 0 && members.every((m: any) => selectedUsers.has(m.id));
+    const someSel = members.some((m: any) => selectedUsers.has(m.id));
+    return (
+      <div key={dept.id}>
+        <div className="flex items-center gap-2 py-2 px-2 rounded-lg hover:bg-slate-100 cursor-pointer group" onClick={() => toggleDept(dept.id)}>
+          <span className={`material-symbols-outlined text-[14px] text-slate-400 transition-transform ${isExpanded ? 'rotate-90' : ''}`}>chevron_right</span>
+          <button onClick={e => { e.stopPropagation(); loadDeptMembers(dept.id).then(() => toggleAllInDept(dept.id)); }}
+            className={`w-4 h-4 rounded flex items-center justify-center border-2 transition-all shrink-0 ${allSel ? 'bg-violet-600 border-violet-600' : someSel ? 'bg-violet-200 border-violet-400' : 'border-slate-300 bg-white hover:border-violet-400'}`}>
+            {allSel && <span className="material-symbols-outlined text-white text-[10px]">check</span>}
+            {someSel && !allSel && <div className="w-1.5 h-1.5 bg-violet-500 rounded-sm"/>}
+          </button>
+          <span className="material-symbols-outlined text-[14px] text-violet-500">corporate_fare</span>
+          <span className="text-sm font-medium text-slate-700 flex-1">{dept.name}</span>
+          <span className="text-xs text-slate-400 opacity-0 group-hover:opacity-100">{dept.member_count} 人</span>
+        </div>
+        {isExpanded && (
+          <div className="ml-6">
+            {members.map((m: any) => (
+              <div key={m.id} onClick={() => toggleUser(m.id)}
+                className="flex items-center gap-2 py-1.5 px-2 rounded-lg hover:bg-slate-100 cursor-pointer">
+                <button className={`w-4 h-4 rounded flex items-center justify-center border-2 transition-all shrink-0 ${selectedUsers.has(m.id) ? 'bg-violet-600 border-violet-600' : 'border-slate-300 bg-white hover:border-violet-400'}`}>
+                  {selectedUsers.has(m.id) && <span className="material-symbols-outlined text-white text-[10px]">check</span>}
+                </button>
+                <div className="w-6 h-6 rounded-full bg-violet-100 text-violet-700 flex items-center justify-center text-xs font-bold shrink-0">{m.name[0]}</div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-medium text-slate-700 truncate">{m.name}</p>
+                  <p className="text-[10px] text-slate-400 truncate">{m.title || m.role}</p>
+                </div>
+              </div>
+            ))}
+            {members.length === 0 && <p className="text-xs text-slate-400 px-2 py-1">暂无直属成员</p>}
+            {dept.children?.length > 0 && renderTree(dept.children)}
+          </div>
+        )}
+      </div>
+    );
+  });
 
-  const modules = [...new Set((local || perms || []).map((p: any) => p.module))];
+  const permModules = [...new Set((permDefs || []).map((p: any) => p.module))];
+  const allMembers = Object.values(deptMembers).flat() as any[];
 
   return (
-    <div>
-      {loading ? <div className="text-center py-8 text-slate-400">加载中...</div> : (
-        <div>
-          <div className="flex items-center justify-between mb-4">
-            <p className="text-xs text-slate-500">定义各角色可访问的功能模块、操作权限与数据字段。管理员权限不可关闭。</p>
-            <div className="flex items-center gap-3">
-              {msg && <span className="text-sm">{msg}</span>}
-              <button onClick={handleSave} disabled={saving}
-                className="px-4 py-1.5 bg-slate-800 text-white text-sm font-medium rounded-lg hover:bg-slate-900 disabled:opacity-60 flex items-center gap-1.5">
-                <span className="material-symbols-outlined text-[14px]">{saving ? 'hourglass_empty' : 'save'}</span>
-                {saving ? '保存中...' : '保存权限'}
-              </button>
-            </div>
+    <div className="flex gap-0 min-h-[480px]">
+      {/* Left: Org Tree */}
+      <div className="w-64 shrink-0 border-r border-slate-100 pr-4 mr-5">
+        <div className="flex items-center justify-between mb-3">
+          <h4 className="text-xs font-bold text-slate-500 uppercase tracking-widest">选择人员</h4>
+          {selectedUsers.size > 0 && (
+            <button onClick={() => setSelectedUsers(new Set())} className="text-xs text-slate-400 hover:text-slate-600">清空 ({selectedUsers.size})</button>
+          )}
+        </div>
+        {loading ? <div className="text-sm text-slate-400 text-center py-8">加载中...</div> : (
+          <div className="space-y-0.5 max-h-[430px] overflow-y-auto">
+            {orgTree?.length ? renderTree(orgTree) : <p className="text-sm text-slate-400 text-center py-4">暂无组织数据</p>}
           </div>
+        )}
+      </div>
 
-          {modules.map(mod => (
-            <div key={mod as string} className="mb-5">
-              <h5 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">{mod as string}</h5>
-              <div className="bg-slate-50 rounded-xl overflow-hidden">
-                {/* Header row */}
-                <div className="grid grid-cols-5 text-xs font-bold text-slate-500 border-b border-slate-100 px-4 py-2">
-                  <div className="col-span-1">权限项</div>
-                  {roles.map(r => (
-                    <div key={r.key} className="text-center">
-                      <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-semibold ${r.color}`}>{r.label}</span>
-                    </div>
-                  ))}
-                </div>
-                {(local || []).filter((p: any) => p.module === mod).map((perm: any) => (
-                  <div key={perm.key} className="grid grid-cols-5 items-center px-4 py-2.5 border-b border-slate-100 last:border-0 hover:bg-slate-100/50 transition-colors">
-                    <div className="col-span-1 text-sm text-slate-700">{perm.label}</div>
-                    {roles.map(role => (
-                      <div key={role.key} className="flex justify-center">
-                        <button
-                          disabled={role.key === 'admin'}
-                          onClick={() => toggle(perm.key, role.key)}
-                          className={`w-6 h-6 rounded-md flex items-center justify-center transition-all ${
-                            perm[role.key]
-                              ? 'bg-emerald-500 text-white shadow-sm'
-                              : 'bg-white border-2 border-slate-200 text-transparent hover:border-slate-400'
-                          } ${role.key === 'admin' ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}
-                        >
-                          <span className="material-symbols-outlined text-[14px] font-bold">check</span>
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                ))}
+      {/* Right: Permission Toggles */}
+      <div className="flex-1 min-w-0">
+        {selectedUsers.size === 0 ? (
+          <div className="flex flex-col items-center justify-center h-full text-slate-400 py-16">
+            <span className="material-symbols-outlined text-[52px] mb-3 text-slate-200">person_search</span>
+            <p className="text-sm font-semibold text-slate-500">请在左侧选择人员或部门</p>
+            <p className="text-xs mt-1.5 text-slate-400">点击部门复选框可批量选择该部门所有成员</p>
+          </div>
+        ) : (
+          <div>
+            <div className="flex items-center gap-2 mb-3 flex-wrap">
+              <span className="text-xs text-slate-500 font-medium">已选：</span>
+              {[...selectedUsers].slice(0, 6).map(uid => {
+                const user = allMembers.find((m: any) => m.id === uid);
+                return (
+                  <span key={uid} className="flex items-center gap-1 px-2 py-0.5 bg-violet-50 border border-violet-200 text-violet-700 rounded-full text-xs font-medium">
+                    {user?.name || uid}
+                    <button onClick={e => { e.stopPropagation(); toggleUser(uid); }} className="hover:text-violet-900">×</button>
+                  </span>
+                );
+              })}
+              {selectedUsers.size > 6 && <span className="text-xs text-slate-400">+{selectedUsers.size - 6} 人</span>}
+            </div>
+
+            <div className="flex items-center justify-between mb-4">
+              <p className="text-xs text-slate-500">将权限应用至 <strong className="text-violet-600">{selectedUsers.size}</strong> 人（多人选中时以第一人权限为基准）</p>
+              <div className="flex items-center gap-3">
+                {msg && <span className="text-xs">{msg}</span>}
+                {loadingPerms && <span className="text-xs text-violet-500 flex items-center gap-1"><span className="material-symbols-outlined text-[12px]">sync</span>加载权限...</span>}
+                <button onClick={handleSave} disabled={saving || loadingPerms}
+                  className="px-4 py-1.5 bg-violet-600 text-white text-sm font-medium rounded-lg hover:bg-violet-700 disabled:opacity-60 flex items-center gap-1.5">
+                  <span className="material-symbols-outlined text-[14px]">{saving ? 'hourglass_empty' : 'save'}</span>
+                  {saving ? '保存中...' : '保存权限'}
+                </button>
               </div>
             </div>
-          ))}
-        </div>
-      )}
+
+            <div className="max-h-[380px] overflow-y-auto space-y-4 pr-1">
+              {permModules.map(mod => (
+                <div key={mod as string}>
+                  <h5 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">{mod as string}</h5>
+                  <div className="bg-slate-50 rounded-xl overflow-hidden">
+                    {(permDefs || []).filter((p: any) => p.module === mod).map((perm: any) => {
+                      const on = grantedKeys.has(perm.key);
+                      return (
+                        <div key={perm.key} onClick={() => togglePerm(perm.key)}
+                          className="flex items-center justify-between px-4 py-2.5 border-b border-slate-100 last:border-0 hover:bg-white cursor-pointer transition-colors">
+                          <span className="text-sm text-slate-700">{perm.label}</span>
+                          <div className={`relative w-10 h-5 rounded-full transition-all duration-200 ${on ? 'bg-violet-500' : 'bg-slate-200'}`}
+                            onClick={e => { e.stopPropagation(); togglePerm(perm.key); }}>
+                            <span className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform duration-200 ${on ? 'translate-x-5' : ''}`}/>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
+
 
 // ─── MAIN PAGE ────────────────────────────────────────────────────────
 const MODULES = [

@@ -12,6 +12,8 @@ export interface User {
 interface AuthContextType {
   currentUser: User | null;
   isAuthenticating: boolean;
+  userPerms: string[];          // ← 当前用户的有效权限 key 列表
+  hasPermission: (key: string) => boolean;
   loginWithMock: (userId: string) => Promise<void>;
   logout: () => void;
 }
@@ -19,6 +21,8 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType>({
   currentUser: null,
   isAuthenticating: true,
+  userPerms: [],
+  hasPermission: () => true,
   loginWithMock: async () => {},
   logout: () => {},
 });
@@ -28,6 +32,20 @@ export const useAuth = () => useContext(AuthContext);
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isAuthenticating, setIsAuthenticating] = useState(true);
+  const [userPerms, setUserPerms] = useState<string[]>([]);
+
+  const fetchPerms = async (userId: string) => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`/api/permissions/user/${userId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const json = await res.json();
+      if (json.code === 0) setUserPerms(json.data);
+    } catch {
+      // 网络错误时沿用空权限列表（不影响正常使用）
+    }
+  };
 
   const fetchCurrentUser = async (token: string) => {
     try {
@@ -38,6 +56,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const data = await res.json();
         if (data.code === 0 && data.data) {
           setCurrentUser(data.data);
+          await fetchPerms(data.data.id);
           return true;
         }
       }
@@ -54,14 +73,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const token = localStorage.getItem('token');
       
       if (token) {
-        // 尝试用已有 token 恢复用户身份
         const success = await fetchCurrentUser(token);
         if (!success) {
           localStorage.removeItem('token');
           setCurrentUser(null);
         }
       } else if (isWecom) {
-        // 在企微环境中，且没 token -> 执行 OAuth 流程
         const urlParams = new URLSearchParams(window.location.search);
         const code = urlParams.get('code');
         
@@ -76,6 +93,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             if (data.code === 0 && data.data?.token) {
               localStorage.setItem('token', data.data.token);
               setCurrentUser(data.data.user);
+              await fetchPerms(data.data.user.id);
               window.history.replaceState({}, document.title, window.location.pathname);
             }
           } catch (err) {
@@ -83,11 +101,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           }
         } else {
           window.location.href = '/api/auth/wecom-url';
-          return; // Redirecting, stay loading
+          return;
         }
-      } else {
-        // 不是企微环境，也没有 token，为了能顺畅测试，我们在这里可以默认登录 admin，或者等 DevSwitcher 操作
-        // 默认让它进页面，然后点击切换器再加载
       }
       
       setIsAuthenticating(false);
@@ -108,7 +123,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (data.code === 0 && data.data?.token) {
         localStorage.setItem('token', data.data.token);
         setCurrentUser(data.data.user);
-        window.location.reload(); // Hard reload to clear all states cleanly
+        window.location.reload();
       }
     } catch (err) {
       console.error('Mock login failed:', err);
@@ -122,8 +137,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     window.location.reload();
   };
 
+  const hasPermission = (key: string) => {
+    // 如果权限列表为空（未加载完成），暂时放行，避免闪烁
+    if (userPerms.length === 0) return true;
+    return userPerms.includes(key);
+  };
+
   return (
-    <AuthContext.Provider value={{ currentUser, isAuthenticating, loginWithMock, logout }}>
+    <AuthContext.Provider value={{ currentUser, isAuthenticating, userPerms, hasPermission, loginWithMock, logout }}>
       {children}
     </AuthContext.Provider>
   );

@@ -217,6 +217,15 @@ export function initDatabase(): void {
       employee_val INTEGER,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
+
+    -- ============ 用户级权限覆盖 (ACL) ============
+    CREATE TABLE IF NOT EXISTS user_perm_overrides (
+      user_id TEXT NOT NULL,
+      perm_key TEXT NOT NULL,
+      allowed INTEGER NOT NULL DEFAULT 1,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (user_id, perm_key)
+    );
   `);
 
   console.log('✅ Database tables initialized');

@@ -240,16 +240,16 @@ export default function TeamPerformance({ navigate }: { navigate: (view: string)
           </div>
         </section>
 
-        {/* Dynamic Member Cards */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+        {/* Dynamic Member Cards — 人员左右滑动 × 任务上下滑动 */}
+        <div className="flex gap-5 overflow-x-auto pb-4 -mx-2 px-2 snap-x snap-mandatory scroll-smooth">
           {subordinates.length === 0 ? (
-            <div className="col-span-full py-16 text-center text-slate-400 bg-white dark:bg-slate-900 rounded-2xl border border-dashed border-slate-200 dark:border-slate-800">
+            <div className="flex-none w-full py-16 text-center text-slate-400 bg-white dark:bg-slate-900 rounded-2xl border border-dashed border-slate-200 dark:border-slate-800">
               <span className="material-symbols-outlined text-5xl mb-3 block">group_off</span>
               <p className="text-sm font-bold">暂无下属成员数据</p>
             </div>
           ) : (
             subordinates.map(sub => (
-              <div key={sub.id} className="bg-surface-container-low rounded-xl p-6 transition-all hover:shadow-2xl hover:shadow-primary/5 group flex flex-col h-[400px]">
+              <div key={sub.id} className="flex-none w-72 snap-center bg-surface-container-low rounded-xl p-6 transition-all hover:shadow-2xl hover:shadow-primary/5 group flex flex-col" style={{ height: 'calc(100vh - 320px)', minHeight: '400px' }}>
                 <div className="flex justify-between items-start mb-6 shrink-0">
                   <div className="flex items-center space-x-4">
                     <div className="relative shrink-0">
