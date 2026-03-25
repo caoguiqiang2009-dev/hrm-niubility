@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { changelogData, getLatestVersion } from '../data/changelog';
 
 interface SidebarProps {
   currentView: string;
@@ -6,6 +7,10 @@ interface SidebarProps {
 }
 
 export default function Sidebar({ currentView, navigate }: SidebarProps) {
+  const [isNotifOpen, setIsNotifOpen] = useState(false);
+  const [hasUnread, setHasUnread] = useState(false);
+  const notifRef = useRef<HTMLDivElement>(null);
+
   const navItems = [
     { id: 'dashboard', icon: 'dashboard', label: '仪表盘' },
     { id: 'personal', icon: 'person', label: '个人管理' },
@@ -14,6 +19,31 @@ export default function Sidebar({ currentView, navigate }: SidebarProps) {
     { id: 'hrmap', icon: 'map', label: '人力地图' },
     { id: 'panorama', icon: 'view_quilt', label: '全景仪表盘' },
   ];
+
+  useEffect(() => {
+    // Check if user has read the latest version changelog
+    const lastSeenVersion = localStorage.getItem('hrm_last_seen_version');
+    if (lastSeenVersion !== getLatestVersion()) {
+      setHasUnread(true);
+    }
+
+    // Click outside to close generic handler
+    const handleClickOutside = (event: MouseEvent) => {
+      if (notifRef.current && !notifRef.current.contains(event.target as Node)) {
+        setIsNotifOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const handleNotifClick = () => {
+    setIsNotifOpen(!isNotifOpen);
+    if (hasUnread) {
+      setHasUnread(false);
+      localStorage.setItem('hrm_last_seen_version', getLatestVersion());
+    }
+  };
 
   return (
     <header className="h-16 w-full fixed top-0 left-0 right-0 flex items-center justify-between px-6 border-b border-slate-200/60 dark:border-slate-800/60 bg-slate-50 dark:bg-slate-950 font-['Inter'] z-50 transition-all duration-200">
@@ -63,10 +93,59 @@ export default function Sidebar({ currentView, navigate }: SidebarProps) {
           <span className="material-symbols-outlined text-sm">add</span>
           新建任务/申请
         </button>
-        <button className="p-1.5 rounded-lg hover:bg-slate-200/50 dark:hover:bg-slate-800/50 transition-colors relative">
-          <span className="material-symbols-outlined text-slate-500 text-[20px]">notifications</span>
-          <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full border-2 border-white dark:border-slate-950"></span>
-        </button>
+        
+        {/* Notifications / Changelog Dropdown */}
+        <div className="relative" ref={notifRef}>
+          <button 
+            onClick={handleNotifClick}
+            className={`p-1.5 rounded-lg transition-colors relative ${isNotifOpen ? 'bg-slate-200 dark:bg-slate-800' : 'hover:bg-slate-200/50 dark:hover:bg-slate-800/50'}`}
+          >
+            <span className="material-symbols-outlined text-slate-500 text-[20px]">notifications</span>
+            {hasUnread && (
+              <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full border-2 border-white dark:border-slate-950"></span>
+            )}
+          </button>
+          
+          {isNotifOpen && (
+            <div className="absolute right-0 mt-3 w-80 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl overflow-hidden z-[100] origin-top-right animate-in fade-in slide-in-from-top-4 duration-200">
+              <div className="bg-slate-50 dark:bg-slate-950/50 border-b border-slate-100 dark:border-slate-800 p-4">
+                <h3 className="text-sm font-bold text-slate-800 dark:text-slate-100 flex items-center justify-between">
+                  <span>版本更新日志</span>
+                  <span className="text-[10px] px-2 py-0.5 bg-primary/10 text-primary rounded-full">{getLatestVersion()}</span>
+                </h3>
+              </div>
+              <div className="max-h-96 overflow-y-auto p-4 space-y-6">
+                {changelogData.map((log, idx) => (
+                  <div key={log.version} className="relative pl-4 before:content-[''] before:absolute before:left-0 before:top-1.5 before:w-1.5 before:h-1.5 before:bg-[#0060a9] before:rounded-full">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs font-bold text-slate-800 dark:text-slate-200">{log.version} - {log.title}</span>
+                      <span className="text-[10px] text-slate-400">{log.date}</span>
+                    </div>
+                    {log.features.length > 0 && (
+                      <ul className="mt-2 space-y-1.5">
+                        {log.features.map((feat, fIdx) => (
+                          <li key={fIdx} className="text-[11px] text-slate-600 dark:text-slate-400 flex items-start">
+                            <span className="mr-1.5 mt-0.5 text-[#0060a9]">✨</span> {feat}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    {log.fixes && log.fixes.length > 0 && (
+                      <ul className="mt-2 space-y-1.5">
+                        {log.fixes.map((fix, fxIdx) => (
+                          <li key={fxIdx} className="text-[11px] text-slate-600 dark:text-slate-400 flex items-start">
+                            <span className="mr-1.5 mt-0.5 text-orange-500">🔧</span> {fix}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
         <button className="p-1.5 rounded-lg hover:bg-slate-200/50 dark:hover:bg-slate-800/50 transition-colors">
           <span className="material-symbols-outlined text-slate-500 text-[20px]">help</span>
         </button>

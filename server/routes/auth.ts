@@ -7,8 +7,11 @@ const router = Router();
 
 // 获取企微 OAuth 跳转链接
 router.get('/wecom-url', (req, res) => {
-  // 注意：在真实生产环境中，应使用实际绑定的域名
-  const redirectUri = encodeURIComponent('http://8.129.5.180:3001/'); 
+  // 动态获取当前访问的域名（如 nb.szyixikeji.com），支持 Nginx 等反代传过来的原始 Host
+  const protocol = req.headers['x-forwarded-proto'] || req.protocol;
+  const host = req.headers['x-forwarded-host'] || req.get('host');
+  const redirectUri = encodeURIComponent(`${protocol}://${host}/`); 
+  
   const appid = process.env.WECOM_CORP_ID || 'CORPID_MISSING';
   const agentid = process.env.WECOM_AGENT_ID || 'AGENTID_MISSING';
   const url = `https://open.weixin.qq.com/connect/oauth2/authorize?appid=${appid}&redirect_uri=${redirectUri}&response_type=code&scope=snsapi_base&state=HRM_LOGIN&agentid=${agentid}#wechat_redirect`;
