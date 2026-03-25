@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { changelogData, getLatestVersion } from '../data/changelog';
+import { useAuth } from '../context/AuthContext';
 
 interface SidebarProps {
   currentView: string;
@@ -10,6 +11,7 @@ export default function Sidebar({ currentView, navigate }: SidebarProps) {
   const [isNotifOpen, setIsNotifOpen] = useState(false);
   const [hasUnread, setHasUnread] = useState(false);
   const notifRef = useRef<HTMLDivElement>(null);
+  const { currentUser, logout } = useAuth();
 
   const navItems = [
     { id: 'dashboard', icon: 'dashboard', label: '仪表盘' },
@@ -18,6 +20,7 @@ export default function Sidebar({ currentView, navigate }: SidebarProps) {
     { id: 'company', icon: 'analytics', label: '公司绩效池' },
     { id: 'hrmap', icon: 'map', label: '人力地图' },
     { id: 'panorama', icon: 'view_quilt', label: '全景仪表盘' },
+    { id: 'org', icon: 'account_tree', label: '组织关系' },
   ];
 
   useEffect(() => {
@@ -89,7 +92,7 @@ export default function Sidebar({ currentView, navigate }: SidebarProps) {
           <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-[18px]">search</span>
           <input className="w-56 lg:w-72 pl-9 pr-4 py-1.5 bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800/60 rounded-lg focus:ring-2 focus:ring-[#0060a9]/20 text-xs placeholder:text-slate-400 outline-none transition-all focus:w-80" placeholder="搜索功能、员工或文档..." type="text" />
         </div>
-        <button className="px-4 py-1.5 rounded-lg bg-gradient-to-r from-[#0060a9] to-[#409eff] text-white font-bold text-xs shadow-md hover:shadow-lg hover:opacity-90 transition-all flex items-center justify-center gap-1 active:scale-95">
+        <button onClick={() => alert("功能开发中")} className="px-4 py-1.5 rounded-lg bg-gradient-to-r from-[#0060a9] to-[#409eff] text-white font-bold text-xs shadow-md hover:shadow-lg hover:opacity-90 transition-all flex items-center justify-center gap-1 active:scale-95">
           <span className="material-symbols-outlined text-sm">add</span>
           新建任务/申请
         </button>
@@ -146,7 +149,7 @@ export default function Sidebar({ currentView, navigate }: SidebarProps) {
           )}
         </div>
 
-        <button className="p-1.5 rounded-lg hover:bg-slate-200/50 dark:hover:bg-slate-800/50 transition-colors">
+        <button onClick={() => alert("功能开发中")} className="p-1.5 rounded-lg hover:bg-slate-200/50 dark:hover:bg-slate-800/50 transition-colors">
           <span className="material-symbols-outlined text-slate-500 text-[20px]">help</span>
         </button>
         <button onClick={() => navigate('admin')} className="p-1.5 rounded-lg hover:bg-slate-200/50 dark:hover:bg-slate-800/50 transition-colors" title="管理后台">
@@ -154,13 +157,13 @@ export default function Sidebar({ currentView, navigate }: SidebarProps) {
         </button>
         <div className="h-6 w-px bg-slate-200/60 dark:bg-slate-800/60 mx-1"></div>
         <div className="flex items-center gap-2 cursor-pointer">
-          <img alt="User avatar" className="w-8 h-8 rounded-full object-cover ring-2 ring-[#0060a9]/10" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDdrdTGDJYeBHfJTlatMpLqwsbtQ4gp5ZxDGcUSG1-JpEjvrW0oKbdaeF6RuWTWGt00FKgwLrZ8Nj2CxCxAFq3HGnlh1u_fIRvsrO5LlFbgpesyz0lGQFmHe_y4fVLCQBZA7qNoCR1qgHF6xlJIvVO1neRBE_gOglQFWToIPklhlTGSvOlJQrn3wmLzWS9y7Kuk5lIGSFLyjZHyXPnZxT7ESoReBjIp4QKWL5k3HAKXQeT03MJ17TReEVrjk22ijU6baqjCr2fFgE0" />
+          <img alt="User avatar" className="w-8 h-8 rounded-full object-cover ring-2 ring-[#0060a9]/10" src={currentUser?.avatar_url || "https://lh3.googleusercontent.com/aida-public/AB6AXuDdrdTGDJYeBHfJTlatMpLqwsbtQ4gp5ZxDGcUSG1-JpEjvrW0oKbdaeF6RuWTWGt00FKgwLrZ8Nj2CxCxAFq3HGnlh1u_fIRvsrO5LlFbgpesyz0lGQFmHe_y4fVLCQBZA7qNoCR1qgHF6xlJIvVO1neRBE_gOglQFWToIPklhlTGSvOlJQrn3wmLzWS9y7Kuk5lIGSFLyjZHyXPnZxT7ESoReBjIp4QKWL5k3HAKXQeT03MJ17TReEVrjk22ijU6baqjCr2fFgE0"} />
           <div className="hidden lg:block text-right">
-            <p className="text-xs font-bold text-slate-800 dark:text-slate-100 leading-tight">张伟</p>
-            <p className="text-[10px] text-slate-500 font-medium">高级产品经理</p>
+            <p className="text-xs font-bold text-slate-800 dark:text-slate-100 leading-tight">{currentUser?.name || "未知用户"}</p>
+            <p className="text-[10px] text-slate-500 font-medium">{currentUser?.title || "员工"}</p>
           </div>
         </div>
-        <button className="flex items-center justify-center gap-1 p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20 rounded-lg transition-all" title="退出登录">
+        <button onClick={logout} className="flex items-center justify-center gap-1 p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20 rounded-lg transition-all" title="退出登录">
           <span className="material-symbols-outlined text-[18px]">logout</span>
         </button>
       </div>

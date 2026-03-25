@@ -1,27 +1,152 @@
+import React, { useState, useEffect } from 'react';
 import Sidebar from '../components/Sidebar';
+import { useAuth } from '../context/AuthContext';
+
+interface PerfPlan {
+  id: number;
+  title: string;
+  description: string;
+  category: string;
+  status: string;
+  progress: number;
+  target_value: string;
+  deadline: string;
+  assignee_id: string;
+  creator_id: string;
+}
+
+interface Subordinate {
+  id: string;
+  name: string;
+  title: string;
+  avatar_url: string;
+  role: string;
+  score: number;
+  tasks: {
+    id: number;
+    title: string;
+    status: string;
+    deadline: string;
+    progress: number;
+  }[];
+}
 
 export default function TeamPerformance({ navigate }: { navigate: (view: string) => void }) {
+  const { currentUser } = useAuth();
+  const [approvals, setApprovals] = useState<PerfPlan[]>([]);
+  const [subordinates, setSubordinates] = useState<Subordinate[]>([]);
+  const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
+  const [newPlan, setNewPlan] = useState({ title: '', description: '', category: '业务', target_value: '', deadline: '', assignee_id: '' });
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (currentUser?.id) {
+      fetchApprovals();
+      fetchTeamStatus();
+    }
+  }, [currentUser]);
+
+  const fetchApprovals = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`/api/perf/my-approvals`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (data.code === 0) setApprovals(data.data);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const fetchTeamStatus = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`/api/perf/team-status`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (data.code === 0) setSubordinates(data.data);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleApprove = async (id: number) => {
+    try {
+      const token = localStorage.getItem('token');
+      await fetch(`/api/perf/plans/${id}/approve`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      fetchApprovals();
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleReject = async (id: number) => {
+    try {
+      const token = localStorage.getItem('token');
+      await fetch(`/api/perf/plans/${id}/reject`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ reason: '主管审阅驳回' })
+      });
+      fetchApprovals();
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleAssignPlan = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSubmitting(true);
+    try {
+      const token = localStorage.getItem('token');
+      // 1. 创建草稿
+      const createRes = await fetch('/api/perf/plans', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ 
+          ...newPlan, 
+          quarter: '2024 Q2', 
+          creator_id: currentUser?.id,
+          approver_id: currentUser?.id // 主管自己做审批人
+        })
+      });
+      const createData = await createRes.json();
+      
+      // 2. 将草稿提交并立刻审批通过 -> 进入 in_progress 状态
+      if (createData.code === 0 && createData.data?.id) {
+        const planId = createData.data.id;
+        await fetch(`/api/perf/plans/${planId}/submit`, { method: 'POST', headers: { 'Authorization': `Bearer ${token}` } });
+        await fetch(`/api/perf/plans/${planId}/approve`, { method: 'POST', headers: { 'Authorization': `Bearer ${token}` } });
+        
+        setIsAssignModalOpen(false);
+        setNewPlan({ title: '', description: '', category: '业务', target_value: '', deadline: '', assignee_id: '' });
+        fetchTeamStatus(); // Refresh subordinates' tasks after assigning
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   return (
     <div className="flex h-screen overflow-hidden bg-background text-on-surface font-body selection:bg-primary-fixed">
       <Sidebar currentView="team" navigate={navigate} />
 
-      {/* Main Content Canvas */}
       <main className="flex-1 h-[calc(100vh-4rem)] mt-16 overflow-y-auto">
-
         <div className="pt-4 pb-12 px-8">
-          {/* Section Header */}
           <section className="mb-8 flex justify-between items-end">
           <div>
             <h2 className="text-3xl font-black text-on-surface font-headline tracking-tight">团队绩效与任务追踪</h2>
-            <p className="text-on-surface-variant font-label mt-1">实时概览核心团队成员的能力模型与产出效率</p>
+            <p className="text-on-surface-variant font-label mt-1">作为主管 {currentUser?.name}，管理团队目标申请与向下派发</p>
           </div>
           <div className="flex space-x-3">
-            <div className="flex p-1 bg-surface-container-high rounded-xl">
-              <button className="px-4 py-1.5 bg-surface-container-lowest text-primary font-bold rounded-lg text-sm shadow-sm transition-all">所有部门</button>
-              <button className="px-4 py-1.5 text-on-surface-variant font-medium rounded-lg text-sm hover:bg-white/50 transition-all">产品开发</button>
-              <button className="px-4 py-1.5 text-on-surface-variant font-medium rounded-lg text-sm hover:bg-white/50 transition-all">市场推广</button>
-            </div>
-            <button className="flex items-center px-4 py-2 bg-surface-container-highest text-on-surface rounded-xl font-bold text-sm hover:bg-surface-variant transition-all">
+            <button onClick={() => alert("功能开发中")} className="flex items-center px-4 py-2 bg-surface-container-highest text-on-surface rounded-xl font-bold text-sm hover:bg-surface-variant transition-all">
               <span className="material-symbols-outlined text-sm mr-2">filter_list</span>
               高级筛选
             </button>
@@ -29,45 +154,69 @@ export default function TeamPerformance({ navigate }: { navigate: (view: string)
         </section>
 
         {/* Quick Action Cards Section */}
-        <section className="mb-8 grid grid-cols-1 md:grid-cols-3 gap-6">
-          {/* Action 1: Pending Review */}
-          <div className="bg-white border border-surface-container rounded-2xl p-5 shadow-sm hover:shadow-md transition-all cursor-pointer group flex items-center justify-between">
+        <section className="mb-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="bg-white border border-surface-container rounded-2xl p-5 shadow-sm hover:shadow-md transition-all cursor-default group flex items-center justify-between">
             <div className="flex items-center space-x-4">
               <div className="w-12 h-12 rounded-xl bg-secondary/10 flex items-center justify-center group-hover:bg-secondary transition-colors">
                 <span className="material-symbols-outlined text-secondary group-hover:text-white">assignment_turned_in</span>
               </div>
               <div>
-                <h4 className="font-bold text-on-surface">待办审核</h4>
-                <p className="text-xs text-on-surface-variant mt-0.5">审核下级的目标或请假申请</p>
+                <h4 className="font-bold text-on-surface">待办审核 ({approvals.length})</h4>
+                <p className="text-xs text-on-surface-variant mt-0.5">请重点关注下方的审批看板</p>
               </div>
             </div>
-            <span className="bg-error text-white text-[10px] font-black px-2 py-0.5 rounded-full min-w-[20px] text-center">5</span>
+            {approvals.length > 0 && <span className="bg-error text-white text-[10px] font-black px-2 py-0.5 rounded-full min-w-[20px] text-center animate-pulse">{approvals.length}</span>}
           </div>
           
-          {/* Action 2: Initiate Task */}
-          <div className="bg-white border border-surface-container rounded-2xl p-5 shadow-sm hover:shadow-md transition-all cursor-pointer group flex items-center space-x-4">
+          <div onClick={() => { setIsAssignModalOpen(true); setNewPlan(p => ({ ...p, assignee_id: subordinates[0]?.id || '' })); }} className="bg-white border border-surface-container rounded-2xl p-5 shadow-sm hover:shadow-md transition-all cursor-pointer group flex items-center space-x-4">
             <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center group-hover:bg-primary transition-colors">
               <span className="material-symbols-outlined text-primary group-hover:text-white">add_task</span>
             </div>
             <div>
-              <h4 className="font-bold text-on-surface">发起任务</h4>
-              <p className="text-xs text-on-surface-variant mt-0.5">给下级发起新任务或指标</p>
-            </div>
-          </div>
-
-          {/* Action 3: Apply Upwards */}
-          <div className="bg-white border border-surface-container rounded-2xl p-5 shadow-sm hover:shadow-md transition-all cursor-pointer group flex items-center space-x-4">
-            <div className="w-12 h-12 rounded-xl bg-tertiary-fixed-dim/20 flex items-center justify-center group-hover:bg-tertiary transition-colors">
-              <span className="material-symbols-outlined text-tertiary group-hover:text-white">rocket_launch</span>
-            </div>
-            <div>
-              <h4 className="font-bold text-on-surface">往上级申请</h4>
-              <p className="text-xs text-on-surface-variant mt-0.5">提交资源申请、目标变更或请假</p>
+              <h4 className="font-bold text-on-surface tracking-tight">向下发起任务</h4>
+              <p className="text-xs text-on-surface-variant mt-0.5">给团队成员强势派发新指标</p>
             </div>
           </div>
         </section>
 
-        {/* Team Overall Progress Section */}
+        {/* Dynamic Approvals Board */}
+        {approvals.length > 0 && (
+          <section className="mb-10 animate-in fade-in slide-in-from-bottom-4">
+            <h3 className="text-xl font-black font-headline text-on-surface mb-4 flex items-center">
+              <span className="material-symbols-outlined text-amber-500 mr-2">pending_actions</span>
+              待您审批的绩效申请
+            </h3>
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+              {approvals.map(plan => (
+                <div key={plan.id} className="bg-amber-50/50 border border-amber-200 dark:bg-amber-900/10 dark:border-amber-900/30 p-5 rounded-2xl flex flex-col sm:flex-row justify-between gap-4 group hover:shadow-md transition-all relative overflow-hidden">
+                  <div className="absolute top-0 left-0 w-1.5 h-full bg-amber-400"></div>
+                  <div className="pl-2">
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <span className="text-[10px] font-bold px-2 py-0.5 bg-amber-200/50 text-amber-700 rounded-lg">来自: {plan.assignee_id}</span>
+                      <span className="text-[10px] font-bold px-2 py-0.5 bg-slate-200/50 text-slate-700 rounded-lg">{plan.category}</span>
+                    </div>
+                    <h4 className="text-lg font-bold text-slate-800 dark:text-slate-100">{plan.title}</h4>
+                    <p className="text-sm text-slate-600 dark:text-slate-400 mt-1 line-clamp-2">{plan.description}</p>
+                    <div className="flex items-center gap-4 mt-3 text-xs text-slate-500">
+                      <span>🎯 目标: {plan.target_value}</span>
+                      <span>📅 截止: {plan.deadline}</span>
+                    </div>
+                  </div>
+                  <div className="flex sm:flex-col items-center justify-end gap-2 shrink-0">
+                    <button onClick={() => handleApprove(plan.id)} className="w-full sm:w-28 px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-xl text-sm transition-all shadow-sm flex items-center justify-center gap-1 active:scale-95">
+                      <span className="material-symbols-outlined text-[16px]">check_circle</span> 通过
+                    </button>
+                    <button onClick={() => handleReject(plan.id)} className="w-full sm:w-28 px-4 py-2 bg-white dark:bg-slate-800 border border-rose-200 dark:border-rose-900/50 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 font-bold rounded-xl text-sm transition-all flex items-center justify-center gap-1 active:scale-95">
+                       <span className="material-symbols-outlined text-[16px]">cancel</span> 驳回
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* Team Overview Section (Bento Grid) */}
         <section className="mb-10 bg-white border border-surface-container rounded-2xl p-6 shadow-sm">
           <div className="flex flex-col lg:flex-row lg:items-center gap-8">
             <div className="flex-grow">
@@ -87,280 +236,149 @@ export default function TeamPerformance({ navigate }: { navigate: (view: string)
               <div className="w-full bg-surface-container rounded-full h-3 overflow-hidden">
                 <div className="bg-gradient-to-r from-primary to-primary-container h-full rounded-full transition-all duration-1000" style={{ width: '72%' }}></div>
               </div>
-              <div className="flex justify-between mt-2 text-[10px] font-bold text-outline uppercase font-label">
-                <span>开始</span>
-                <span>里程碑 1</span>
-                <span>当前进度</span>
-                <span>目标</span>
-              </div>
-            </div>
-            <div className="flex gap-4 lg:border-l lg:border-surface-container lg:pl-8">
-              <div className="px-4 py-2">
-                <p className="text-[10px] font-bold text-on-surface-variant uppercase font-label mb-1">活跃任务数</p>
-                <div className="flex items-baseline gap-1">
-                  <span className="text-2xl font-black text-on-surface">24</span>
-                  <span className="text-xs text-on-surface-variant font-medium">/ 32</span>
-                </div>
-              </div>
-              <div className="px-4 py-2 border-x border-surface-container">
-                <p className="text-[10px] font-bold text-on-surface-variant uppercase font-label mb-1">逾期任务数</p>
-                <div className="flex items-baseline gap-1">
-                  <span className="text-2xl font-black text-error">2</span>
-                  <span className="text-[10px] text-error font-bold flex items-center">
-                    <span className="material-symbols-outlined text-[10px] mr-0.5">warning</span>
-                    需关注
-                  </span>
-                </div>
-              </div>
-              <div className="px-4 py-2">
-                <p className="text-[10px] font-bold text-on-surface-variant uppercase font-label mb-1">平均达成率</p>
-                <div className="flex items-baseline gap-1">
-                  <span className="text-2xl font-black text-on-surface">88%</span>
-                  <span className="text-[10px] text-secondary font-bold">↑ 4.2%</span>
-                </div>
-              </div>
             </div>
           </div>
         </section>
 
-        {/* Bento Grid: Member Cards */}
+        {/* Dynamic Member Cards */}
         <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-          {/* Member Card 1 */}
-          <div className="bg-surface-container-low rounded-xl p-6 transition-all hover:shadow-2xl hover:shadow-primary/5 cursor-pointer group">
-            <div className="flex justify-between items-start mb-6">
-              <div className="flex items-center space-x-4">
-                <div className="relative">
-                  <img alt="Member Avatar" className="w-16 h-16 rounded-2xl object-cover ring-4 ring-white shadow-sm" src="https://lh3.googleusercontent.com/aida-public/AB6AXuChC7ybweytlrFKGiYebzIzmNzv3_C76fS6oPIppUoJ0D90u2NPDGBdwkcAkzzflnd8kIApWB4S6gS4U2oi3oWd0n-W_dZ66M8dj0kp5krpZLz95GKcI7uyhDAX5Eq1A7WYrQqktFoLuIO3vNpjTu_HaFKdOBYiqVDnz_XJFKeq93GwJVMWalBG196BM9ceWHnHSAiW-8sStGqQ32P6V-EPmYqWmflBJp9nxZor5v1D1nVbTpxbUxS1aoinQq_6F0MOhVoBi_uR6Z0" />
-                  <span className="absolute -bottom-1 -right-1 w-4 h-4 bg-secondary border-2 border-white rounded-full"></span>
-                </div>
-                <div>
-                  <h3 className="text-lg font-black font-headline">李晓月</h3>
-                  <p className="text-xs text-on-surface-variant font-label tracking-wide uppercase">高级产品经理</p>
-                </div>
-              </div>
-              <div className="flex flex-col items-end">
-                <span className="text-2xl font-black text-primary">94</span>
-                <span className="text-[10px] text-on-surface-variant font-label uppercase">绩效评分</span>
-              </div>
+          {subordinates.length === 0 ? (
+            <div className="col-span-full py-16 text-center text-slate-400 bg-white dark:bg-slate-900 rounded-2xl border border-dashed border-slate-200 dark:border-slate-800">
+              <span className="material-symbols-outlined text-5xl mb-3 block">group_off</span>
+              <p className="text-sm font-bold">暂无下属成员数据</p>
             </div>
-            <div className="grid grid-cols-2 gap-4 mb-6">
-              {/* Mini Radar Chart Mockup */}
-              <div className="bg-surface-container-lowest rounded-xl p-3 radar-grid flex items-center justify-center relative overflow-hidden">
-                <div className="absolute inset-0 bg-primary/5"></div>
-                <svg className="w-24 h-24 transform -rotate-90 relative z-10" viewBox="0 0 100 100">
-                  <polygon fill="none" points="50,10 85,35 75,80 25,80 15,35" stroke="#c0c7d4" strokeWidth="0.5"></polygon>
-                  <polygon fill="rgba(0, 96, 169, 0.2)" points="50,20 75,40 65,70 35,70 25,40" stroke="#0060a9" strokeWidth="2"></polygon>
-                </svg>
-                <span className="absolute bottom-1 text-[8px] font-label text-on-surface-variant">核心能力模型</span>
-              </div>
-              {/* Performance Trend */}
-              <div className="bg-surface-container-lowest rounded-xl p-3 flex flex-col justify-between">
-                <div className="flex justify-between items-center">
-                  <span className="text-[10px] font-bold text-on-surface-variant uppercase">趋势</span>
-                  <span className="text-secondary text-[10px] font-bold">+12%</span>
+          ) : (
+            subordinates.map(sub => (
+              <div key={sub.id} className="bg-surface-container-low rounded-xl p-6 transition-all hover:shadow-2xl hover:shadow-primary/5 group flex flex-col h-[400px]">
+                <div className="flex justify-between items-start mb-6 shrink-0">
+                  <div className="flex items-center space-x-4">
+                    <div className="relative shrink-0">
+                      {sub.avatar_url ? (
+                        <img alt={sub.name} className="w-16 h-16 rounded-2xl object-cover ring-4 ring-white shadow-sm" src={sub.avatar_url} />
+                      ) : (
+                        <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-primary/20 to-secondary/20 flex items-center justify-center font-black text-xl text-primary ring-4 ring-white shadow-sm">
+                          {sub.name[0]}
+                        </div>
+                      )}
+                      <span className={`absolute -bottom-1 -right-1 w-4 h-4 border-2 border-white rounded-full ${sub.role === 'manager' ? 'bg-amber-400' : 'bg-secondary'}`}></span>
+                    </div>
+                    <div className="min-w-0">
+                      <h3 className="text-lg font-black font-headline truncate">{sub.name} ({sub.id})</h3>
+                      <p className="text-xs text-on-surface-variant font-label tracking-wide uppercase truncate">{sub.title || '员工'}</p>
+                    </div>
+                  </div>
+                  <div className="flex flex-col items-end shrink-0 pl-2">
+                    <span className="text-2xl font-black text-primary">{sub.score || 90}</span>
+                    <span className="text-[10px] text-on-surface-variant font-label uppercase">绩效预估</span>
+                  </div>
                 </div>
-                <div className="flex items-end justify-between h-12 px-1">
-                  <div className="w-1.5 bg-surface-variant rounded-full h-4"></div>
-                  <div className="w-1.5 bg-surface-variant rounded-full h-6"></div>
-                  <div className="w-1.5 bg-primary rounded-full h-8"></div>
-                  <div className="w-1.5 bg-primary rounded-full h-10"></div>
-                  <div className="w-1.5 bg-primary rounded-full h-7"></div>
-                </div>
-              </div>
-            </div>
-            <div className="space-y-3">
-              <h4 className="text-xs font-bold text-on-surface-variant uppercase flex items-center">
-                <span className="material-symbols-outlined text-xs mr-1">task_alt</span>
-                当前关键任务 (3)
-              </h4>
-              <div className="space-y-2">
-                <div className="p-2.5 bg-white/60 rounded-lg flex items-center justify-between group-hover:bg-white transition-colors">
-                  <span className="text-sm font-medium">Q3 路线图规划</span>
-                  <span className="text-[10px] px-2 py-0.5 bg-secondary-container text-on-secondary-container rounded-full font-bold">进行中</span>
-                </div>
-                <div className="p-2.5 bg-white/60 rounded-lg flex items-center justify-between group-hover:bg-white transition-colors">
-                  <span className="text-sm font-medium">用户访谈报告汇总</span>
-                  <span className="text-[10px] px-2 py-0.5 bg-surface-container-highest text-on-surface-variant rounded-full font-bold">待审核</span>
-                </div>
-                <div className="p-2.5 bg-white/60 rounded-lg flex items-center justify-between group-hover:bg-white transition-colors">
-                  <span className="text-sm font-medium">跨部门资源协调会议</span>
-                  <span className="text-[10px] px-2 py-0.5 bg-primary-fixed text-on-primary-fixed rounded-full font-bold">今天 14:00</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Member Card 2 */}
-          <div className="bg-surface-container-low rounded-xl p-6 transition-all hover:shadow-2xl hover:shadow-primary/5 cursor-pointer group">
-            <div className="flex justify-between items-start mb-6">
-              <div className="flex items-center space-x-4">
-                <div className="relative">
-                  <img alt="Member Avatar" className="w-16 h-16 rounded-2xl object-cover ring-4 ring-white shadow-sm" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCIrzh3kq9-Hh49f0vaoW5UE6e0C51b5ZsVJeBXJoGzsKw2fb725S69WiGjY_oPkBva6wc-2hJTEqdnkLNAIOj2is-G2LMsDHOf53nkczEnAmK7kUzI527r0ATV9WfjZOyhfR1rUeKfIXTyj0wOoTimnIMpjMdXcrDx_p9vMEmCc49WTdp2rQcswVlG6uC4XsgKx8lKGrsiNjbRmNwbz8dfhNtl95NuS9PIygQkzpmyoDzf8LUg3B-HxabEGRAS7w40HieRhToLBw0" />
-                  <span className="absolute -bottom-1 -right-1 w-4 h-4 bg-secondary border-2 border-white rounded-full"></span>
-                </div>
-                <div>
-                  <h3 className="text-lg font-black font-headline">张建华</h3>
-                  <p className="text-xs text-on-surface-variant font-label tracking-wide uppercase">全栈开发工程师</p>
-                </div>
-              </div>
-              <div className="flex flex-col items-end">
-                <span className="text-2xl font-black text-primary">88</span>
-                <span className="text-[10px] text-on-surface-variant font-label uppercase">绩效评分</span>
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-4 mb-6">
-              <div className="bg-surface-container-lowest rounded-xl p-3 radar-grid flex items-center justify-center relative overflow-hidden">
-                <div className="absolute inset-0 bg-primary/5"></div>
-                <svg className="w-24 h-24 transform -rotate-90 relative z-10" viewBox="0 0 100 100">
-                  <polygon fill="none" points="50,10 85,35 75,80 25,80 15,35" stroke="#c0c7d4" strokeWidth="0.5"></polygon>
-                  <polygon fill="rgba(0, 96, 169, 0.2)" points="50,15 80,45 70,75 40,85 10,40" stroke="#0060a9" strokeWidth="2"></polygon>
-                </svg>
-                <span className="absolute bottom-1 text-[8px] font-label text-on-surface-variant">核心能力模型</span>
-              </div>
-              <div className="bg-surface-container-lowest rounded-xl p-3 flex flex-col justify-between">
-                <div className="flex justify-between items-center">
-                  <span className="text-[10px] font-bold text-on-surface-variant uppercase">趋势</span>
-                  <span className="text-error text-[10px] font-bold">-2%</span>
-                </div>
-                <div className="flex items-end justify-between h-12 px-1">
-                  <div className="w-1.5 bg-primary rounded-full h-10"></div>
-                  <div className="w-1.5 bg-primary rounded-full h-9"></div>
-                  <div className="w-1.5 bg-primary rounded-full h-8"></div>
-                  <div className="w-1.5 bg-surface-variant rounded-full h-7"></div>
-                  <div className="w-1.5 bg-surface-variant rounded-full h-6"></div>
+                
+                <div className="space-y-3 flex-1 flex flex-col min-h-0">
+                  <h4 className="text-xs font-bold text-on-surface-variant uppercase flex items-center shrink-0">
+                    <span className="material-symbols-outlined text-xs mr-1">task_alt</span>
+                    当前分配的关键任务 ({sub.tasks?.length || 0})
+                  </h4>
+                  <div className="space-y-2 flex-1 overflow-y-auto pr-1">
+                    {!sub.tasks || sub.tasks.length === 0 ? (
+                      <div className="text-xs text-slate-400 py-6 text-center border border-dashed border-slate-200 dark:border-slate-700/50 rounded-lg">该成员暂无可追踪的绩效任务</div>
+                    ) : (
+                      sub.tasks.map(task => (
+                        <div key={task.id} className="p-3 bg-white/80 dark:bg-slate-800/80 rounded-lg flex flex-col gap-1.5 border border-slate-100 dark:border-slate-700/50 hover:border-primary/30 transition-colors">
+                          <div className="flex items-start justify-between gap-2">
+                            <span className="text-sm font-bold text-slate-800 dark:text-slate-100 line-clamp-2 leading-tight">{task.title}</span>
+                            <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold whitespace-nowrap shrink-0 ${
+                              task.status === 'completed' || task.status === 'assessed' ? 'bg-purple-100 text-purple-700' :
+                              task.status === 'in_progress' ? 'bg-blue-100 text-blue-700' :
+                              task.status === 'pending_review' ? 'bg-amber-100 text-amber-700' :
+                              task.status === 'rejected' ? 'bg-rose-100 text-rose-700' : 'bg-slate-100 text-slate-700'
+                            }`}>
+                              {task.status === 'completed' || task.status === 'assessed' ? '待考核' :
+                               task.status === 'in_progress' ? '进行中' :
+                               task.status === 'pending_review' ? '待审批' :
+                               task.status === 'rejected' ? '被驳回' : '挂起'}
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between text-[10px] text-slate-400 mt-0.5">
+                            <span className="flex items-center gap-1 font-medium"><span className="material-symbols-outlined text-[10px]">schedule</span> 截止: {task.deadline}</span>
+                            <span className="font-bold text-primary">进度: {task.progress || 0}%</span>
+                          </div>
+                          <div className="h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden mt-1">
+                            <div className="h-full bg-gradient-to-r from-primary to-secondary rounded-full" style={{ width: `${task.progress || 0}%` }}></div>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
-            <div className="space-y-3">
-              <h4 className="text-xs font-bold text-on-surface-variant uppercase flex items-center">
-                <span className="material-symbols-outlined text-xs mr-1">task_alt</span>
-                当前关键任务 (3)
-              </h4>
-              <div className="space-y-2">
-                <div className="p-2.5 bg-white/60 rounded-lg flex items-center justify-between group-hover:bg-white transition-colors">
-                  <span className="text-sm font-medium">后端 API 性能优化</span>
-                  <span className="text-[10px] px-2 py-0.5 bg-secondary-container text-on-secondary-container rounded-full font-bold">已完成 80%</span>
-                </div>
-                <div className="p-2.5 bg-white/60 rounded-lg flex items-center justify-between group-hover:bg-white transition-colors">
-                  <span className="text-sm font-medium">数据库迁移方案设计</span>
-                  <span className="text-[10px] px-2 py-0.5 bg-error-container text-on-error-container rounded-full font-bold">高优先级</span>
-                </div>
-                <div className="p-2.5 bg-white/60 rounded-lg flex items-center justify-between group-hover:bg-white transition-colors">
-                  <span className="text-sm font-medium">新员工入职技术培训</span>
-                  <span className="text-[10px] px-2 py-0.5 bg-surface-container-highest text-on-surface-variant rounded-full font-bold">下周开始</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Member Card 3 */}
-          <div className="bg-surface-container-low rounded-xl p-6 transition-all hover:shadow-2xl hover:shadow-primary/5 cursor-pointer group">
-            <div className="flex justify-between items-start mb-6">
-              <div className="flex items-center space-x-4">
-                <div className="relative">
-                  <img alt="Member Avatar" className="w-16 h-16 rounded-2xl object-cover ring-4 ring-white shadow-sm" src="https://lh3.googleusercontent.com/aida-public/AB6AXuC8NiGRp9CSkyxf45rs-wniV6v_gYye6WRV2e7olrXnMkM09jPnjqKTGg1G1Lx88tzKRDnkRi2JPwyiVx0rPFKcv_CWztNHk3KV6RpxpuseV0-dH6fH9WHAOsvLfT2P4hSOj0_bwqmhN6LhD3ubpRt_TulkzpoyWsNwy1e-5AEwspk8D7VS9nCXdI_9eL6n6Kh7a7eAAbzX7Go1smtSyFuyc5Yvog61bbp-Q0rJ93xPtdmthsvSFMX8d0mHKUfWThGKYQbbKxdE4ok" />
-                  <span className="absolute -bottom-1 -right-1 w-4 h-4 bg-outline-variant border-2 border-white rounded-full"></span>
-                </div>
-                <div>
-                  <h3 className="text-lg font-black font-headline">陈思雨</h3>
-                  <p className="text-xs text-on-surface-variant font-label tracking-wide uppercase">视觉设计主管</p>
-                </div>
-              </div>
-              <div className="flex flex-col items-end">
-                <span className="text-2xl font-black text-primary">91</span>
-                <span className="text-[10px] text-on-surface-variant font-label uppercase">绩效评分</span>
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-4 mb-6">
-              <div className="bg-surface-container-lowest rounded-xl p-3 radar-grid flex items-center justify-center relative overflow-hidden">
-                <div className="absolute inset-0 bg-primary/5"></div>
-                <svg className="w-24 h-24 transform -rotate-90 relative z-10" viewBox="0 0 100 100">
-                  <polygon fill="none" points="50,10 85,35 75,80 25,80 15,35" stroke="#c0c7d4" strokeWidth="0.5"></polygon>
-                  <polygon fill="rgba(0, 96, 169, 0.2)" points="50,12 80,30 65,75 30,75 20,40" stroke="#0060a9" strokeWidth="2"></polygon>
-                </svg>
-                <span className="absolute bottom-1 text-[8px] font-label text-on-surface-variant">核心能力模型</span>
-              </div>
-              <div className="bg-surface-container-lowest rounded-xl p-3 flex flex-col justify-between">
-                <div className="flex justify-between items-center">
-                  <span className="text-[10px] font-bold text-on-surface-variant uppercase">趋势</span>
-                  <span className="text-secondary text-[10px] font-bold">+5%</span>
-                </div>
-                <div className="flex items-end justify-between h-12 px-1">
-                  <div className="w-1.5 bg-surface-variant rounded-full h-3"></div>
-                  <div className="w-1.5 bg-primary rounded-full h-5"></div>
-                  <div className="w-1.5 bg-primary rounded-full h-9"></div>
-                  <div className="w-1.5 bg-primary rounded-full h-10"></div>
-                  <div className="w-1.5 bg-primary rounded-full h-10"></div>
-                </div>
-              </div>
-            </div>
-            <div className="space-y-3">
-              <h4 className="text-xs font-bold text-on-surface-variant uppercase flex items-center">
-                <span className="material-symbols-outlined text-xs mr-1">task_alt</span>
-                当前关键任务 (3)
-              </h4>
-              <div className="space-y-2">
-                <div className="p-2.5 bg-white/60 rounded-lg flex items-center justify-between group-hover:bg-white transition-colors">
-                  <span className="text-sm font-medium">设计系统 2.0 更新</span>
-                  <span className="text-[10px] px-2 py-0.5 bg-secondary-container text-on-secondary-container rounded-full font-bold">进行中</span>
-                </div>
-                <div className="p-2.5 bg-white/60 rounded-lg flex items-center justify-between group-hover:bg-white transition-colors">
-                  <span className="text-sm font-medium">品牌营销视觉规范</span>
-                  <span className="text-[10px] px-2 py-0.5 bg-surface-container-highest text-on-surface-variant rounded-full font-bold">待讨论</span>
-                </div>
-                <div className="p-2.5 bg-white/60 rounded-lg flex items-center justify-between group-hover:bg-white transition-colors">
-                  <span className="text-sm font-medium">移动端 UI 走查报告</span>
-                  <span className="text-[10px] px-2 py-0.5 bg-primary-fixed text-on-primary-fixed rounded-full font-bold">已安排</span>
-                </div>
-              </div>
-            </div>
-          </div>
+            ))
+          )}
         </div>
-
-        {/* Team Stats Summary Section (Bento Bottom) */}
-        <section className="mt-12 grid grid-cols-1 md:grid-cols-4 gap-6">
-          <div className="md:col-span-2 bg-gradient-to-r from-primary to-primary-container p-6 rounded-xl text-white shadow-xl shadow-primary/10 flex items-center justify-between relative overflow-hidden">
-            <div className="relative z-10">
-              <h3 className="text-xl font-black mb-1">团队整体绩效趋势</h3>
-              <p className="text-primary-fixed text-sm font-medium">过去 30 天内，团队产出效率提升了 8.4%</p>
-              <div className="mt-4 flex space-x-2">
-                <button className="bg-white/20 hover:bg-white/30 px-3 py-1 rounded-lg text-xs font-bold transition-all">查看详细报告</button>
-              </div>
-            </div>
-            <div className="relative z-10 text-right">
-              <div className="text-5xl font-black opacity-30">A+</div>
-            </div>
-            {/* Abstract Design Decor */}
-            <div className="absolute -right-10 -bottom-10 w-40 h-40 bg-white/10 rounded-full blur-3xl"></div>
-          </div>
-          <div className="bg-surface-container-low p-6 rounded-xl flex flex-col justify-between">
-            <div className="flex items-center space-x-2 text-on-surface-variant mb-2">
-              <span className="material-symbols-outlined text-sm">schedule</span>
-              <span className="text-xs font-bold uppercase font-label tracking-tight">进行中任务</span>
-            </div>
-            <div className="flex items-end justify-between">
-              <span className="text-3xl font-black text-primary">24</span>
-              <span className="text-secondary text-xs font-bold flex items-center mb-1">
-                <span className="material-symbols-outlined text-xs mr-1">trending_up</span>
-                +4
-              </span>
-            </div>
-          </div>
-          <div className="bg-surface-container-low p-6 rounded-xl flex flex-col justify-between">
-            <div className="flex items-center space-x-2 text-on-surface-variant mb-2">
-              <span className="material-symbols-outlined text-sm">assignment_late</span>
-              <span className="text-xs font-bold uppercase font-label tracking-tight">逾期风险</span>
-            </div>
-            <div className="flex items-end justify-between">
-              <span className="text-3xl font-black text-error">2</span>
-              <span className="text-on-surface-variant text-xs font-bold flex items-center mb-1">
-                正常范围
-              </span>
-            </div>
-          </div>
-        </section>
         </div>
       </main>
+
+      {/* Top-Down Assignment Modal */}
+      {isAssignModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setIsAssignModalOpen(false)}></div>
+          <div className="relative bg-surface-container-lowest w-full max-w-lg rounded-3xl shadow-2xl overflow-hidden animate-in slide-in-from-bottom-10 fade-in duration-300">
+            <div className="px-6 py-5 border-b border-outline-variant/20 flex justify-between items-center bg-surface-container-low/50">
+              <h3 className="text-lg font-black text-on-surface">向下发起绩效目标</h3>
+              <button onClick={() => setIsAssignModalOpen(false)} className="text-outline hover:bg-surface-container-highest p-1 rounded-full transition-colors">
+                 <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+            <form onSubmit={handleAssignPlan} className="p-6 space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-on-surface-variant mb-1 uppercase tracking-wider">指派给谁</label>
+                <select required value={newPlan.assignee_id} onChange={e => setNewPlan({...newPlan, assignee_id: e.target.value})} className="w-full bg-surface-container-low border border-outline-variant/30 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-primary outline-none">
+                  {subordinates.length === 0 ? (
+                  <option disabled value="">（无下属成员）</option>
+                ) : (
+                  subordinates.map(sub => (
+                    <option key={sub.id} value={sub.id}>{sub.name} ({sub.title || sub.role})</option>
+                  ))
+                )}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-on-surface-variant mb-1 uppercase tracking-wider">强制目标标题</label>
+                <input required value={newPlan.title} onChange={e => setNewPlan({...newPlan, title: e.target.value})} className="w-full bg-surface-container-low border border-outline-variant/30 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-primary outline-none" placeholder="例如：本月必须拿下的 3 个大客户" />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-on-surface-variant mb-1 uppercase tracking-wider">执行策略</label>
+                <textarea required value={newPlan.description} onChange={e => setNewPlan({...newPlan, description: e.target.value})} className="w-full bg-surface-container-low border border-outline-variant/30 rounded-xl px-4 py-2.5 text-sm h-20 resize-none focus:ring-2 focus:ring-primary outline-none" placeholder="强制要求的落地细节..." />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-on-surface-variant mb-1 uppercase tracking-wider">分类</label>
+                  <select value={newPlan.category} onChange={e => setNewPlan({...newPlan, category: e.target.value})} className="w-full bg-surface-container-low border border-outline-variant/30 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-primary outline-none">
+                    <option>业务</option>
+                    <option>技术</option>
+                    <option>团队</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-on-surface-variant mb-1 uppercase tracking-wider">死线 (Deadline)</label>
+                  <input required type="date" value={newPlan.deadline} onChange={e => setNewPlan({...newPlan, deadline: e.target.value})} className="w-full bg-surface-container-low border border-outline-variant/30 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-primary outline-none" />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-on-surface-variant mb-1 uppercase tracking-wider">关键结果 (Target)</label>
+                <input required value={newPlan.target_value} onChange={e => setNewPlan({...newPlan, target_value: e.target.value})} className="w-full bg-surface-container-low border border-outline-variant/30 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-primary outline-none" placeholder="明确的数值或交付物" />
+              </div>
+              <div className="pt-4 flex justify-end gap-3 border-t border-outline-variant/20">
+                <button type="button" onClick={() => setIsAssignModalOpen(false)} className="px-5 py-2.5 rounded-xl font-bold text-on-surface-variant hover:bg-surface-container-highest transition-colors">取消</button>
+                <button type="submit" disabled={submitting} className="bg-secondary text-white px-6 py-2.5 rounded-xl font-bold hover:shadow-lg disabled:opacity-70 transition-all flex items-center gap-2">
+                   {submitting ? <span className="material-symbols-outlined animate-spin" style={{fontVariationSettings:"'wght' 300"}}>progress_activity</span> : <span className="material-symbols-outlined text-[18px]">electric_bolt</span>}
+                   立即强制派发
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

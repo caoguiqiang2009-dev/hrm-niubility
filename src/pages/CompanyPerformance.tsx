@@ -39,9 +39,9 @@ export default function CompanyPerformance({ navigate }: { navigate: (view: stri
               <div className="mb-8">
                 <label className="label-font text-[10px] uppercase tracking-widest text-on-surface-variant font-bold block mb-3">奖金范围</label>
                 <div className="flex flex-wrap gap-2">
-                  <button className="px-3 py-1.5 text-xs rounded-full bg-surface-container-lowest border border-outline-variant/20 hover:border-primary transition-all">¥0-5k</button>
-                  <button className="px-3 py-1.5 text-xs rounded-full bg-primary text-white font-medium">¥5k-20k</button>
-                  <button className="px-3 py-1.5 text-xs rounded-full bg-surface-container-lowest border border-outline-variant/20 hover:border-primary transition-all">¥20k+</button>
+                  <button onClick={() => alert("功能开发中")} className="px-3 py-1.5 text-xs rounded-full bg-surface-container-lowest border border-outline-variant/20 hover:border-primary transition-all">¥0-5k</button>
+                  <button onClick={() => alert("功能开发中")} className="px-3 py-1.5 text-xs rounded-full bg-primary text-white font-medium">¥5k-20k</button>
+                  <button onClick={() => alert("功能开发中")} className="px-3 py-1.5 text-xs rounded-full bg-surface-container-lowest border border-outline-variant/20 hover:border-primary transition-all">¥20k+</button>
                 </div>
               </div>
               {/* Department Filter */}
@@ -59,15 +59,15 @@ export default function CompanyPerformance({ navigate }: { navigate: (view: stri
               <div className="mb-2">
                 <label className="label-font text-[10px] uppercase tracking-widest text-on-surface-variant font-bold block mb-3">截止日期</label>
                 <div className="space-y-2">
-                  <button className="w-full text-left px-4 py-2 text-sm rounded-lg hover:bg-surface-container-highest transition-colors flex items-center justify-between group">
+                  <button onClick={() => alert("功能开发中")} className="w-full text-left px-4 py-2 text-sm rounded-lg hover:bg-surface-container-highest transition-colors flex items-center justify-between group">
                     <span>本周</span>
                     <span className="text-[10px] bg-error-container text-on-error-container px-2 py-0.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity">紧急</span>
                   </button>
-                  <button className="w-full text-left px-4 py-2 text-sm rounded-lg bg-surface-container-highest font-medium text-primary flex items-center justify-between">
+                  <button onClick={() => alert("功能开发中")} className="w-full text-left px-4 py-2 text-sm rounded-lg bg-surface-container-highest font-medium text-primary flex items-center justify-between">
                     <span>本月</span>
                     <span className="material-symbols-outlined text-sm">check</span>
                   </button>
-                  <button className="w-full text-left px-4 py-2 text-sm rounded-lg hover:bg-surface-container-highest transition-colors">本季</button>
+                  <button onClick={() => alert("功能开发中")} className="w-full text-left px-4 py-2 text-sm rounded-lg hover:bg-surface-container-highest transition-colors">本季</button>
                 </div>
               </div>
             </div>
@@ -75,7 +75,7 @@ export default function CompanyPerformance({ navigate }: { navigate: (view: stri
               <div className="relative z-10">
                 <h4 className="font-bold text-lg mb-2">快速挑战</h4>
                 <p className="text-xs text-white/80 mb-4">完成即时任务，获取双倍积分奖励。</p>
-                <button className="bg-white text-primary px-4 py-2 rounded-xl text-xs font-bold hover:bg-opacity-90 transition-all">立即查看</button>
+                <button onClick={() => alert("功能开发中")} className="bg-white text-primary px-4 py-2 rounded-xl text-xs font-bold hover:bg-opacity-90 transition-all">立即查看</button>
               </div>
               <span className="material-symbols-outlined absolute -right-4 -bottom-4 text-white/10 text-8xl">rocket_launch</span>
             </div>
@@ -89,11 +89,11 @@ export default function CompanyPerformance({ navigate }: { navigate: (view: stri
                 <p className="text-on-surface-variant text-sm mt-1">发现新机遇，挑战高难度任务，赢取丰厚奖金。</p>
               </div>
               <div className="flex gap-3">
-                <button className="flex items-center gap-2 px-4 py-2 bg-surface-container-low rounded-xl text-sm font-medium text-on-surface-variant hover:bg-surface-container-high transition-all">
+                <button onClick={() => alert("功能开发中")} className="flex items-center gap-2 px-4 py-2 bg-surface-container-low rounded-xl text-sm font-medium text-on-surface-variant hover:bg-surface-container-high transition-all">
                   <span className="material-symbols-outlined text-lg">sort</span>
                   按奖励排序
                 </button>
-                <button className="flex items-center gap-2 px-4 py-2 primary-gradient rounded-xl text-sm font-bold text-white shadow-lg shadow-primary/20">
+                <button onClick={() => alert("功能开发中")} className="flex items-center gap-2 px-4 py-2 primary-gradient rounded-xl text-sm font-bold text-white shadow-lg shadow-primary/20">
                   <span className="material-symbols-outlined text-lg">add</span>
                   发布任务
                 </button>
@@ -121,7 +121,7 @@ export default function CompanyPerformance({ navigate }: { navigate: (view: stri
                   <div className="w-full bg-surface-container-highest h-1.5 rounded-full overflow-hidden mb-6">
                     <div className="bg-primary h-full rounded-full transition-all" style={{ width: '40%' }}></div>
                   </div>
-                  <button className="w-full py-3 bg-surface-container-lowest text-primary font-bold rounded-xl border border-primary/20 hover:bg-primary hover:text-white transition-all">
+                  <button onClick={() => alert("功能开发中")} className="w-full py-3 bg-surface-container-lowest text-primary font-bold rounded-xl border border-primary/20 hover:bg-primary hover:text-white transition-all">
                     立即加入
                   </button>
                 </div>
@@ -146,7 +146,7 @@ export default function CompanyPerformance({ navigate }: { navigate: (view: stri
                   <div className="w-full bg-surface-container-highest h-1.5 rounded-full overflow-hidden mb-6">
                     <div className="bg-primary h-full rounded-full transition-all" style={{ width: '85%' }}></div>
                   </div>
-                  <button className="w-full py-3 bg-surface-container-lowest text-on-surface-variant font-bold rounded-xl border border-outline-variant/20 cursor-not-allowed">
+                  <button onClick={() => alert("功能开发中")} className="w-full py-3 bg-surface-container-lowest text-on-surface-variant font-bold rounded-xl border border-outline-variant/20 cursor-not-allowed">
                     人数已满
                   </button>
                 </div>
@@ -171,7 +171,7 @@ export default function CompanyPerformance({ navigate }: { navigate: (view: stri
                   <div className="w-full bg-surface-container-highest h-1.5 rounded-full overflow-hidden mb-6">
                     <div className="bg-primary h-full rounded-full transition-all" style={{ width: '0%' }}></div>
                   </div>
-                  <button className="w-full py-3 bg-surface-container-lowest text-primary font-bold rounded-xl border border-primary/20 hover:bg-primary hover:text-white transition-all">
+                  <button onClick={() => alert("功能开发中")} className="w-full py-3 bg-surface-container-lowest text-primary font-bold rounded-xl border border-primary/20 hover:bg-primary hover:text-white transition-all">
                     立即加入
                   </button>
                 </div>
@@ -196,7 +196,7 @@ export default function CompanyPerformance({ navigate }: { navigate: (view: stri
                   <div className="w-full bg-surface-container-highest h-1.5 rounded-full overflow-hidden mb-6">
                     <div className="bg-primary h-full rounded-full transition-all" style={{ width: '15%' }}></div>
                   </div>
-                  <button className="w-full py-3 bg-surface-container-lowest text-primary font-bold rounded-xl border border-primary/20 hover:bg-primary hover:text-white transition-all">
+                  <button onClick={() => alert("功能开发中")} className="w-full py-3 bg-surface-container-lowest text-primary font-bold rounded-xl border border-primary/20 hover:bg-primary hover:text-white transition-all">
                     立即加入
                   </button>
                 </div>
@@ -221,7 +221,7 @@ export default function CompanyPerformance({ navigate }: { navigate: (view: stri
                   <div className="w-full bg-surface-container-highest h-1.5 rounded-full overflow-hidden mb-6">
                     <div className="bg-primary h-full rounded-full transition-all" style={{ width: '5%' }}></div>
                   </div>
-                  <button className="w-full py-3 bg-surface-container-lowest text-primary font-bold rounded-xl border border-primary/20 hover:bg-primary hover:text-white transition-all">
+                  <button onClick={() => alert("功能开发中")} className="w-full py-3 bg-surface-container-lowest text-primary font-bold rounded-xl border border-primary/20 hover:bg-primary hover:text-white transition-all">
                     立即加入
                   </button>
                 </div>

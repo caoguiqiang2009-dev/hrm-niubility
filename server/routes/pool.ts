@@ -49,4 +49,22 @@ router.post('/tasks/:id/join', authMiddleware, (req: AuthRequest, res) => {
   return res.json({ code: 0, message: '加入成功' });
 });
 
+// 创建绩效池任务 (HR / Admin)
+router.post('/tasks', authMiddleware, (req: AuthRequest, res) => {
+  const { title, department, difficulty, bonus, max_participants } = req.body;
+  if (!title || !bonus) return res.status(400).json({ code: 400, message: '任务名称和奖金不能为空' });
+  const db = getDb();
+  const result = db.prepare(
+    'INSERT INTO pool_tasks (title, department, difficulty, bonus, max_participants, created_by) VALUES (?, ?, ?, ?, ?, ?)'
+  ).run(title, department || null, difficulty || 'normal', bonus, max_participants || 5, req.userId);
+  return res.json({ code: 0, data: { id: result.lastInsertRowid } });
+});
+
+// 关闭绩效池任务
+router.post('/tasks/:id/close', authMiddleware, (_req, res) => {
+  const db = getDb();
+  db.prepare("UPDATE pool_tasks SET status = 'closed' WHERE id = ?").run(_req.params.id);
+  return res.json({ code: 0, message: '已关闭' });
+});
+
 export default router;

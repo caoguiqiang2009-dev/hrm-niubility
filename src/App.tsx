@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import EmployeeDashboard from './pages/EmployeeDashboard';
 import PersonalGoals from './pages/PersonalGoals';
 import TeamPerformance from './pages/TeamPerformance';
@@ -6,52 +6,13 @@ import CompanyPerformance from './pages/CompanyPerformance';
 import HRMap from './pages/HRMap';
 import PanoramaDashboard from './pages/PanoramaDashboard';
 import AdminPanel from './pages/AdminPanel';
+import OrgChart from './pages/OrgChart';
+import DevRoleSwitcher from './components/DevRoleSwitcher';
+import { useAuth } from './context/AuthContext';
 
 export default function App() {
   const [currentView, setCurrentView] = useState('dashboard');
-  const [isAuthenticating, setIsAuthenticating] = useState(true);
-
-  useEffect(() => {
-    // 企微环境检测
-    const isWecom = navigator.userAgent.toLowerCase().includes('wxwork');
-    const token = localStorage.getItem('token');
-    
-    if (isWecom && !token) {
-      const urlParams = new URLSearchParams(window.location.search);
-      const code = urlParams.get('code');
-      
-      if (code) {
-        // 用 code 去后端换取 token
-        fetch('/api/auth/login', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ code })
-        })
-        .then(res => res.json())
-        .then(data => {
-          if (data.code === 0 && data.data?.token) {
-            localStorage.setItem('token', data.data.token);
-            // 清理 URL 上的 code，避免刷新重复使用
-            window.history.replaceState({}, document.title, window.location.pathname);
-            setIsAuthenticating(false);
-          } else {
-            console.error('企微登录失败:', data.message);
-            setIsAuthenticating(false);
-          }
-        })
-        .catch(err => {
-          console.error('企微认证请求错误:', err);
-          setIsAuthenticating(false);
-        });
-      } else {
-        // 无 token 无 code，去后端拿构造好的企微 OAuth 授权链接
-        window.location.href = '/api/auth/wecom-url';
-      }
-    } else {
-      // 非企微环境，或已有 token
-      setIsAuthenticating(false);
-    }
-  }, []);
+  const { isAuthenticating, currentUser } = useAuth();
 
   const navigate = (view: string) => {
     setCurrentView(view);
@@ -68,22 +29,47 @@ export default function App() {
     );
   }
 
-  switch (currentView) {
-    case 'dashboard':
-      return <EmployeeDashboard navigate={navigate} />;
-    case 'personal':
-      return <PersonalGoals navigate={navigate} />;
-    case 'team':
-      return <TeamPerformance navigate={navigate} />;
-    case 'company':
-      return <CompanyPerformance navigate={navigate} />;
-    case 'hrmap':
-      return <HRMap navigate={navigate} />;
-    case 'panorama':
-      return <PanoramaDashboard navigate={navigate} />;
-    case 'admin':
-      return <AdminPanel navigate={navigate} />;
-    default:
-      return <EmployeeDashboard navigate={navigate} />;
+  // 若无用户身份，则渲染骨架屏并提示（通常只会出现在本地开发还没点击测试登录的时候）
+  if (!currentUser) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-surface text-on-surface flex-col">
+        <div className="w-16 h-16 bg-surface-container rounded-full mb-4 flex items-center justify-center">
+          <span className="material-symbols-outlined text-outline text-3xl">sentiment_dissatisfied</span>
+        </div>
+        <h2 className="text-xl font-bold mb-2">未检测到企业微信登录身份</h2>
+        <p className="text-on-surface-variant text-sm mb-6">请在企业微信客户端内打开，或使用左下角的测试账号选择器进行免密登录测试。</p>
+        <DevRoleSwitcher />
+      </div>
+    );
   }
+
+  const renderView = () => {
+    switch (currentView) {
+      case 'dashboard':
+        return <EmployeeDashboard navigate={navigate} />;
+      case 'personal':
+        return <PersonalGoals navigate={navigate} />;
+      case 'team':
+        return <TeamPerformance navigate={navigate} />;
+      case 'company':
+        return <CompanyPerformance navigate={navigate} />;
+      case 'hrmap':
+        return <HRMap navigate={navigate} />;
+      case 'panorama':
+        return <PanoramaDashboard navigate={navigate} />;
+      case 'admin':
+        return <AdminPanel navigate={navigate} />;
+      case 'org':
+        return <OrgChart navigate={navigate} />;
+      default:
+        return <EmployeeDashboard navigate={navigate} />;
+    }
+  };
+
+  return (
+    <>
+      {renderView()}
+      <DevRoleSwitcher />
+    </>
+  );
 }

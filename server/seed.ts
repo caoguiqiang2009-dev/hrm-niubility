@@ -19,7 +19,7 @@ export function seedData(): void {
   db.prepare(`INSERT INTO departments (id, name, parent_id, leader_user_id, region) VALUES (?, ?, ?, ?, ?)`).run(1, '总裁办', 0, 'admin', '总部');
   db.prepare(`INSERT INTO departments (id, name, parent_id, leader_user_id, region) VALUES (?, ?, ?, ?, ?)`).run(2, '产品部', 1, 'zhangwei', '华东');
   db.prepare(`INSERT INTO departments (id, name, parent_id, leader_user_id, region) VALUES (?, ?, ?, ?, ?)`).run(3, '技术部', 1, 'wangming', '华东');
-  db.prepare(`INSERT INTO departments (id, name, parent_id, leader_user_id, region) VALUES (?, ?, ?, ?, ?)`).run(4, 'UX设计组', 2, 'zhaoming', '华东');
+  db.prepare(`INSERT INTO departments (id, name, parent_id, leader_user_id, region) VALUES (?, ?, ?, ?, ?)`).run(4, 'UX设计组', 2, 'zhangwei', '华东');
   db.prepare(`INSERT INTO departments (id, name, parent_id, leader_user_id, region) VALUES (?, ?, ?, ?, ?)`).run(5, '人力资源部', 1, 'lifang', '总部');
   db.prepare(`INSERT INTO departments (id, name, parent_id, leader_user_id, region) VALUES (?, ?, ?, ?, ?)`).run(6, '市场部', 1, null, '华南');
 

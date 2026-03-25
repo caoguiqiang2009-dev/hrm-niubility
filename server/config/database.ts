@@ -207,6 +207,16 @@ export function initDatabase(): void {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
+
+    -- ============ 权限覆盖配置 ============
+    CREATE TABLE IF NOT EXISTS permission_overrides (
+      key TEXT PRIMARY KEY,
+      admin_val INTEGER,
+      hr_val INTEGER,
+      manager_val INTEGER,
+      employee_val INTEGER,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
   `);
 
   console.log('✅ Database tables initialized');

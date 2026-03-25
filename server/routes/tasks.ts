@@ -1,8 +1,8 @@
-import { Response } from 'express';
+import { Router, Response } from 'express';
 import { getDb } from '../config/database';
 import { authMiddleware, AuthRequest } from '../middleware/auth';
 
-const router = require('express').Router();
+const router = Router();
 
 // GET /api/tasks - 获取当前登录用户的任务
 router.get('/', authMiddleware, (req: AuthRequest, res: Response) => {
@@ -10,7 +10,7 @@ router.get('/', authMiddleware, (req: AuthRequest, res: Response) => {
   const userId = req.userId;
   
   try {
-    const tasks = db.prepare('SELECT * FROM tasks WHERE user_id = ? ORDER BY CASE WHEN status = "pending" THEN 1 ELSE 2 END, due_date ASC, id DESC').all(userId);
+    const tasks = db.prepare('SELECT * FROM tasks WHERE user_id = ? ORDER BY CASE WHEN status = \'pending\' THEN 1 ELSE 2 END, due_date ASC, id DESC').all(userId);
     res.json(tasks);
   } catch (err) {
     console.error('Failed to get tasks:', err);

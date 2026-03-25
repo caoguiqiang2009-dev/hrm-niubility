@@ -16,9 +16,9 @@ export default function HRMap({ navigate }: { navigate: (view: string) => void }
           {/* Interactive Map Controls Overlay */}
           <div className="absolute top-6 left-8 z-30 flex flex-col gap-3">
             <div className="p-1 bg-surface-container-lowest rounded-xl flex gap-1 shadow-sm">
-              <button className="px-4 py-1.5 rounded-lg bg-primary text-white text-xs font-medium">按业务线</button>
-              <button className="px-4 py-1.5 rounded-lg text-on-surface-variant hover:bg-surface-container-low text-xs font-medium transition-colors">按地域</button>
-              <button className="px-4 py-1.5 rounded-lg text-on-surface-variant hover:bg-surface-container-low text-xs font-medium transition-colors">按职能</button>
+              <button onClick={() => alert("功能开发中")} className="px-4 py-1.5 rounded-lg bg-primary text-white text-xs font-medium">按业务线</button>
+              <button onClick={() => alert("功能开发中")} className="px-4 py-1.5 rounded-lg text-on-surface-variant hover:bg-surface-container-low text-xs font-medium transition-colors">按地域</button>
+              <button onClick={() => alert("功能开发中")} className="px-4 py-1.5 rounded-lg text-on-surface-variant hover:bg-surface-container-low text-xs font-medium transition-colors">按职能</button>
             </div>
             <div className="flex gap-2">
               <div className="px-3 py-1.5 bg-secondary-container/20 text-on-secondary-container rounded-full text-[10px] font-bold flex items-center gap-1 border border-secondary-container/50">
@@ -169,13 +169,13 @@ export default function HRMap({ navigate }: { navigate: (view: string) => void }
 
           {/* Map Zoom Controls */}
           <div className="absolute bottom-10 right-8 z-30 flex flex-col gap-2">
-            <button className="w-10 h-10 bg-surface-container-lowest rounded-xl shadow-md flex items-center justify-center text-on-surface hover:bg-surface-container-high transition-colors">
+            <button onClick={() => alert("功能开发中")} className="w-10 h-10 bg-surface-container-lowest rounded-xl shadow-md flex items-center justify-center text-on-surface hover:bg-surface-container-high transition-colors">
               <span className="material-symbols-outlined">add</span>
             </button>
-            <button className="w-10 h-10 bg-surface-container-lowest rounded-xl shadow-md flex items-center justify-center text-on-surface hover:bg-surface-container-high transition-colors">
+            <button onClick={() => alert("功能开发中")} className="w-10 h-10 bg-surface-container-lowest rounded-xl shadow-md flex items-center justify-center text-on-surface hover:bg-surface-container-high transition-colors">
               <span className="material-symbols-outlined">remove</span>
             </button>
-            <button className="w-10 h-10 bg-surface-container-lowest rounded-xl shadow-md flex items-center justify-center text-primary hover:bg-surface-container-high transition-colors">
+            <button onClick={() => alert("功能开发中")} className="w-10 h-10 bg-surface-container-lowest rounded-xl shadow-md flex items-center justify-center text-primary hover:bg-surface-container-high transition-colors">
               <span className="material-symbols-outlined">filter_center_focus</span>
             </button>
           </div>
@@ -190,8 +190,8 @@ export default function HRMap({ navigate }: { navigate: (view: string) => void }
                 <p className="text-xs text-slate-400 mt-1">监控各周期、项目的人才评估与绩效达成实时状态</p>
               </div>
               <div className="flex gap-2">
-                <button className="px-4 py-2 bg-surface-container-high text-on-surface-variant rounded-xl text-xs font-bold hover:bg-surface-container-highest transition-colors">导出数据</button>
-                <button className="px-4 py-2 bg-primary text-white rounded-xl text-xs font-bold shadow-md hover:opacity-90 transition-opacity flex items-center gap-2">
+                <button onClick={() => alert("功能开发中")} className="px-4 py-2 bg-surface-container-high text-on-surface-variant rounded-xl text-xs font-bold hover:bg-surface-container-highest transition-colors">导出数据</button>
+                <button onClick={() => alert("功能开发中")} className="px-4 py-2 bg-primary text-white rounded-xl text-xs font-bold shadow-md hover:opacity-90 transition-opacity flex items-center gap-2">
                   <span className="material-symbols-outlined text-sm">add</span>
                   新建档期
                 </button>
@@ -239,7 +239,7 @@ export default function HRMap({ navigate }: { navigate: (view: string) => void }
                       <span className="px-3 py-1 bg-secondary-container/20 text-on-secondary-container rounded-full text-[10px] font-bold">进行中</span>
                     </td>
                     <td className="px-6 py-5">
-                      <button className="text-primary hover:underline text-xs font-bold">详情</button>
+                      <button onClick={() => alert("功能开发中")} className="text-primary hover:underline text-xs font-bold">详情</button>
                     </td>
                   </tr>
                   <tr className="hover:bg-surface-container-low/30 transition-colors">
@@ -272,7 +272,7 @@ export default function HRMap({ navigate }: { navigate: (view: string) => void }
                       <span className="px-3 py-1 bg-secondary-container/20 text-on-secondary-container rounded-full text-[10px] font-bold">进行中</span>
                     </td>
                     <td className="px-6 py-5">
-                      <button className="text-primary hover:underline text-xs font-bold">详情</button>
+                      <button onClick={() => alert("功能开发中")} className="text-primary hover:underline text-xs font-bold">详情</button>
                     </td>
                   </tr>
                   <tr className="hover:bg-surface-container-low/30 transition-colors">
@@ -305,14 +305,14 @@ export default function HRMap({ navigate }: { navigate: (view: string) => void }
                       <span className="px-3 py-1 bg-surface-container-high text-on-surface-variant rounded-full text-[10px] font-bold">已结束</span>
                     </td>
                     <td className="px-6 py-5">
-                      <button className="text-primary hover:underline text-xs font-bold">查看报告</button>
+                      <button onClick={() => alert("功能开发中")} className="text-primary hover:underline text-xs font-bold">查看报告</button>
                     </td>
                   </tr>
                 </tbody>
               </table>
             </div>
             <div className="p-6 bg-surface-container-low/20 flex justify-center border-t border-outline-variant/10">
-              <button className="text-xs font-bold text-primary flex items-center gap-1 hover:gap-2 transition-all">
+              <button onClick={() => alert("功能开发中")} className="text-xs font-bold text-primary flex items-center gap-1 hover:gap-2 transition-all">
                 加载更多历史档期
                 <span className="material-symbols-outlined text-sm">keyboard_arrow_down</span>
               </button>
@@ -322,7 +322,7 @@ export default function HRMap({ navigate }: { navigate: (view: string) => void }
 
         {/* FAB for Quick Diagnosis */}
         <div className="fixed bottom-10 left-[280px] z-30">
-          <button className="flex items-center gap-3 bg-inverse-surface text-inverse-on-surface px-6 py-4 rounded-full shadow-2xl hover:scale-105 active:scale-95 transition-all">
+          <button onClick={() => alert("功能开发中")} className="flex items-center gap-3 bg-inverse-surface text-inverse-on-surface px-6 py-4 rounded-full shadow-2xl hover:scale-105 active:scale-95 transition-all">
             <span className="material-symbols-outlined">health_and_safety</span>
             <span className="text-sm font-bold">实时组织诊断</span>
           </button>
@@ -427,7 +427,7 @@ export default function HRMap({ navigate }: { navigate: (view: string) => void }
             <div>
               <div className="flex justify-between items-end mb-4">
                 <h3 className="text-base font-bold text-slate-900">关键人才 (HiPo)</h3>
-                <button className="text-sm text-blue-600 font-medium hover:underline">查看全部</button>
+                <button onClick={() => alert("功能开发中")} className="text-sm text-blue-600 font-medium hover:underline">查看全部</button>
               </div>
               <div className="space-y-0">
                 <div className="flex items-center justify-between py-4 border-b border-slate-100">

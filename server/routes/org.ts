@@ -87,4 +87,16 @@ router.get('/users/:id', authMiddleware, (req, res) => {
   return res.json({ code: 0, data: user });
 });
 
+// 更新用户信息 (HR / Admin)
+router.put('/users/:id', authMiddleware, requireRole('admin', 'hr'), (req: AuthRequest, res) => {
+  const { name, title, mobile, email, role, status } = req.body;
+  const db = getDb();
+  const user = db.prepare('SELECT id FROM users WHERE id = ?').get(req.params.id);
+  if (!user) return res.status(404).json({ code: 404, message: '用户不存在' });
+
+  db.prepare('UPDATE users SET name=?, title=?, mobile=?, email=?, role=?, status=? WHERE id=?')
+    .run(name, title, mobile, email, role, status, req.params.id);
+  return res.json({ code: 0, message: '更新成功' });
+});
+
 export default router;

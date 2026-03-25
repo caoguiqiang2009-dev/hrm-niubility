@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import Sidebar from '../components/Sidebar';
+import { useAuth } from '../context/AuthContext';
 
 interface Task {
   id: number;
@@ -11,6 +12,7 @@ interface Task {
 }
 
 export default function EmployeeDashboard({ navigate }: { navigate: (view: string) => void }) {
+  const { currentUser } = useAuth();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
   const [newTask, setNewTask] = useState({ title: '', description: '', due_date: '', priority: 'normal' });
@@ -86,15 +88,15 @@ export default function EmployeeDashboard({ navigate }: { navigate: (view: strin
           {/* Welcome Header & Quick Actions */}
           <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
             <div>
-              <h2 className="text-4xl font-extrabold text-on-surface tracking-tight mb-2">欢迎回来, 张伟</h2>
+              <h2 className="text-4xl font-extrabold text-on-surface tracking-tight mb-2">欢迎回来, {currentUser?.name || '未知员工'}</h2>
               <p className="text-on-surface-variant max-w-lg">今天是 2024年5月22日 星期三。您本周已完成 85% 的既定任务，继续保持！</p>
             </div>
             <div className="flex items-center space-x-3">
-              <button className="flex items-center px-6 py-3 bg-surface-container-highest text-on-primary-container font-bold rounded-xl hover:bg-surface-dim transition-colors active:scale-95">
+              <button onClick={() => alert("功能开发中")} className="flex items-center px-6 py-3 bg-surface-container-highest text-on-primary-container font-bold rounded-xl hover:bg-surface-dim transition-colors active:scale-95">
                 <span className="material-symbols-outlined mr-2 text-[20px]">payments</span>
                 查看薪资单
               </button>
-              <button className="flex items-center px-6 py-3 bg-gradient-to-br from-[#0060a9] to-[#409eff] text-white font-bold rounded-xl shadow-lg shadow-primary/20 hover:shadow-xl transition-all active:scale-95">
+              <button onClick={() => alert("功能开发中")} className="flex items-center px-6 py-3 bg-gradient-to-br from-[#0060a9] to-[#409eff] text-white font-bold rounded-xl shadow-lg shadow-primary/20 hover:shadow-xl transition-all active:scale-95">
                 <span className="material-symbols-outlined mr-2 text-[20px]">event_available</span>
                 申请休假
               </button>
