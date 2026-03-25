@@ -110,7 +110,9 @@ echo ""
 echo "🚀 [4/5] 服务器解压并重启服务..."
 
 # 构建远程命令序列
-REMOTE_COMMANDS=""
+REMOTE_COMMANDS="send \"powershell.exe\r\"
+expect \">\"
+"
 # 解压
 REMOTE_COMMANDS+="send \"Expand-Archive -Path ${REMOTE_ZIP_PATH} -DestinationPath ${REMOTE_DIR} -Force\r\"
 expect \">\"
@@ -122,7 +124,7 @@ expect -timeout 90 \">\"
 "
 fi
 # 重启 NSSM 服务
-REMOTE_COMMANDS+="send \"nssm restart ${SERVICE_NAME}\r\"
+REMOTE_COMMANDS+="send \"Restart-Service ${SERVICE_NAME}\r\"
 expect \">\"
 "
 # 清理 zip
