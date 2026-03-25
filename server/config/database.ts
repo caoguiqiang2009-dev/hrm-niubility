@@ -4,7 +4,9 @@ import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const PROJECT_ROOT = path.resolve(__dirname, '../..');
+// In dev: server/config/ -> ../../ (root)
+// In prod (tsup bundle): server-dist/ -> ../ (root)
+const PROJECT_ROOT = __dirname.endsWith('server-dist') ? path.resolve(__dirname, '..') : path.resolve(__dirname, '../..');
 const DB_PATH = path.resolve(PROJECT_ROOT, 'data/hrm.db');
 
 let db: Database.Database;
