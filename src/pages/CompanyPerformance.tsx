@@ -324,31 +324,31 @@ export default function CompanyPerformance({ navigate }: { navigate: (view: stri
             {/* Step: detail */}
             {modalStep === 'detail' && (
               <>
-                {/* Header */}
-                <div className="relative bg-gradient-to-br from-[#0060a9] to-[#409eff] px-6 py-5 text-white">
-                  <div className="flex items-start justify-between mb-4">
-                    <span className="text-[10px] font-bold px-2.5 py-1 bg-white/20 rounded-full uppercase tracking-wider">
-                      {getBadge(selectedTask).label}
-                    </span>
+                {/* Header — compact */}
+                <div className="relative bg-gradient-to-br from-[#0060a9] to-[#409eff] px-5 py-3 text-white">
+                  <div className="flex items-center justify-between mb-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[9px] font-bold px-2 py-0.5 bg-white/20 rounded-full uppercase tracking-wider">
+                        {getBadge(selectedTask).label}
+                      </span>
+                      <span className="inline-flex items-center gap-1 bg-white/20 rounded-lg px-2.5 py-0.5 text-xs">
+                        <span className="material-symbols-outlined text-[13px]">payments</span>
+                        <span className="font-black text-sm">¥{selectedTask.bonus.toLocaleString()}</span>
+                      </span>
+                    </div>
                     <button onClick={() => setSelectedTask(null)} className="p-1 hover:bg-white/20 rounded-lg transition-colors">
                       <span className="material-symbols-outlined text-[18px]">close</span>
                     </button>
                   </div>
-                  <h2 className="text-xl font-black leading-snug mb-2">{selectedTask.title}</h2>
-                  <div className="flex items-center gap-3 text-white/80 text-xs">
-                    {selectedTask.department && <span className="flex items-center gap-1"><span className="material-symbols-outlined text-[12px]">business</span>{selectedTask.department}</span>}
-                    <span className="flex items-center gap-1"><span className="material-symbols-outlined text-[12px]">signal_cellular_alt</span>难度: {DIFFICULTY_MAP[selectedTask.difficulty] || selectedTask.difficulty}</span>
-                  </div>
-                  {/* Reward pill */}
-                  <div className="mt-4 inline-flex items-center gap-2 bg-white/20 rounded-xl px-4 py-2">
-                    <span className="material-symbols-outlined text-[18px]">payments</span>
-                    <span className="font-black text-2xl tracking-tight">¥{selectedTask.bonus.toLocaleString()}</span>
-                    <span className="text-xs text-white/70">任务奖金</span>
+                  <h2 className="text-lg font-black leading-snug">{selectedTask.title}</h2>
+                  <div className="flex items-center gap-3 text-white/80 text-[10px] mt-0.5">
+                    {selectedTask.department && <span className="flex items-center gap-1"><span className="material-symbols-outlined text-[11px]">business</span>{selectedTask.department}</span>}
+                    <span className="flex items-center gap-1"><span className="material-symbols-outlined text-[11px]">signal_cellular_alt</span>难度: {DIFFICULTY_MAP[selectedTask.difficulty] || selectedTask.difficulty}</span>
                   </div>
                 </div>
 
                 {/* Body */}
-                <div className="px-6 py-5 space-y-5 max-h-72 overflow-y-auto">
+                <div className="px-5 py-4 space-y-4 max-h-[50vh] overflow-y-auto">
                   <SmartGoalDisplay
                     data={{
                       title: selectedTask.title,
