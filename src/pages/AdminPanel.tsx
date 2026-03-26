@@ -932,31 +932,59 @@ function SettingsModule({ currentUser }: { currentUser: any }) {
   );
 }
 
-// ─── MODULE: 流程审批设置 ─────────────────────────────────────────────
+// ─── MODULE: 流程审批设置 (企微风格) ─────────────────────────────────
 const NODE_TYPES: Record<string, { label: string; icon: string; color: string }> = {
-  initiator: { label: '发起人', icon: 'person', color: 'bg-blue-500' },
+  initiator: { label: '申请人', icon: 'person', color: 'bg-blue-500' },
   approver: { label: '审批人', icon: 'how_to_reg', color: 'bg-orange-500' },
-  cc: { label: '抄送人', icon: 'forward_to_inbox', color: 'bg-green-500' },
+  handler: { label: '办理人', icon: 'engineering', color: 'bg-indigo-500' },
+  cc: { label: '抄送人', icon: 'forward_to_inbox', color: 'bg-teal-500' },
   condition: { label: '条件分支', icon: 'call_split', color: 'bg-purple-500' },
 };
 
-const APPROVE_TYPES: Record<string, string> = {
-  serial: '依次审批',
-  parallel: '会签（需全部通过）',
-  or_sign: '或签（任一人通过）',
+const APPROVE_MODES: Record<string, string> = {
+  serial: '依次审批（按顺序依次审批）',
+  parallel: '会签（须所有成员同意）',
+  or_sign: '或签（一名成员同意即可）',
 };
+
+const ASSIGNEE_TYPES: { value: string; label: string; icon: string }[] = [
+  { value: 'specified', label: '指定成员', icon: 'person_pin' },
+  { value: 'superior', label: '指定上级', icon: 'supervisor_account' },
+  { value: 'multi_superior', label: '连续多级上级', icon: 'account_tree' },
+  { value: 'dept_head', label: '部门负责人', icon: 'corporate_fare' },
+  { value: 'multi_dept_head', label: '连续多级部门负责人', icon: 'domain' },
+  { value: 'self', label: '申请人本人', icon: 'person' },
+  { value: 'self_select', label: '申请人自选', icon: 'person_search' },
+  { value: 'role_hr', label: '指定角色: HR', icon: 'badge' },
+  { value: 'role_admin', label: '指定角色: 管理员', icon: 'admin_panel_settings' },
+];
+
+const BUSINESS_TYPES: { value: string; label: string; icon: string }[] = [
+  { value: 'perf_submit', label: '绩效申请', icon: 'trending_up' },
+  { value: 'perf_assign', label: '绩效下发', icon: 'assignment_ind' },
+  { value: 'pool_proposal', label: '绩效池提案', icon: 'lightbulb' },
+  { value: 'leave_request', label: '请假申请', icon: 'event_note' },
+  { value: 'expense_claim', label: '报销申请', icon: 'receipt_long' },
+  { value: 'transfer', label: '调岗申请', icon: 'swap_horiz' },
+  { value: 'onboarding', label: '入职审批', icon: 'badge' },
+  { value: 'offboarding', label: '离职审批', icon: 'exit_to_app' },
+];
+
 function ApprovalFlowModule() {
   const { data: allUsers } = useApiGet('/api/org/users-list');
   const [templates, setTemplates] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [editing, setEditing] = useState<any | null>(null); // currently editing template
+  const [editing, setEditing] = useState<any | null>(null);
   const [nodes, setNodes] = useState<any[]>([]);
+  const [selectedNodeIdx, setSelectedNodeIdx] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState('');
   const [showCreate, setShowCreate] = useState(false);
   const [newName, setNewName] = useState('');
   const [newDesc, setNewDesc] = useState('');
   const [newIcon, setNewIcon] = useState('approval');
+  const [newBizTypes, setNewBizTypes] = useState<string[]>([]);
+  const [configTab, setConfigTab] = useState<'approver' | 'permissions'>('approver');
 
   const loadTemplates = async () => {
     setLoading(true);
@@ -970,11 +998,11 @@ function ApprovalFlowModule() {
 
   const handleCreate = async () => {
     if (!newName.trim()) return;
-    const res = await apiCall('/api/approval-flows', 'POST', { name: newName.trim(), description: newDesc.trim(), icon: newIcon });
+    const res = await apiCall('/api/approval-flows', 'POST', { name: newName.trim(), description: newDesc.trim(), icon: newIcon, business_types: newBizTypes });
     if (res.code === 0) {
       setTemplates(prev => [...prev, res.data]);
       setShowCreate(false);
-      setNewName(''); setNewDesc(''); setNewIcon('approval');
+      setNewName(''); setNewDesc(''); setNewIcon('approval'); setNewBizTypes([]);
       setMsg('✅ 模板已创建');
     }
   };
@@ -983,7 +1011,7 @@ function ApprovalFlowModule() {
     if (!confirm('确定删除此审批流模板？')) return;
     await apiCall(`/api/approval-flows/${id}`, 'DELETE');
     setTemplates(prev => prev.filter(t => t.id !== id));
-    if (editing?.id === id) { setEditing(null); setNodes([]); }
+    if (editing?.id === id) { setEditing(null); setNodes([]); setSelectedNodeIdx(null); }
     setMsg('已删除');
   };
 
@@ -995,19 +1023,23 @@ function ApprovalFlowModule() {
   const openEditor = (tpl: any) => {
     setEditing(tpl);
     setNodes(tpl.nodes?.length ? tpl.nodes : [
-      { node_type: 'initiator', label: '发起人', approve_type: 'serial', config: {} },
+      { node_type: 'initiator', label: '申请人', approve_type: 'serial', config: {} },
     ]);
-    setMsg('');
+    setSelectedNodeIdx(null); setMsg(''); setConfigTab('approver');
   };
 
   const addNode = (type: string) => {
     const label = NODE_TYPES[type]?.label || type;
-    setNodes(prev => [...prev, { node_type: type, label, approve_type: 'serial', config: { assignees: [] } }]);
+    const newNode = { node_type: type, label, approve_type: 'serial', config: { assigneeType: 'specified', assignees: [], selectionMode: 'multi', requireComment: false, allowActions: ['approve', 'reject'] } };
+    setNodes(prev => [...prev, newNode]);
+    setSelectedNodeIdx(nodes.length);
   };
 
   const removeNode = (idx: number) => {
     if (nodes[idx].node_type === 'initiator') return;
     setNodes(prev => prev.filter((_, i) => i !== idx));
+    if (selectedNodeIdx === idx) setSelectedNodeIdx(null);
+    else if (selectedNodeIdx !== null && selectedNodeIdx > idx) setSelectedNodeIdx(selectedNodeIdx - 1);
   };
 
   const updateNode = (idx: number, patch: any) => {
@@ -1020,19 +1052,34 @@ function ApprovalFlowModule() {
     const next = [...nodes];
     [next[idx], next[idx + dir]] = [next[idx + dir], next[idx]];
     setNodes(next);
+    if (selectedNodeIdx === idx) setSelectedNodeIdx(idx + dir);
+    else if (selectedNodeIdx === idx + dir) setSelectedNodeIdx(idx);
   };
 
   const handleSaveNodes = async () => {
     if (!editing) return;
     setSaving(true);
+    // Save template-level permissions
+    await apiCall(`/api/approval-flows/${editing.id}`, 'PUT', {
+      business_types: editing.business_types,
+      permissions: editing.permissions,
+    });
     const res = await apiCall(`/api/approval-flows/${editing.id}/nodes`, 'PUT', { nodes });
     setSaving(false);
     if (res.code === 0) {
-      setMsg('✅ 节点已保存');
-      setTemplates(prev => prev.map(t => t.id === editing.id ? { ...t, nodes: res.data } : t));
+      setMsg('✅ 流程已保存');
+      setTemplates(prev => prev.map(t => t.id === editing.id ? { ...t, nodes: res.data, business_types: editing.business_types, permissions: editing.permissions } : t));
     } else {
       setMsg(`❌ ${res.message}`);
     }
+  };
+
+  const updateTemplateBizTypes = (types: string[]) => {
+    setEditing((prev: any) => ({ ...prev, business_types: types }));
+  };
+
+  const updateTemplatePermissions = (key: string, val: boolean) => {
+    setEditing((prev: any) => ({ ...prev, permissions: { ...(prev.permissions || {}), [key]: val } }));
   };
 
   const ICON_OPTIONS = [
@@ -1048,19 +1095,23 @@ function ApprovalFlowModule() {
     { value: 'handshake', label: '合同' },
   ];
 
-  // ── Editing View ──
+  const selectedNode = selectedNodeIdx !== null ? nodes[selectedNodeIdx] : null;
+  const userList: any[] = Array.isArray(allUsers) ? allUsers : [];
+
+  // ── Editing View (Two-panel layout) ──
   if (editing) {
     return (
       <div>
-        <div className="flex items-center justify-between mb-5">
+        {/* Header with save */}
+        <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
-            <button onClick={() => { setEditing(null); setNodes([]); }}
+            <button onClick={() => { setEditing(null); setNodes([]); setSelectedNodeIdx(null); }}
               className="w-8 h-8 rounded-lg bg-slate-100 hover:bg-slate-200 flex items-center justify-center transition-colors">
               <span className="material-symbols-outlined text-[16px] text-slate-600">arrow_back</span>
             </button>
             <div>
-              <h4 className="text-base font-bold text-slate-800">{editing.name}</h4>
-              <p className="text-xs text-slate-400">{editing.description || '编辑审批流程节点'}</p>
+              <h4 className="text-base font-bold text-slate-800 dark:text-slate-100">{editing.name}</h4>
+              <p className="text-xs text-slate-400">{editing.description || '审批流程设置'}</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -1073,169 +1124,473 @@ function ApprovalFlowModule() {
           </div>
         </div>
 
-        {/* Visual Flow */}
-        <div className="flex flex-col items-center gap-0 py-4">
-          {nodes.map((node, idx) => (
-            <React.Fragment key={idx}>
-              {/* Connector Line */}
-              {idx > 0 && (
-                <div className="flex flex-col items-center">
-                  <div className="w-0.5 h-6 bg-slate-300" />
-                  <span className="material-symbols-outlined text-[16px] text-slate-300 -my-1">arrow_drop_down</span>
-                </div>
-              )}
-              {/* Node Card */}
-              <div className={`relative w-full max-w-md rounded-xl border-2 p-4 transition-all ${
-                node.node_type === 'initiator' ? 'border-blue-200 bg-blue-50/50' :
-                node.node_type === 'approver' ? 'border-orange-200 bg-orange-50/50' :
-                node.node_type === 'cc' ? 'border-green-200 bg-green-50/50' :
-                'border-purple-200 bg-purple-50/50'
-              }`}>
-                <div className="flex items-start justify-between">
-                  <div className="flex items-center gap-2.5">
-                    <div className={`w-8 h-8 rounded-lg ${NODE_TYPES[node.node_type]?.color || 'bg-slate-500'} flex items-center justify-center`}>
-                      <span className="material-symbols-outlined text-white text-[16px]">{NODE_TYPES[node.node_type]?.icon || 'help'}</span>
-                    </div>
-                    <div>
-                      <input value={node.label} onChange={e => updateNode(idx, { label: e.target.value })}
-                        className="text-sm font-bold text-slate-800 bg-transparent border-none outline-none w-40" placeholder="节点名称" />
-                      <p className="text-[10px] text-slate-400 mt-0.5">{NODE_TYPES[node.node_type]?.label}</p>
-                    </div>
+        {/* Business types binding */}
+        <div className="mb-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-4">
+          <h5 className="text-xs font-bold text-slate-600 dark:text-slate-300 mb-2.5 flex items-center gap-1.5">
+            <span className="material-symbols-outlined text-[14px]">link</span>关联业务操作
+          </h5>
+          <div className="flex flex-wrap gap-2">
+            {BUSINESS_TYPES.map(bt => {
+              const isActive = (editing.business_types || []).includes(bt.value);
+              return (
+                <button key={bt.value} onClick={() => {
+                  const cur = editing.business_types || [];
+                  updateTemplateBizTypes(isActive ? cur.filter((v: string) => v !== bt.value) : [...cur, bt.value]);
+                }}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${
+                    isActive ? 'bg-[#0060a9]/10 border-[#0060a9]/30 text-[#0060a9]' : 'bg-white dark:bg-slate-700 border-slate-200 dark:border-slate-600 text-slate-500 hover:border-slate-300'
+                  }`}>
+                  <span className="material-symbols-outlined text-[14px]">{bt.icon}</span>
+                  {bt.label}
+                  {isActive && <span className="material-symbols-outlined text-[12px]">check</span>}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Two-panel layout */}
+        <div className="flex gap-4" style={{ minHeight: '500px' }}>
+          {/* Left Panel: Visual Flow */}
+          <div className="w-[340px] shrink-0 flex flex-col items-center gap-0 py-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700 px-4 overflow-y-auto">
+            {nodes.map((node, idx) => (
+              <React.Fragment key={idx}>
+                {idx > 0 && (
+                  <div className="flex flex-col items-center">
+                    <div className="w-0.5 h-4 bg-slate-300" />
+                    <button onClick={() => {
+                      // Insert node between
+                    }} className="w-5 h-5 rounded-full bg-white border-2 border-slate-300 hover:border-[#0060a9] flex items-center justify-center transition-colors group -my-0.5 z-10">
+                      <span className="material-symbols-outlined text-[12px] text-slate-300 group-hover:text-[#0060a9]">add</span>
+                    </button>
+                    <div className="w-0.5 h-4 bg-slate-300" />
                   </div>
-                  {node.node_type !== 'initiator' && (
-                    <div className="flex items-center gap-1">
-                      <button onClick={() => moveNode(idx, -1)} className="w-6 h-6 rounded flex items-center justify-center text-slate-400 hover:text-slate-600 hover:bg-white">
-                        <span className="material-symbols-outlined text-[14px]">arrow_upward</span>
+                )}
+                {/* Node Card */}
+                <div onClick={() => { setSelectedNodeIdx(idx); setConfigTab('approver'); }}
+                  className={`relative w-full rounded-xl border-2 p-3 cursor-pointer transition-all ${
+                    selectedNodeIdx === idx ? 'ring-2 ring-[#0060a9]/30 shadow-md' : ''
+                  } ${
+                    node.node_type === 'initiator' ? 'border-blue-300 bg-blue-50/80 dark:bg-blue-900/20' :
+                    node.node_type === 'approver' ? 'border-orange-300 bg-orange-50/80 dark:bg-orange-900/20' :
+                    node.node_type === 'handler' ? 'border-indigo-300 bg-indigo-50/80 dark:bg-indigo-900/20' :
+                    node.node_type === 'cc' ? 'border-teal-300 bg-teal-50/80 dark:bg-teal-900/20' :
+                    'border-purple-300 bg-purple-50/80 dark:bg-purple-900/20'
+                  }`}>
+                  <div className={`absolute top-0 left-0 right-0 h-6 rounded-t-[10px] text-[10px] font-bold text-white px-3 flex items-center ${NODE_TYPES[node.node_type]?.color || 'bg-slate-500'}`}>
+                    {NODE_TYPES[node.node_type]?.label || node.node_type}
+                  </div>
+                  <div className="mt-5 flex items-center justify-between">
+                    <div className="text-sm text-slate-700 dark:text-slate-200 truncate flex-1">
+                      {node.node_type === 'initiator' ? (
+                        <span className="text-slate-500">{node.config?.scope || '所有人'}</span>
+                      ) : node.node_type === 'approver' || node.node_type === 'handler' ? (
+                        <span className="text-slate-500 text-xs">
+                          {ASSIGNEE_TYPES.find(a => a.value === (node.config?.assigneeType || 'specified'))?.label}
+                          {(node.config?.assigneeType || 'specified') === 'specified' && node.config?.assignees?.length > 0
+                            ? ` · ${node.config.assignees.length}人` : ''}
+                          {node.node_type === 'approver' && ` · ${node.approve_type === 'or_sign' ? '或签' : node.approve_type === 'parallel' ? '会签' : '依次'}`}
+                        </span>
+                      ) : node.node_type === 'cc' ? (
+                        <span className="text-slate-500 text-xs">{node.config?.assigneeType === 'self_select' ? '申请人自选' : '指定成员'}</span>
+                      ) : (
+                        <span className="text-xs text-slate-500">条件分支</span>
+                      )}
+                    </div>
+                    <span className="material-symbols-outlined text-[14px] text-slate-300">chevron_right</span>
+                  </div>
+                  {/* Delete/Move buttons */}
+                  {node.node_type !== 'initiator' && selectedNodeIdx === idx && (
+                    <div className="absolute -top-2 -right-2 flex gap-0.5">
+                      <button onClick={e => { e.stopPropagation(); moveNode(idx, -1); }} className="w-5 h-5 rounded-full bg-white shadow border border-slate-200 flex items-center justify-center text-slate-400 hover:text-blue-500">
+                        <span className="material-symbols-outlined text-[11px]">arrow_upward</span>
                       </button>
-                      <button onClick={() => moveNode(idx, 1)} className="w-6 h-6 rounded flex items-center justify-center text-slate-400 hover:text-slate-600 hover:bg-white">
-                        <span className="material-symbols-outlined text-[14px]">arrow_downward</span>
+                      <button onClick={e => { e.stopPropagation(); moveNode(idx, 1); }} className="w-5 h-5 rounded-full bg-white shadow border border-slate-200 flex items-center justify-center text-slate-400 hover:text-blue-500">
+                        <span className="material-symbols-outlined text-[11px]">arrow_downward</span>
                       </button>
-                      <button onClick={() => removeNode(idx)} className="w-6 h-6 rounded flex items-center justify-center text-slate-400 hover:text-red-500 hover:bg-red-50">
-                        <span className="material-symbols-outlined text-[14px]">delete</span>
+                      <button onClick={e => { e.stopPropagation(); removeNode(idx); }} className="w-5 h-5 rounded-full bg-white shadow border border-slate-200 flex items-center justify-center text-slate-400 hover:text-red-500">
+                        <span className="material-symbols-outlined text-[11px]">close</span>
                       </button>
                     </div>
                   )}
                 </div>
+              </React.Fragment>
+            ))}
 
-                {/* Approver config */}
-                {node.node_type === 'approver' && (
-                  <div className="mt-3 space-y-2">
-                    <div className="flex items-center gap-2 text-xs">
-                      <span className="text-slate-500 shrink-0">审批方式：</span>
-                      <select value={node.approve_type || 'serial'} onChange={e => updateNode(idx, { approve_type: e.target.value })}
-                        className="bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs outline-none">
-                        {Object.entries(APPROVE_TYPES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-                      </select>
+            {/* End + Add */}
+            <div className="flex flex-col items-center">
+              <div className="w-0.5 h-4 bg-slate-300" />
+              <button className="w-5 h-5 rounded-full bg-white border-2 border-slate-300 hover:border-[#0060a9] flex items-center justify-center transition-colors group -my-0.5 z-10"
+                onClick={() => addNode('approver')}>
+                <span className="material-symbols-outlined text-[12px] text-slate-300 group-hover:text-[#0060a9]">add</span>
+              </button>
+              <div className="w-0.5 h-4 bg-slate-300" />
+            </div>
+            <div className="w-full rounded-xl border-2 border-dashed border-slate-300 bg-white dark:bg-slate-800 p-2.5 text-center">
+              <span className="text-xs font-bold text-slate-400">流程结束</span>
+            </div>
+
+            {/* Quick add buttons */}
+            <div className="flex flex-wrap justify-center gap-1.5 mt-4 pt-3 border-t border-slate-200 dark:border-slate-700 w-full">
+              {(['approver', 'handler', 'cc', 'condition'] as const).map(type => (
+                <button key={type} onClick={() => addNode(type)}
+                  className="flex items-center gap-1 px-2.5 py-1 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg text-[11px] font-medium text-slate-500 hover:border-[#0060a9]/30 hover:text-[#0060a9] transition-all">
+                  <span className={`w-4 h-4 rounded ${NODE_TYPES[type].color} flex items-center justify-center`}>
+                    <span className="material-symbols-outlined text-white text-[10px]">{NODE_TYPES[type].icon}</span>
+                  </span>
+                  {NODE_TYPES[type].label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Right Panel: Node Config */}
+          <div className="flex-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden">
+            {selectedNode ? (
+              <div className="h-full flex flex-col">
+                {/* Config Tabs */}
+                <div className="flex border-b border-slate-200 dark:border-slate-700 shrink-0">
+                  {(selectedNode.node_type === 'approver' || selectedNode.node_type === 'handler') && (
+                    <>
+                      <button onClick={() => setConfigTab('approver')}
+                        className={`px-5 py-3 text-sm font-medium transition-colors relative ${configTab === 'approver' ? 'text-[#0060a9]' : 'text-slate-500 hover:text-slate-700'}`}>
+                        {selectedNode.node_type === 'handler' ? '办理人设置' : '审批人设置'}
+                        {configTab === 'approver' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#0060a9]" />}
+                      </button>
+                      <button onClick={() => setConfigTab('permissions')}
+                        className={`px-5 py-3 text-sm font-medium transition-colors relative ${configTab === 'permissions' ? 'text-[#0060a9]' : 'text-slate-500 hover:text-slate-700'}`}>
+                        权限设置
+                        {configTab === 'permissions' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#0060a9]" />}
+                      </button>
+                    </>
+                  )}
+                  {selectedNode.node_type === 'cc' && (
+                    <div className="px-5 py-3 text-sm font-medium text-[#0060a9] relative">
+                      抄送人设置
+                      <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#0060a9]" />
                     </div>
-                    <div className="flex items-center gap-2 text-xs">
-                      <span className="text-slate-500 shrink-0">审批人：</span>
-                      <select value={node.config?.assigneeType || 'specified'} onChange={e => updateNode(idx, { config: { ...node.config, assigneeType: e.target.value } })}
-                        className="bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs outline-none">
-                        <option value="specified">指定成员</option>
-                        <option value="superior">发起人直属上级</option>
-                        <option value="dept_head">部门主管</option>
-                        <option value="role_hr">角色: HR</option>
-                        <option value="role_admin">角色: 管理员</option>
-                      </select>
+                  )}
+                  {selectedNode.node_type === 'initiator' && (
+                    <div className="px-5 py-3 text-sm font-medium text-[#0060a9] relative">
+                      发起人设置
+                      <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#0060a9]" />
                     </div>
-                    {/* Person picker for specified members */}
-                    {(node.config?.assigneeType || 'specified') === 'specified' && (() => {
-                      const selectedIds: string[] = node.config?.assignees || [];
-                      const userList: any[] = Array.isArray(allUsers) ? allUsers : [];
-                      return (
-                        <div className="mt-1">
-                          {/* Selected chips */}
-                          {selectedIds.length > 0 && (
-                            <div className="flex flex-wrap gap-1 mb-1.5">
-                              {selectedIds.map((uid: string) => {
-                                const u = userList.find(u => u.id === uid);
-                                return (
-                                  <span key={uid} className="inline-flex items-center gap-1 px-2 py-0.5 bg-blue-50 text-blue-700 rounded-md text-[11px]">
-                                    {u?.name || uid}
-                                    <button onClick={() => updateNode(idx, { config: { ...node.config, assignees: selectedIds.filter(id => id !== uid) } })}
-                                      className="text-blue-400 hover:text-red-500">×</button>
-                                  </span>
-                                );
-                              })}
-                            </div>
-                          )}
-                          {/* Add person dropdown */}
-                          <select value="" onChange={e => {
-                            if (e.target.value && !selectedIds.includes(e.target.value)) {
-                              updateNode(idx, { config: { ...node.config, assignees: [...selectedIds, e.target.value] } });
-                            }
-                            e.target.value = '';
-                          }} className="bg-white border border-dashed border-slate-300 rounded-lg px-2 py-1 text-[11px] text-slate-500 outline-none w-full">
-                            <option value="">+ 添加审批人...</option>
-                            {userList.filter(u => !selectedIds.includes(u.id)).map((u: any) => (
-                              <option key={u.id} value={u.id}>{u.name} ({u.department_name || u.title || ''})</option>
-                            ))}
-                          </select>
+                  )}
+                  {selectedNode.node_type === 'condition' && (
+                    <div className="px-5 py-3 text-sm font-medium text-[#0060a9] relative">
+                      条件设置
+                      <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#0060a9]" />
+                    </div>
+                  )}
+                </div>
+
+                {/* Config Content */}
+                <div className="flex-1 overflow-y-auto p-5 space-y-5">
+                  {/* ── Node Name ── */}
+                  <div>
+                    <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 mb-1.5">节点名称</label>
+                    <input value={selectedNode.label} onChange={e => updateNode(selectedNodeIdx!, { label: e.target.value })}
+                      className="w-full px-3 py-2 border border-slate-200 dark:border-slate-600 rounded-lg text-sm bg-white dark:bg-slate-700 outline-none focus:ring-2 focus:ring-[#0060a9]/20" />
+                  </div>
+
+                  {/* ── Initiator Config ── */}
+                  {selectedNode.node_type === 'initiator' && (
+                    <div>
+                      <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 mb-2">发起范围</label>
+                      <div className="space-y-2">
+                        {['所有人', '指定部门', '指定角色'].map(scope => (
+                          <label key={scope} className="flex items-center gap-2 cursor-pointer">
+                            <input type="radio" name="initiator_scope" checked={(selectedNode.config?.scope || '所有人') === scope}
+                              onChange={() => updateNode(selectedNodeIdx!, { config: { ...selectedNode.config, scope } })}
+                              className="w-3.5 h-3.5 text-[#0060a9]" />
+                            <span className="text-sm text-slate-600 dark:text-slate-300">{scope}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* ── Approver/Handler Config (Tab: 审批人设置) ── */}
+                  {(selectedNode.node_type === 'approver' || selectedNode.node_type === 'handler') && configTab === 'approver' && (
+                    <>
+                      {/* Assignee Type (radio grid) */}
+                      <div>
+                        <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 mb-2">
+                          {selectedNode.node_type === 'handler' ? '办理人' : '审批人'}
+                        </label>
+                        <div className="grid grid-cols-3 gap-x-4 gap-y-2.5">
+                          {ASSIGNEE_TYPES.map(at => (
+                            <label key={at.value} className="flex items-center gap-1.5 cursor-pointer">
+                              <input type="radio" name={`assignee_type_${selectedNodeIdx}`}
+                                checked={(selectedNode.config?.assigneeType || 'specified') === at.value}
+                                onChange={() => updateNode(selectedNodeIdx!, { config: { ...selectedNode.config, assigneeType: at.value } })}
+                                className="w-3.5 h-3.5 text-[#0060a9]" />
+                              <span className="text-xs text-slate-600 dark:text-slate-300">{at.label}</span>
+                            </label>
+                          ))}
                         </div>
-                      );
-                    })()}
-                  </div>
-                )}
+                      </div>
 
-                {/* CC config */}
-                {node.node_type === 'cc' && (
-                  <div className="mt-3 text-xs text-slate-500">
-                    <span>通知方式：</span>
-                    <select value={node.config?.notifyType || 'system'} onChange={e => updateNode(idx, { config: { ...node.config, notifyType: e.target.value } })}
-                      className="bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs outline-none ml-1">
-                      <option value="system">系统通知</option>
-                      <option value="wecom">企微消息</option>
-                      <option value="both">系统+企微</option>
-                    </select>
-                  </div>
-                )}
+                      {/* Person picker — when specified */}
+                      {(selectedNode.config?.assigneeType || 'specified') === 'specified' && (() => {
+                        const selectedIds: string[] = selectedNode.config?.assignees || [];
+                        return (
+                          <div>
+                            <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 mb-2">指定成员</label>
+                            {selectedIds.length > 0 && (
+                              <div className="flex flex-wrap gap-1.5 mb-2">
+                                {selectedIds.map((uid: string) => {
+                                  const u = userList.find(u => u.id === uid);
+                                  return (
+                                    <span key={uid} className="inline-flex items-center gap-1 px-2 py-1 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-lg text-[11px] font-medium">
+                                      <span className="material-symbols-outlined text-[12px]">person</span>
+                                      {u?.name || uid}
+                                      <button onClick={() => updateNode(selectedNodeIdx!, { config: { ...selectedNode.config, assignees: selectedIds.filter(id => id !== uid) } })}
+                                        className="text-blue-400 hover:text-red-500 ml-0.5">×</button>
+                                    </span>
+                                  );
+                                })}
+                              </div>
+                            )}
+                            <select value="" onChange={e => {
+                              if (e.target.value && !selectedIds.includes(e.target.value)) {
+                                updateNode(selectedNodeIdx!, { config: { ...selectedNode.config, assignees: [...selectedIds, e.target.value] } });
+                              }
+                              e.target.value = '';
+                            }} className="w-full bg-white dark:bg-slate-700 border border-dashed border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-xs text-slate-500 outline-none">
+                              <option value="">+ 添加成员...</option>
+                              {userList.filter(u => !selectedIds.includes(u.id)).map((u: any) => (
+                                <option key={u.id} value={u.id}>{u.name} ({u.department_name || u.title || ''})</option>
+                              ))}
+                            </select>
+                          </div>
+                        );
+                      })()}
 
-                {/* Condition config */}
-                {node.node_type === 'condition' && (
-                  <div className="mt-3 text-xs text-slate-500">
-                    <div className="flex items-center gap-2">
-                      <span className="shrink-0">条件字段：</span>
-                      <input value={node.config?.field || ''} onChange={e => updateNode(idx, { config: { ...node.config, field: e.target.value } })}
-                        placeholder="例如: amount" className="bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs outline-none w-24" />
-                      <select value={node.config?.operator || 'gt'} onChange={e => updateNode(idx, { config: { ...node.config, operator: e.target.value } })}
-                        className="bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs outline-none">
-                        <option value="gt">&gt;</option>
-                        <option value="gte">&ge;</option>
-                        <option value="lt">&lt;</option>
-                        <option value="lte">&le;</option>
-                        <option value="eq">=</option>
-                      </select>
-                      <input value={node.config?.value || ''} onChange={e => updateNode(idx, { config: { ...node.config, value: e.target.value } })}
-                        placeholder="值" className="bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs outline-none w-20" />
+                      {/* Selection scope */}
+                      {selectedNode.config?.assigneeType === 'self_select' && (
+                        <>
+                          <div>
+                            <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 mb-2">可选范围</label>
+                            <div className="flex gap-4">
+                              {['不限范围', '指定范围'].map(s => (
+                                <label key={s} className="flex items-center gap-1.5 cursor-pointer">
+                                  <input type="radio" checked={(selectedNode.config?.selectionScope || '不限范围') === s}
+                                    onChange={() => updateNode(selectedNodeIdx!, { config: { ...selectedNode.config, selectionScope: s } })}
+                                    className="w-3.5 h-3.5 text-[#0060a9]" />
+                                  <span className="text-xs text-slate-600 dark:text-slate-300">{s}</span>
+                                </label>
+                              ))}
+                            </div>
+                          </div>
+                          <div>
+                            <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 mb-2">选人方式</label>
+                            <div className="flex gap-4">
+                              {[{ v: 'single', l: '单选' }, { v: 'multi', l: '多选' }].map(m => (
+                                <label key={m.v} className="flex items-center gap-1.5 cursor-pointer">
+                                  <input type="radio" checked={(selectedNode.config?.selectionMode || 'multi') === m.v}
+                                    onChange={() => updateNode(selectedNodeIdx!, { config: { ...selectedNode.config, selectionMode: m.v } })}
+                                    className="w-3.5 h-3.5 text-[#0060a9]" />
+                                  <span className="text-xs text-slate-600 dark:text-slate-300">{m.l}</span>
+                                </label>
+                              ))}
+                            </div>
+                          </div>
+                        </>
+                      )}
+
+                      {/* Multi-approval mode (for approver only) */}
+                      {selectedNode.node_type === 'approver' && (
+                        <div>
+                          <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 mb-2">多人审批方式</label>
+                          <div className="space-y-2">
+                            {Object.entries(APPROVE_MODES).map(([k, v]) => (
+                              <label key={k} className="flex items-center gap-1.5 cursor-pointer">
+                                <input type="radio" name={`approve_mode_${selectedNodeIdx}`}
+                                  checked={(selectedNode.approve_type || 'serial') === k}
+                                  onChange={() => updateNode(selectedNodeIdx!, { approve_type: k })}
+                                  className="w-3.5 h-3.5 text-[#0060a9]" />
+                                <span className="text-xs text-slate-600 dark:text-slate-300">{v}</span>
+                              </label>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Approval opinions */}
+                      <div>
+                        <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 mb-2">
+                          {selectedNode.node_type === 'handler' ? '办理意见' : '审批意见'}
+                        </label>
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input type="checkbox" checked={selectedNode.config?.requireComment || false}
+                            onChange={e => updateNode(selectedNodeIdx!, { config: { ...selectedNode.config, requireComment: e.target.checked } })}
+                            className="w-3.5 h-3.5 rounded text-[#0060a9]" />
+                          <span className="text-xs text-slate-600 dark:text-slate-300">
+                            {selectedNode.node_type === 'handler'
+                              ? '办理人提交办理结果时，必须填写办理意见'
+                              : '审批人同意或驳回单据时，必须填写审批意见'}
+                          </span>
+                        </label>
+                      </div>
+
+                      {/* Node actions */}
+                      {selectedNode.node_type === 'approver' && (
+                        <div>
+                          <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 mb-2">节点操作</label>
+                          <div className="flex flex-wrap gap-3">
+                            {[{ k: 'approve', l: '同意' }, { k: 'reject', l: '驳回' }, { k: 'transfer', l: '转交' }].map(a => (
+                              <label key={a.k} className="flex items-center gap-1.5 cursor-pointer">
+                                <input type="checkbox" checked={(selectedNode.config?.allowActions || ['approve', 'reject']).includes(a.k)}
+                                  onChange={e => {
+                                    const cur = selectedNode.config?.allowActions || ['approve', 'reject'];
+                                    const next = e.target.checked ? [...cur, a.k] : cur.filter((x: string) => x !== a.k);
+                                    updateNode(selectedNodeIdx!, { config: { ...selectedNode.config, allowActions: next } });
+                                  }}
+                                  className="w-3.5 h-3.5 rounded text-[#0060a9]" />
+                                <span className="text-xs text-slate-600 dark:text-slate-300">{a.l}</span>
+                              </label>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  )}
+
+                  {/* ── Approver/Handler Config (Tab: 权限设置) ── */}
+                  {(selectedNode.node_type === 'approver' || selectedNode.node_type === 'handler') && configTab === 'permissions' && (
+                    <div className="space-y-5">
+                      <div>
+                        <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 mb-3">修改权限</label>
+                        <div className="space-y-2.5">
+                          {[
+                            { k: 'lockApprover', l: '提交申请时，员工不可修改固定审批人' },
+                            { k: 'lockCc', l: '提交申请时，员工不可删除固定抄送人' },
+                            { k: 'lockHandler', l: '提交申请时，员工不可修改固定办理人' },
+                          ].map(p => (
+                            <label key={p.k} className="flex items-center gap-2 cursor-pointer">
+                              <input type="checkbox" checked={editing.permissions?.[p.k] || false}
+                                onChange={e => updateTemplatePermissions(p.k, e.target.checked)}
+                                className="w-3.5 h-3.5 rounded text-[#0060a9]" />
+                              <span className="text-xs text-slate-600 dark:text-slate-300">{p.l}</span>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 mb-3">撤销权限</label>
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input type="checkbox" checked={editing.permissions?.allowRevoke || false}
+                            onChange={e => updateTemplatePermissions('allowRevoke', e.target.checked)}
+                            className="w-3.5 h-3.5 rounded text-[#0060a9]" />
+                          <span className="text-xs text-slate-600 dark:text-slate-300">通过后允许撤销 — 审批通过后，经审批人和办理人同意可撤销申请</span>
+                        </label>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 mb-3">加签权限</label>
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input type="checkbox" checked={editing.permissions?.allowAddSigner || false}
+                            onChange={e => updateTemplatePermissions('allowAddSigner', e.target.checked)}
+                            className="w-3.5 h-3.5 rounded text-[#0060a9]" />
+                          <span className="text-xs text-slate-600 dark:text-slate-300">允许在审批单中增加临时审批人</span>
+                        </label>
+                      </div>
                     </div>
-                  </div>
-                )}
+                  )}
+
+                  {/* ── CC Config ── */}
+                  {selectedNode.node_type === 'cc' && (
+                    <>
+                      <div>
+                        <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 mb-2">抄送人类型</label>
+                        <div className="space-y-2">
+                          {[{ v: 'specified', l: '指定成员' }, { v: 'self_select', l: '申请人自选' }].map(t => (
+                            <label key={t.v} className="flex items-center gap-1.5 cursor-pointer">
+                              <input type="radio" name={`cc_type_${selectedNodeIdx}`}
+                                checked={(selectedNode.config?.assigneeType || 'specified') === t.v}
+                                onChange={() => updateNode(selectedNodeIdx!, { config: { ...selectedNode.config, assigneeType: t.v } })}
+                                className="w-3.5 h-3.5 text-[#0060a9]" />
+                              <span className="text-xs text-slate-600 dark:text-slate-300">{t.l}</span>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                      {(selectedNode.config?.assigneeType || 'specified') === 'specified' && (() => {
+                        const selectedIds: string[] = selectedNode.config?.assignees || [];
+                        return (
+                          <div>
+                            <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 mb-2">指定抄送人</label>
+                            {selectedIds.length > 0 && (
+                              <div className="flex flex-wrap gap-1.5 mb-2">
+                                {selectedIds.map((uid: string) => {
+                                  const u = userList.find(u => u.id === uid);
+                                  return (
+                                    <span key={uid} className="inline-flex items-center gap-1 px-2 py-1 bg-teal-50 dark:bg-teal-900/30 text-teal-700 dark:text-teal-300 rounded-lg text-[11px] font-medium">
+                                      <span className="material-symbols-outlined text-[12px]">person</span>
+                                      {u?.name || uid}
+                                      <button onClick={() => updateNode(selectedNodeIdx!, { config: { ...selectedNode.config, assignees: selectedIds.filter(id => id !== uid) } })}
+                                        className="text-teal-400 hover:text-red-500 ml-0.5">×</button>
+                                    </span>
+                                  );
+                                })}
+                              </div>
+                            )}
+                            <select value="" onChange={e => {
+                              if (e.target.value && !selectedIds.includes(e.target.value)) {
+                                updateNode(selectedNodeIdx!, { config: { ...selectedNode.config, assignees: [...selectedIds, e.target.value] } });
+                              }
+                              e.target.value = '';
+                            }} className="w-full bg-white dark:bg-slate-700 border border-dashed border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-xs text-slate-500 outline-none">
+                              <option value="">+ 添加抄送人...</option>
+                              {userList.filter(u => !selectedIds.includes(u.id)).map((u: any) => (
+                                <option key={u.id} value={u.id}>{u.name} ({u.department_name || u.title || ''})</option>
+                              ))}
+                            </select>
+                          </div>
+                        );
+                      })()}
+                      <div>
+                        <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 mb-2">通知方式</label>
+                        <select value={selectedNode.config?.notifyType || 'both'} onChange={e => updateNode(selectedNodeIdx!, { config: { ...selectedNode.config, notifyType: e.target.value } })}
+                          className="bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg px-3 py-2 text-xs outline-none">
+                          <option value="system">系统通知</option>
+                          <option value="wecom">企微消息</option>
+                          <option value="both">系统 + 企微</option>
+                        </select>
+                      </div>
+                    </>
+                  )}
+
+                  {/* ── Condition Config ── */}
+                  {selectedNode.node_type === 'condition' && (
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-2">
+                        <label className="text-xs text-slate-500 shrink-0">条件字段：</label>
+                        <input value={selectedNode.config?.field || ''} onChange={e => updateNode(selectedNodeIdx!, { config: { ...selectedNode.config, field: e.target.value } })}
+                          placeholder="例如: amount" className="bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg px-3 py-2 text-xs outline-none w-32" />
+                        <select value={selectedNode.config?.operator || 'gt'} onChange={e => updateNode(selectedNodeIdx!, { config: { ...selectedNode.config, operator: e.target.value } })}
+                          className="bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg px-2 py-2 text-xs outline-none">
+                          <option value="gt">&gt;</option>
+                          <option value="gte">&ge;</option>
+                          <option value="lt">&lt;</option>
+                          <option value="lte">&le;</option>
+                          <option value="eq">=</option>
+                        </select>
+                        <input value={selectedNode.config?.value || ''} onChange={e => updateNode(selectedNodeIdx!, { config: { ...selectedNode.config, value: e.target.value } })}
+                          placeholder="值" className="bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg px-3 py-2 text-xs outline-none w-24" />
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
-            </React.Fragment>
-          ))}
-
-          {/* End Node */}
-          <div className="flex flex-col items-center">
-            <div className="w-0.5 h-6 bg-slate-300" />
-            <span className="material-symbols-outlined text-[16px] text-slate-300 -my-1">arrow_drop_down</span>
+            ) : (
+              <div className="h-full flex flex-col items-center justify-center text-slate-300 dark:text-slate-600 p-8">
+                <span className="material-symbols-outlined text-[48px] mb-3">touch_app</span>
+                <p className="text-sm font-medium">点击左侧节点进行配置</p>
+                <p className="text-xs mt-1">选择节点后可设置审批人、权限等</p>
+              </div>
+            )}
           </div>
-          <div className="w-full max-w-md rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 p-3 text-center">
-            <span className="text-xs font-bold text-slate-400">流程结束</span>
-          </div>
-        </div>
-
-        {/* Add Node Toolbar */}
-        <div className="flex items-center justify-center gap-2 mt-4 pt-4 border-t border-slate-100">
-          <span className="text-xs text-slate-400 mr-2">添加节点：</span>
-          {(['approver', 'cc', 'condition'] as const).map(type => (
-            <button key={type} onClick={() => addNode(type)}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-medium text-slate-600 hover:border-[#0060a9]/30 hover:text-[#0060a9] transition-all">
-              <span className={`w-5 h-5 rounded ${NODE_TYPES[type].color} flex items-center justify-center`}>
-                <span className="material-symbols-outlined text-white text-[12px]">{NODE_TYPES[type].icon}</span>
-              </span>
-              {NODE_TYPES[type].label}
-            </button>
-          ))}
         </div>
       </div>
     );
@@ -1255,22 +1610,40 @@ function ApprovalFlowModule() {
 
       {msg && <div className="mb-3 text-xs text-slate-600 bg-slate-50 rounded-lg px-3 py-2">{msg}</div>}
 
-      {/* Create Form Popover */}
+      {/* Create Form */}
       {showCreate && (
-        <div className="mb-4 bg-white border border-slate-200 rounded-xl p-5 shadow-sm">
-          <h5 className="text-sm font-bold text-slate-700 mb-3">新建审批流模板</h5>
+        <div className="mb-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-5 shadow-sm">
+          <h5 className="text-sm font-bold text-slate-700 dark:text-slate-200 mb-3">新建审批流模板</h5>
           <div className="grid grid-cols-[1fr_auto] gap-3 mb-3">
             <input value={newName} onChange={e => setNewName(e.target.value)} placeholder="审批流名称 *"
-              className="px-3 py-2 border border-slate-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-200" autoFocus />
+              className="px-3 py-2 border border-slate-200 dark:border-slate-600 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-200 bg-white dark:bg-slate-700" autoFocus />
             <select value={newIcon} onChange={e => setNewIcon(e.target.value)}
-              className="px-3 py-2 border border-slate-200 rounded-lg text-sm outline-none">
+              className="px-3 py-2 border border-slate-200 dark:border-slate-600 rounded-lg text-sm outline-none bg-white dark:bg-slate-700">
               {ICON_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
             </select>
           </div>
           <input value={newDesc} onChange={e => setNewDesc(e.target.value)} placeholder="描述说明（可选）"
-            className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm outline-none mb-3 focus:ring-2 focus:ring-blue-200" />
+            className="w-full px-3 py-2 border border-slate-200 dark:border-slate-600 rounded-lg text-sm outline-none mb-3 focus:ring-2 focus:ring-blue-200 bg-white dark:bg-slate-700" />
+          {/* Business types selection */}
+          <div className="mb-3">
+            <label className="block text-xs font-bold text-slate-500 mb-2">关联业务（可选）</label>
+            <div className="flex flex-wrap gap-1.5">
+              {BUSINESS_TYPES.map(bt => {
+                const active = newBizTypes.includes(bt.value);
+                return (
+                  <button key={bt.value} onClick={() => setNewBizTypes(prev => active ? prev.filter(v => v !== bt.value) : [...prev, bt.value])}
+                    className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-medium border transition-all ${
+                      active ? 'bg-[#0060a9]/10 border-[#0060a9]/30 text-[#0060a9]' : 'bg-slate-50 border-slate-200 text-slate-500 hover:border-slate-300'
+                    }`}>
+                    <span className="material-symbols-outlined text-[12px]">{bt.icon}</span>
+                    {bt.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
           <div className="flex justify-end gap-2">
-            <button onClick={() => { setShowCreate(false); setNewName(''); setNewDesc(''); }}
+            <button onClick={() => { setShowCreate(false); setNewName(''); setNewDesc(''); setNewBizTypes([]); }}
               className="px-3 py-1.5 text-xs text-slate-500 hover:text-slate-700 rounded-lg hover:bg-slate-50">取消</button>
             <button onClick={handleCreate} disabled={!newName.trim()}
               className="px-4 py-1.5 bg-[#0060a9] text-white text-xs font-medium rounded-lg hover:bg-[#004d8a] disabled:opacity-50">创建</button>
@@ -1290,18 +1663,24 @@ function ApprovalFlowModule() {
       ) : (
         <div className="space-y-3">
           {templates.map(tpl => (
-            <div key={tpl.id} className="bg-slate-50 rounded-xl p-4 flex items-center justify-between group hover:bg-slate-100 transition-colors">
+            <div key={tpl.id} className="bg-slate-50 dark:bg-slate-800 rounded-xl p-4 flex items-center justify-between group hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors">
               <div className="flex items-center gap-3 cursor-pointer flex-1" onClick={() => openEditor(tpl)}>
                 <div className="w-10 h-10 rounded-xl bg-[#0060a9] flex items-center justify-center">
                   <span className="material-symbols-outlined text-white text-lg">{tpl.icon || 'approval'}</span>
                 </div>
                 <div>
-                  <h5 className="text-sm font-bold text-slate-700">{tpl.name}</h5>
-                  <p className="text-xs text-slate-400">{tpl.description || '暂无描述'} · {tpl.nodes?.length || 0} 个节点</p>
+                  <h5 className="text-sm font-bold text-slate-700 dark:text-slate-200">{tpl.name}</h5>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <span className="text-xs text-slate-400">{tpl.description || '暂无描述'} · {tpl.nodes?.length || 0} 个节点</span>
+                    {(tpl.business_types || []).length > 0 && (
+                      <span className="text-[10px] px-1.5 py-0.5 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded font-medium">
+                        {(tpl.business_types || []).length} 项业务
+                      </span>
+                    )}
+                  </div>
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                {/* Enable/Disable Toggle */}
                 <div onClick={() => handleToggle(tpl)}
                   className={`relative w-9 h-5 rounded-full cursor-pointer transition-all duration-200 ${tpl.enabled ? 'bg-[#0060a9]' : 'bg-slate-200'}`}>
                   <span className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform duration-200 ${tpl.enabled ? 'translate-x-4' : ''}`} />
@@ -1322,7 +1701,6 @@ function ApprovalFlowModule() {
     </div>
   );
 }
-
 // ─── MODULE: 权限管理 ─────────────────────────────────────────────────
 const PRESETS_KEY = 'hrm_perm_presets';
 interface PermPreset { name: string; keys: string[] }

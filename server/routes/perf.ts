@@ -7,12 +7,15 @@ const router = Router();
 
 // 创建绩效计划
 router.post('/plans', authMiddleware, (req: AuthRequest, res) => {
-  const { title, description, category, assignee_id, approver_id, department_id, difficulty, deadline, quarter, alignment, target_value } = req.body;
+  const { title, description, category, assignee_id, approver_id, department_id, difficulty, deadline, quarter, alignment, target_value, collaborators } = req.body;
   const db = getDb();
 
+  // 兼容旧表
+  try { db.exec("ALTER TABLE perf_plans ADD COLUMN collaborators TEXT"); } catch(e) {}
+
   const result = db.prepare(
-    `INSERT INTO perf_plans (title, description, category, creator_id, assignee_id, approver_id, department_id, difficulty, deadline, quarter, alignment, target_value) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-  ).run(title, description, category, req.userId, assignee_id || req.userId, approver_id, department_id, difficulty, deadline, quarter, alignment, target_value);
+    `INSERT INTO perf_plans (title, description, category, creator_id, assignee_id, approver_id, department_id, difficulty, deadline, quarter, alignment, target_value, collaborators) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).run(title, description, category, req.userId, assignee_id || req.userId, approver_id, department_id, difficulty, deadline, quarter, alignment, target_value, collaborators || null);
 
   return res.json({ code: 0, data: { id: result.lastInsertRowid } });
 });
@@ -44,12 +47,12 @@ router.get('/plans/:id', authMiddleware, (req, res) => {
 
 // 编辑绩效计划 (草稿 or 被驳回均可编辑)
 router.put('/plans/:id', authMiddleware, (req: AuthRequest, res) => {
-  const { title, description, category, difficulty, deadline, quarter, alignment, target_value } = req.body;
+  const { title, description, category, difficulty, deadline, quarter, alignment, target_value, collaborators } = req.body;
   const db = getDb();
 
   db.prepare(
-    `UPDATE perf_plans SET title=?, description=?, category=?, difficulty=?, deadline=?, quarter=?, alignment=?, target_value=?, updated_at=? WHERE id = ? AND status IN ('draft', 'rejected')`
-  ).run(title, description, category, difficulty, deadline, quarter, alignment, target_value, new Date().toISOString(), req.params.id);
+    `UPDATE perf_plans SET title=?, description=?, category=?, difficulty=?, deadline=?, quarter=?, alignment=?, target_value=?, collaborators=?, updated_at=? WHERE id = ? AND status IN ('draft', 'rejected')`
+  ).run(title, description, category, difficulty, deadline, quarter, alignment, target_value, collaborators || null, new Date().toISOString(), req.params.id);
 
   return res.json({ code: 0, message: '更新成功' });
 });
@@ -62,11 +65,11 @@ router.post('/plans/:id/resubmit', authMiddleware, (req: AuthRequest, res) => {
   if (plan.status !== 'rejected') return res.json({ code: 400, message: '只有被驳回的计划可以重新提交' });
 
   // 更新字段（如果 body 有新内容）
-  const { title, description, category, target_value, deadline } = req.body;
+  const { title, description, category, target_value, deadline, collaborators } = req.body;
   if (title) {
     db.prepare(
-      `UPDATE perf_plans SET title=?, description=?, category=?, target_value=?, deadline=?, status='pending_review', reject_reason=NULL, updated_at=? WHERE id = ?`
-    ).run(title, description, category, target_value, deadline, new Date().toISOString(), req.params.id);
+      `UPDATE perf_plans SET title=?, description=?, category=?, target_value=?, deadline=?, collaborators=?, status='pending_review', reject_reason=NULL, updated_at=? WHERE id = ?`
+    ).run(title, description, category, target_value, deadline, collaborators || null, new Date().toISOString(), req.params.id);
   } else {
     db.prepare(
       `UPDATE perf_plans SET status='pending_review', reject_reason=NULL, updated_at=? WHERE id = ?`

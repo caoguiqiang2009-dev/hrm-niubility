@@ -15,6 +15,7 @@ interface PerfPlan {
   deadline: string;
   assignee_id: string;
   creator_id: string;
+  collaborators?: string;
 }
 
 interface Subordinate {
@@ -42,7 +43,7 @@ export default function TeamPerformance({ navigate }: { navigate: (view: string)
   const [subordinates, setSubordinates] = useState<Subordinate[]>([]);
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
   const [selectedTask, setSelectedTask] = useState<any>(null);
-  const [newPlan, setNewPlan] = useState<SmartData & { assignee_id: string }>({ title: '', target_value: '', resource: '', relevance: '', deadline: '', category: '业务', assignee_id: '' });
+  const [newPlan, setNewPlan] = useState<SmartData & { assignee_id: string }>({ title: '', target_value: '', resource: '', relevance: '', deadline: '', category: '业务', collaborators: '', assignee_id: '' });
   const [submitting, setSubmitting] = useState(false);
 
   // Drag to scroll
@@ -425,6 +426,7 @@ export default function TeamPerformance({ navigate }: { navigate: (view: string)
                 description={selectedTask.description}
                 deadline={selectedTask.deadline}
                 category={selectedTask.category}
+                collaborators={selectedTask.collaborators}
               />
             </div>
             

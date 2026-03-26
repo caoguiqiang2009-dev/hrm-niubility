@@ -98,6 +98,29 @@ export default function SmartGoalDisplay({ data }: Props) {
           </p>
         </div>
       </div>
+
+      {/* Collaborators */}
+      {data.collaborators && (
+        <div className="bg-slate-50 dark:bg-slate-800/80 border border-slate-200/60 dark:border-slate-700/60 rounded-2xl p-4 shadow-sm relative overflow-hidden transition-all">
+          <div className="absolute top-0 left-0 w-1.5 h-full bg-sky-500"></div>
+          <div className="flex items-center mb-2 gap-2.5">
+            <span className="flex-none w-7 h-7 rounded-lg bg-sky-100 dark:bg-sky-900/40 text-sky-700 dark:text-sky-400 flex items-center justify-center">
+              <span className="material-symbols-outlined text-[16px]">group_add</span>
+            </span>
+            <label className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-widest flex items-center gap-1.5">
+              跨部门协同人员 <span className="text-slate-400 font-normal normal-case">(Collaborators)</span>
+            </label>
+          </div>
+          <div className="flex flex-wrap gap-2 pl-9.5">
+            {data.collaborators.split(/[,，]/).map((name, i) => name.trim() && (
+              <span key={i} className="inline-flex items-center gap-1 bg-sky-50 dark:bg-sky-900/30 text-sky-700 dark:text-sky-300 px-2.5 py-1 rounded-lg text-xs font-bold border border-sky-200/60 dark:border-sky-700/60">
+                <span className="material-symbols-outlined text-[13px]">person</span>
+                {name.trim()}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -107,9 +130,9 @@ export default function SmartGoalDisplay({ data }: Props) {
  * that has an encoded `description` string.
  */
 export function SmartGoalDisplayFromPlan({ 
-  title, target_value, description, deadline, category 
+  title, target_value, description, deadline, category, collaborators 
 }: { 
-  title: string, target_value: string, description: string, deadline: string, category: string 
+  title: string, target_value: string, description: string, deadline: string, category: string, collaborators?: string 
 }) {
   const { resource, relevance } = decodeSmartDescription(description || '');
   return (
@@ -120,7 +143,8 @@ export function SmartGoalDisplayFromPlan({
         resource,
         relevance,
         deadline,
-        category
+        category,
+        collaborators: collaborators || ''
       }}
     />
   );

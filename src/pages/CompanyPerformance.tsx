@@ -426,6 +426,7 @@ export default function CompanyPerformance({ navigate }: { navigate: (view: stri
                       relevance: `【归属部门】\n${selectedTask.department || '全公司可见'}\n\n【挑战等级】\n难度系数 ${DIFFICULTY_MAP[selectedTask.difficulty] || selectedTask.difficulty}`,
                       deadline: selectedTask.deadline || '长期有效（随时报名）',
                       category: '公司公坚',
+                      collaborators: '',
                     }}
                   />
                 </div>

@@ -14,6 +14,7 @@ interface PerfPlan {
   target_value: string;
   deadline: string;
   quarter: string;
+  collaborators?: string;
 }
 
 const statusMap: Record<string, { label: string, color: string, bg: string }> = {
@@ -38,12 +39,13 @@ export default function PersonalGoals({ navigate }: { navigate: (view: string) =
     relevance: '直接关联公司年度数字化转型战略，极大提升内网工具的操作效率',
     deadline: '2024-09-30',
     category: '技术',
+    collaborators: '',
     quarter: '2024 Q3'
   });
   const [submitting, setSubmitting] = useState(false);
   // 二次编辑被驳回的目标
   const [editingPlan, setEditingPlan] = useState<PerfPlan | null>(null);
-  const [editForm, setEditForm] = useState<SmartData>({ title: '', target_value: '', resource: '', relevance: '', deadline: '', category: '业务' });
+  const [editForm, setEditForm] = useState<SmartData>({ title: '', target_value: '', resource: '', relevance: '', deadline: '', category: '业务', collaborators: '' });
   const [resubmitting, setResubmitting] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState<PerfPlan | null>(null);
 
@@ -94,7 +96,7 @@ export default function PersonalGoals({ navigate }: { navigate: (view: string) =
           headers: { 'Authorization': `Bearer ${token}` }
         });
         setIsModalOpen(false);
-        setNewPlan({ title: '', target_value: '', resource: '', relevance: '', deadline: '', category: '业务', quarter: '2024 Q2' });
+        setNewPlan({ title: '', target_value: '', resource: '', relevance: '', deadline: '', category: '业务', collaborators: '', quarter: '2024 Q2' });
         fetchPlans();
       }
     } catch (err) {
@@ -133,6 +135,7 @@ export default function PersonalGoals({ navigate }: { navigate: (view: string) =
       category: plan.category,
       target_value: plan.target_value || '',
       deadline: plan.deadline || '',
+      collaborators: plan.collaborators || '',
     });
   };
 
@@ -479,6 +482,7 @@ export default function PersonalGoals({ navigate }: { navigate: (view: string) =
                     description={sp.description}
                     deadline={sp.deadline}
                     category={sp.category}
+                    collaborators={sp.collaborators}
                   />
                 </div>
 

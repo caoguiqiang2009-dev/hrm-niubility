@@ -4,14 +4,23 @@ import { authMiddleware, AuthRequest } from '../middleware/auth';
 
 const router = Router();
 
+// 兼容旧表
+function ensureColumns(db: any) {
+  try { db.exec("ALTER TABLE approval_templates ADD COLUMN business_types TEXT DEFAULT '[]'"); } catch(e) {}
+  try { db.exec("ALTER TABLE approval_templates ADD COLUMN permissions TEXT DEFAULT '{}'"); } catch(e) {}
+}
+
 // ─── 获取所有审批流模板（含节点） ──────────────────────────────
 router.get('/', authMiddleware, (_req: AuthRequest, res) => {
   const db = getDb();
+  ensureColumns(db);
   const templates = db.prepare('SELECT * FROM approval_templates ORDER BY sort_order, id').all() as any[];
   const nodes = db.prepare('SELECT * FROM approval_nodes ORDER BY template_id, node_index').all() as any[];
 
   const result = templates.map(t => ({
     ...t,
+    business_types: (() => { try { return JSON.parse(t.business_types || '[]'); } catch { return []; } })(),
+    permissions: (() => { try { return JSON.parse(t.permissions || '{}'); } catch { return {}; } })(),
     nodes: nodes.filter((n: any) => n.template_id === t.id).map((n: any) => ({
       ...n,
       config: (() => { try { return JSON.parse(n.config_json || '{}'); } catch { return {}; } })(),
@@ -23,22 +32,24 @@ router.get('/', authMiddleware, (_req: AuthRequest, res) => {
 // ─── 新建模板 ─────────────────────────────────────────────────
 router.post('/', authMiddleware, (req: AuthRequest, res) => {
   const db = getDb();
-  const { name, icon, description, category } = req.body;
+  ensureColumns(db);
+  const { name, icon, description, category, business_types, permissions } = req.body;
   if (!name) return res.json({ code: 1, message: '模板名称不能为空' });
 
   const maxSort = (db.prepare('SELECT MAX(sort_order) as ms FROM approval_templates').get() as any)?.ms || 0;
   const result = db.prepare(
-    'INSERT INTO approval_templates (name, icon, description, category, sort_order) VALUES (?, ?, ?, ?, ?)'
-  ).run(name, icon || 'approval', description || '', category || 'general', maxSort + 1);
+    'INSERT INTO approval_templates (name, icon, description, category, business_types, permissions, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?)'
+  ).run(name, icon || 'approval', description || '', category || 'general', JSON.stringify(business_types || []), JSON.stringify(permissions || {}), maxSort + 1);
 
   const template = db.prepare('SELECT * FROM approval_templates WHERE id = ?').get(result.lastInsertRowid) as Record<string, any>;
-  return res.json({ code: 0, data: { ...template, nodes: [] } });
+  return res.json({ code: 0, data: { ...template, business_types: business_types || [], permissions: permissions || {}, nodes: [] } });
 });
 
 // ─── 更新模板信息 ─────────────────────────────────────────────
 router.put('/:id', authMiddleware, (req: AuthRequest, res) => {
   const db = getDb();
-  const { name, icon, description, category, enabled } = req.body;
+  ensureColumns(db);
+  const { name, icon, description, category, enabled, business_types, permissions } = req.body;
   const fields: string[] = [];
   const values: any[] = [];
 
@@ -47,9 +58,11 @@ router.put('/:id', authMiddleware, (req: AuthRequest, res) => {
   if (description !== undefined) { fields.push('description = ?'); values.push(description); }
   if (category !== undefined) { fields.push('category = ?'); values.push(category); }
   if (enabled !== undefined) { fields.push('enabled = ?'); values.push(enabled ? 1 : 0); }
+  if (business_types !== undefined) { fields.push('business_types = ?'); values.push(JSON.stringify(business_types)); }
+  if (permissions !== undefined) { fields.push('permissions = ?'); values.push(JSON.stringify(permissions)); }
   fields.push("updated_at = datetime('now')");
 
-  if (fields.length === 0) return res.json({ code: 1, message: '没有要更新的字段' });
+  if (fields.length <= 1) return res.json({ code: 1, message: '没有要更新的字段' });
 
   values.push(req.params.id);
   db.prepare(`UPDATE approval_templates SET ${fields.join(', ')} WHERE id = ?`).run(...values);

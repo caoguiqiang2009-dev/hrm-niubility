@@ -7,6 +7,7 @@ export interface SmartData {
   relevance: string;      // R Relevant
   deadline: string;       // T Time-bound
   category: string;
+  collaborators: string;  // 跨部门协同人员
 }
 
 export function encodeSmartDescription(resource: string, relevance: string) {
@@ -114,6 +115,22 @@ export default function SmartFormInputs({ data, onChange, hideCategory }: Props)
             </select>
           </div>
         )}
+      </div>
+
+      {/* Cross-department Collaborators */}
+      <div className="bg-slate-50 dark:bg-slate-800/80 border border-slate-200/60 dark:border-slate-700/60 rounded-2xl p-4 shadow-sm relative overflow-hidden focus-within:border-sky-400 focus-within:ring-2 focus-within:ring-sky-400/20 transition-all">
+        <div className="absolute top-0 left-0 w-1.5 h-full bg-sky-500"></div>
+        <div className="flex items-center mb-3 gap-2.5">
+          <span className="flex-none w-7 h-7 rounded-lg bg-sky-100 dark:bg-sky-900/40 text-sky-700 dark:text-sky-400 flex items-center justify-center">
+            <span className="material-symbols-outlined text-[16px]">group_add</span>
+          </span>
+          <label className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-widest flex items-center gap-1.5">
+            跨部门协同人员 <span className="text-slate-400 font-normal normal-case">(Collaborators)</span>
+          </label>
+        </div>
+        <input value={data.collaborators || ''} onChange={e => onChange({ collaborators: e.target.value })} 
+          className="w-full bg-transparent text-sm font-medium text-slate-800 dark:text-slate-100 focus:outline-none placeholder-slate-400 dark:placeholder-slate-500" 
+          placeholder="输入协同人员姓名，多人用逗号分隔，如：李芳, 王明" />
       </div>
     </div>
   );
