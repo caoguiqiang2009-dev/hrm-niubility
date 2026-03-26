@@ -5,9 +5,9 @@ export default function DevRoleSwitcher() {
   const { currentUser, loginWithMock, logout } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
 
-  // 如果是在生产环境（非开发模式），可选地隐藏它。但为了演示目前我们保持显示。
-  // const isDev = import.meta.env.DEV;
-  // if (!isDev) return null;
+  // 生产环境隐藏测试账号切换器
+  const isDev = import.meta.env.DEV;
+  if (!isDev) return null;
 
   const roles = [
     { id: 'admin', name: '管理员', roleLabel: '系统管理员 (Admin)', icon: 'shield_person', color: 'bg-slate-700' },

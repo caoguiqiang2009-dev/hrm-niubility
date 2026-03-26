@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Sidebar from '../components/Sidebar';
 import { useAuth } from '../context/AuthContext';
 import SmartFormInputs, { SmartData, encodeSmartDescription } from '../components/SmartFormInputs';
@@ -44,6 +44,24 @@ export default function TeamPerformance({ navigate }: { navigate: (view: string)
   const [selectedTask, setSelectedTask] = useState<any>(null);
   const [newPlan, setNewPlan] = useState<SmartData & { assignee_id: string }>({ title: '', target_value: '', resource: '', relevance: '', deadline: '', category: '业务', assignee_id: '' });
   const [submitting, setSubmitting] = useState(false);
+
+  // Drag to scroll
+  const dragRef = useRef<HTMLDivElement>(null);
+  const isDragging = useRef(false);
+  const startX = useRef(0);
+  const scrollLeft = useRef(0);
+  const onDragStart = useCallback((e: React.MouseEvent) => {
+    isDragging.current = true;
+    startX.current = e.pageX - (dragRef.current?.offsetLeft || 0);
+    scrollLeft.current = dragRef.current?.scrollLeft || 0;
+  }, []);
+  const onDragMove = useCallback((e: React.MouseEvent) => {
+    if (!isDragging.current || !dragRef.current) return;
+    e.preventDefault();
+    const x = e.pageX - (dragRef.current.offsetLeft || 0);
+    dragRef.current.scrollLeft = scrollLeft.current - (x - startX.current);
+  }, []);
+  const onDragEnd = useCallback(() => { isDragging.current = false; }, []);
 
   useEffect(() => {
     if (currentUser?.id) {
@@ -251,7 +269,14 @@ export default function TeamPerformance({ navigate }: { navigate: (view: string)
         </section>
 
         {/* Dynamic Member Cards — 人员左右滑动 × 任务上下滑动 */}
-        <div className="flex gap-5 overflow-x-auto pb-4 -mx-2 px-2 snap-x snap-mandatory scroll-smooth">
+        <div
+          ref={dragRef}
+          onMouseDown={onDragStart}
+          onMouseMove={onDragMove}
+          onMouseUp={onDragEnd}
+          onMouseLeave={onDragEnd}
+          className="flex gap-5 overflow-x-auto pb-4 -mx-2 px-2 snap-x snap-mandatory scroll-smooth cursor-grab active:cursor-grabbing select-none"
+          style={{ scrollbarWidth: 'thin' }}>
           {subordinates.length === 0 ? (
             <div className="flex-none w-full py-16 text-center text-slate-400 bg-white dark:bg-slate-900 rounded-2xl border border-dashed border-slate-200 dark:border-slate-800">
               <span className="material-symbols-outlined text-5xl mb-3 block">group_off</span>
