@@ -212,9 +212,13 @@ export default function MyWorkflows({ navigate }: MyWorkflowsProps) {
           <div className="space-y-3">
             {data.map((item: any, idx: number) => (
               <WorkflowCard key={`${item.flow_type || item.type}-${item.id}-${idx}`} item={item} tab={activeTab} 
+                onAction={item.flow_type === 'pool_join' ? async (action: 'approve'|'reject') => {
+                  await handleApproveReject(item.id, 'pool_join', action, '');
+                } : undefined}
                 onClick={async () => {
                   const isPending = activeTab === 'pending';
                   const flowType = item.flow_type || 'unknown';
+                  if (flowType === 'pool_join') return; // handled by onAction
                   try {
                     let fullData = item;
                     let mappedData = { ...fullData };
@@ -403,7 +407,7 @@ export default function MyWorkflows({ navigate }: MyWorkflowsProps) {
   );
 }
 
-function WorkflowCard({ item, tab, onClick }: { item: any; tab: TabKey; onClick: () => void }) {
+function WorkflowCard({ item, tab, onClick, onAction }: { item: any; tab: TabKey; onClick: () => void; onAction?: (action: 'approve'|'reject') => void }) {
   const isCC = tab === 'cc';
 
   if (isCC) {
@@ -506,6 +510,19 @@ function WorkflowCard({ item, tab, onClick }: { item: any; tab: TabKey; onClick:
               {item.reason && <span>申请理由：{item.reason}</span>}
             </div>
           )}
+          {/* Inline approve/reject for join requests */}
+          {flowType === 'pool_join' && tab === 'pending' && onAction && (
+            <div className="mt-3 flex items-center gap-2">
+              <button onClick={(e) => { e.stopPropagation(); onAction('approve'); }}
+                className="px-4 py-1.5 text-xs font-bold text-white bg-emerald-500 hover:bg-emerald-600 rounded-lg transition-colors shadow-sm flex items-center gap-1">
+                <span className="material-symbols-outlined text-[14px]">check</span> 批准加入
+              </button>
+              <button onClick={(e) => { e.stopPropagation(); onAction('reject'); }}
+                className="px-4 py-1.5 text-xs font-bold text-red-500 bg-white border border-red-200 hover:bg-red-50 rounded-lg transition-colors flex items-center gap-1">
+                <span className="material-symbols-outlined text-[14px]">close</span> 驳回
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Progress (for perf plans) */}
@@ -578,7 +595,7 @@ function WorkflowCard({ item, tab, onClick }: { item: any; tab: TabKey; onClick:
                 status === 'approved' ? 'bg-emerald-50 border-emerald-100 text-emerald-700' :
                 'border-dashed border-amber-300 bg-amber-50 text-amber-600'
               }`}>
-                <span className="font-bold">{approver || (flowType === 'pool_join' ? '管理员' : '审批人')}</span>
+                <span className="font-bold">{item.pending_reviewer_name || approver || (flowType === 'pool_join' ? '管理员' : '审批人')}</span>
                 <span className="text-[9px] opacity-80">
                   {status === 'rejected' ? '已驳回' : status === 'approved' ? '已完成' : '待处理'}
                 </span>

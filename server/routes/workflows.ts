@@ -53,8 +53,9 @@ router.get('/initiated', authMiddleware, (req: AuthRequest, res) => {
 router.get('/pending', authMiddleware, (req: AuthRequest, res) => {
   const db = getDb();
   const userId = req.userId;
-  const user = db.prepare('SELECT role FROM users WHERE id = ?').get(userId) as any;
+  const user = db.prepare('SELECT role, name FROM users WHERE id = ?').get(userId) as any;
   const role = user?.role || 'employee';
+  const currentUserName = user?.name || userId;
 
   const items: any[] = [];
 
@@ -93,6 +94,8 @@ router.get('/pending', authMiddleware, (req: AuthRequest, res) => {
        WHERE pt.proposal_status = 'pending_hr'
        ORDER BY pt.created_at DESC`
     ).all();
+    // 标注当前审核人名字
+    hrPending.forEach((p: any) => { p.pending_reviewer_name = currentUserName; });
     items.push(...hrPending);
   }
   if (role === 'admin') {
@@ -106,6 +109,7 @@ router.get('/pending', authMiddleware, (req: AuthRequest, res) => {
        WHERE pt.proposal_status = 'pending_admin'
        ORDER BY pt.created_at DESC`
     ).all();
+    adminPending.forEach((p: any) => { p.pending_reviewer_name = currentUserName; });
     items.push(...adminPending);
   }
 
@@ -119,10 +123,10 @@ router.get('/pending', authMiddleware, (req: AuthRequest, res) => {
        WHERE jr.status = 'pending'
        ORDER BY jr.created_at DESC`
     ).all();
-    // Map fields for frontend compatibility
     joinPending.forEach((j: any) => {
       j.title = `${j.creator_name || j.user_id} 申请加入「${j.task_title || '任务#' + j.pool_task_id}」`;
       j.proposal_status = 'pending';
+      j.pending_reviewer_name = currentUserName;
     });
     items.push(...joinPending);
   }
