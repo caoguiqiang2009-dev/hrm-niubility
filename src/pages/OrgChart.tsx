@@ -178,9 +178,10 @@ function MemberCard({
   onMove?: (userId: string, name: string) => void;
 }) {
   const rc = roleConfig[user.role] || roleConfig.employee;
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   return (
-    <div className="group bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800/60 rounded-2xl p-4 hover:shadow-lg hover:border-primary/30 transition-all duration-300 relative overflow-hidden">
+    <div className="bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800/60 rounded-2xl p-4 hover:shadow-lg hover:border-primary/30 transition-all duration-300 relative overflow-hidden">
       {isLeader && (
         <div className="absolute top-0 right-0">
           <div className="bg-amber-400 text-amber-900 text-[9px] font-black px-3 py-0.5 rounded-bl-xl flex items-center gap-0.5">
@@ -222,27 +223,47 @@ function MemberCard({
             <span className="text-[10px] text-slate-400">ID: {user.id}</span>
           </div>
         </div>
-
-        {/* 管理按钮 */}
-        {canManage && (
-          <div className="flex flex-col gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-            <button
-              onClick={() => onMove?.(user.id, user.name)}
-              title="调整部门"
-              className="p-1.5 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
-            >
-              <span className="material-symbols-outlined text-[16px]">swap_horiz</span>
-            </button>
-            <button
-              onClick={() => onDelete?.(user.id, user.name)}
-              title="设为离职"
-              className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
-            >
-              <span className="material-symbols-outlined text-[16px]">person_remove</span>
-            </button>
-          </div>
-        )}
       </div>
+
+      {/* 管理操作栏 */}
+      {canManage && (
+        <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800">
+          {confirmingDelete ? (
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] text-red-500 font-bold flex-1">确定设为离职？</span>
+              <button
+                onClick={() => setConfirmingDelete(false)}
+                className="px-3 py-1 text-[11px] font-medium text-slate-500 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors"
+              >
+                取消
+              </button>
+              <button
+                onClick={() => { onDelete?.(user.id, user.name); setConfirmingDelete(false); }}
+                className="px-3 py-1 text-[11px] font-bold text-white bg-red-500 hover:bg-red-600 rounded-lg transition-colors"
+              >
+                确认离职
+              </button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => onMove?.(user.id, user.name)}
+                className="flex-1 flex items-center justify-center gap-1 px-2 py-1.5 text-[11px] font-bold text-blue-600 bg-blue-50 hover:bg-blue-100 dark:bg-blue-900/20 dark:hover:bg-blue-900/30 rounded-lg transition-colors"
+              >
+                <span className="material-symbols-outlined text-[14px]">swap_horiz</span>
+                调整部门
+              </button>
+              <button
+                onClick={() => setConfirmingDelete(true)}
+                className="flex-1 flex items-center justify-center gap-1 px-2 py-1.5 text-[11px] font-bold text-red-500 bg-red-50 hover:bg-red-100 dark:bg-red-900/20 dark:hover:bg-red-900/30 rounded-lg transition-colors"
+              >
+                <span className="material-symbols-outlined text-[14px]">person_remove</span>
+                设为离职
+              </button>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -350,7 +371,6 @@ export default function OrgChart({ navigate }: { navigate: (view: string) => voi
 
   // 删除成员 (设为离职)
   const handleDeleteMember = async (userId: string, name: string) => {
-    if (!confirm(`确定将「${name}」设为离职状态？该操作不会删除数据，可通过编辑恢复。`)) return;
     try {
       const token = localStorage.getItem('token');
       const res = await fetch(`/api/org/users/${userId}`, {
