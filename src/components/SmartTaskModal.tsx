@@ -1160,19 +1160,26 @@ export default function SmartTaskModal({ isOpen, onClose, onSubmit, title, type,
                   </span>
                 </h4>
                 <div className="flex flex-wrap items-center gap-2 text-[12px]">
-                  {(initialData?.logs || fetchedLogs).length > 0 ? (
-                    (initialData?.logs || fetchedLogs).map((log: any, i: number, arr: any[]) => {
+                  {(() => {
+                    const allLogs = initialData?.logs || fetchedLogs;
+                    // Filter out progress updates from approval path - only show status changes
+                    const statusLogs = allLogs.filter((log: any) => log.action !== 'progress_update');
+                    // Get latest progress for summary
+                    const progressLogs = allLogs.filter((log: any) => log.action === 'progress_update');
+                    const latestProgress = progressLogs.length > 0 ? progressLogs[progressLogs.length - 1] : null;
+
+                    return statusLogs.length > 0 ? (
+                    <>
+                    {statusLogs.map((log: any, i: number, arr: any[]) => {
                       const isReject = log.new_value === 'rejected' || log.action === 'reject';
                       const isApprove = log.new_value === 'approved' || log.action === 'approve';
                       const isWithdraw = log.action === 'withdraw';
-                      const isProgress = log.action === 'progress_update';
                       return (
                         <React.Fragment key={i}>
                           <div className={`flex flex-col rounded-lg px-3 py-1.5 border ${
                             isReject ? 'bg-red-50 border-red-100 text-red-700' : 
                             isApprove ? 'bg-emerald-50 border-emerald-100 text-emerald-700' :
                             isWithdraw ? 'bg-amber-50 border-amber-100 text-amber-700' :
-                            isProgress ? 'bg-blue-50 border-blue-100 text-blue-700' :
                             'bg-white border-slate-200 text-slate-700 shadow-sm'
                           }`}>
                             <span className="font-bold">{log.user_name || log.user_id}</span>
@@ -1180,7 +1187,6 @@ export default function SmartTaskModal({ isOpen, onClose, onSubmit, title, type,
                               {log.action === 'submit' ? '发起申请' : 
                                log.action === 'resubmit' ? '重新提交' :
                                isWithdraw ? '已撤回' :
-                               isProgress ? `进度${log.new_value}%` :
                                isReject ? '已驳回' : 
                                isApprove ? '已通过' : log.action || '审阅中'}
                             </span>
@@ -1190,26 +1196,38 @@ export default function SmartTaskModal({ isOpen, onClose, onSubmit, title, type,
                           )}
                         </React.Fragment>
                       );
-                    })
+                    })}
+                    {/* Show latest progress as a single summary node */}
+                    {latestProgress && (
+                      <>
+                        <span className="material-symbols-outlined text-[16px] text-slate-300">arrow_right_alt</span>
+                        <div className="flex flex-col rounded-lg px-3 py-1.5 border bg-blue-50 border-blue-100 text-blue-700">
+                          <span className="font-bold">{latestProgress.user_name || latestProgress.user_id}</span>
+                          <span className="text-[10px] opacity-70">进度{latestProgress.new_value}% ({progressLogs.length}次更新)</span>
+                        </div>
+                      </>
+                    )}
+                    {initialData?.status && !['approved', 'rejected', 'completed', 'assessed'].includes(initialData.status) && (
+                      <>
+                        <span className="material-symbols-outlined text-[16px] text-slate-300">arrow_right_alt</span>
+                        <div className="flex flex-col rounded-lg px-3 py-1.5 border border-dashed border-amber-300 bg-amber-50 text-amber-600">
+                          <span className="font-bold">{initialData.approver_name || '审批人'}</span>
+                          <span className="text-[10px] opacity-80">
+                            {initialData.status === 'pending_review' ? '待审核' : 
+                             initialData.status === 'in_progress' ? '进行中' :
+                             initialData.status === 'draft' ? '待提交' : '待处理'}
+                          </span>
+                        </div>
+                      </>
+                    )}
+                    </>
                   ) : (
                     <div className="flex flex-col rounded-lg px-3 py-1.5 border bg-slate-100 border-slate-200 text-slate-500">
                       <span className="font-bold">{initialData.status === 'draft' ? '草稿' : '已创建'}</span>
                       <span className="text-[10px] opacity-70">等待提交</span>
                     </div>
-                  )}
-                  {initialData?.status && !['approved', 'rejected', 'completed', 'assessed'].includes(initialData.status) && (initialData?.logs || fetchedLogs).length > 0 && (
-                    <>
-                      <span className="material-symbols-outlined text-[16px] text-slate-300">arrow_right_alt</span>
-                      <div className="flex flex-col rounded-lg px-3 py-1.5 border border-dashed border-amber-300 bg-amber-50 text-amber-600">
-                        <span className="font-bold">{initialData.approver_name || '审批人'}</span>
-                        <span className="text-[10px] opacity-80">
-                          {initialData.status === 'pending_review' ? '待审核' : 
-                           initialData.status === 'in_progress' ? '进行中' :
-                           initialData.status === 'draft' ? '待提交' : '待处理'}
-                        </span>
-                      </div>
-                    </>
-                  )}
+                  );
+                  })()}
                 </div>
               </div>
             )}
