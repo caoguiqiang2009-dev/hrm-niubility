@@ -387,90 +387,100 @@ export default function CompanyPerformance({ navigate }: { navigate: (view: stri
       <main className={`flex-1 mt-16 min-h-[calc(100vh-4rem)] overflow-y-auto ${isMobile ? 'pb-20' : ''}`}>
         <div className={`max-w-screen-2xl mx-auto ${isMobile ? 'px-4 pt-4 pb-6' : 'px-8 pt-6 pb-10'}`}>
 
-          {/* Title Row (Action Buttons only) */}
-          <div className={`flex justify-end mb-4 ${isMobile ? 'flex-wrap gap-2' : ''}`}>
-            <div className={`flex items-center gap-2 ${isMobile ? 'flex-wrap w-full' : ''}`}>
+          {/* Title Row (Action Buttons) */}
+          <div className={`flex justify-end mb-3 ${isMobile ? '' : ''}`}>
+            <div className={`flex items-center ${isMobile ? 'gap-1.5 w-full' : 'gap-2'}`}>
               {canDeleteTask && (
                 <button onClick={() => setShowTrash(true)}
-                  className="relative flex items-center gap-1.5 px-3 py-2 bg-surface-container-low rounded-xl text-xs font-medium text-on-surface-variant hover:bg-surface-container-high transition-all border border-outline-variant/10">
-                  <span className="material-symbols-outlined text-[16px]">delete_sweep</span>
-                  回收站
+                  className={`relative flex items-center gap-1 rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-all border border-outline-variant/10 bg-surface-container-low ${isMobile ? 'p-2' : 'px-3 py-2 text-xs font-medium'}`}>
+                  <span className={`material-symbols-outlined ${isMobile ? 'text-[18px]' : 'text-[16px]'}`}>delete_sweep</span>
+                  {!isMobile && '回收站'}
                   {deletedTasks.length > 0 && (
-                    <span className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center">{deletedTasks.length}</span>
+                    <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center">{deletedTasks.length}</span>
                   )}
                 </button>
               )}
               {canManagePool && (
                 <button onClick={() => setShowPublish(true)}
-                  className="flex items-center gap-1.5 px-3 py-2 bg-surface-container-low rounded-xl text-xs font-medium text-on-surface-variant hover:bg-surface-container-high transition-all border border-outline-variant/10">
-                  <span className="material-symbols-outlined text-[16px]">publish</span>
-                  发布任务
+                  className={`flex items-center gap-1 rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-all border border-outline-variant/10 bg-surface-container-low ${isMobile ? 'p-2' : 'px-3 py-2 text-xs font-medium'}`}>
+                  <span className={`material-symbols-outlined ${isMobile ? 'text-[18px]' : 'text-[16px]'}`}>publish</span>
+                  {!isMobile && '发布任务'}
                 </button>
               )}
               <button onClick={() => setShowPropose(true)} title="发现公司改进点，有机会获得奖励"
-                className="relative flex items-center gap-1.5 px-3 py-2 bg-amber-50 rounded-xl text-xs font-bold text-amber-700 hover:bg-amber-100 transition-all border border-amber-200/60 shadow-sm shadow-amber-100/50">
-                <span className="material-symbols-outlined text-[16px]">add_task</span>
-                申请提案
-                <span className="absolute -top-2 -right-2 px-1.5 py-0.5 bg-gradient-to-r from-amber-400 to-orange-400 text-white text-[9px] font-black rounded-full shadow-sm">有奖</span>
+                className={`relative flex items-center gap-1 bg-amber-50 rounded-lg font-bold text-amber-700 hover:bg-amber-100 transition-all border border-amber-200/60 shadow-sm shadow-amber-100/50 ${isMobile ? 'p-2 ml-auto' : 'px-3 py-2 text-xs'}`}>
+                <span className={`material-symbols-outlined ${isMobile ? 'text-[18px]' : 'text-[16px]'}`}>add_task</span>
+                {isMobile ? '提案' : '申请提案'}
+                <span className={`absolute -top-1.5 -right-1.5 px-1 py-0.5 bg-gradient-to-r from-amber-400 to-orange-400 text-white font-black rounded-full shadow-sm ${isMobile ? 'text-[8px]' : 'text-[9px]'}`}>奖</span>
               </button>
               <button onClick={() => setShowMyProposals(!showMyProposals)}
-                className="relative flex items-center gap-1.5 px-3 py-2 bg-surface-container-low rounded-xl text-xs font-medium text-on-surface-variant hover:bg-surface-container-high transition-all border border-outline-variant/10">
-                <span className="material-symbols-outlined text-[16px]">pending_actions</span>
-                我的提案
+                className={`relative flex items-center gap-1 rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-all border border-outline-variant/10 bg-surface-container-low ${isMobile ? 'p-2' : 'px-3 py-2 text-xs font-medium'}`}>
+                <span className={`material-symbols-outlined ${isMobile ? 'text-[18px]' : 'text-[16px]'}`}>pending_actions</span>
+                {!isMobile && '我的提案'}
                 {myProposals.length > 0 && (
-                  <span className="absolute -top-1.5 -right-1.5 min-w-[16px] h-4 bg-violet-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1 pointer-events-none">{myProposals.length}</span>
+                  <span className="absolute -top-1 -right-1 min-w-[14px] h-3.5 bg-violet-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center px-0.5 pointer-events-none">{myProposals.length}</span>
                 )}
               </button>
             </div>
           </div>
 
           {/* Filter / Search Bar with View Toggles */}
-          <div className={`flex items-center gap-4 mb-6 bg-surface-container-low rounded-2xl border border-outline-variant/10 ${isMobile ? 'flex-col p-3 gap-3' : 'flex-wrap p-4'}`}>
-            <div className="flex bg-surface-container p-1 rounded-xl border border-outline-variant/10 w-fit shrink-0">
-              <button onClick={() => setActiveTab('task')}
-                className={`px-5 py-2 text-sm font-bold rounded-lg transition-all ${activeTab === 'task' ? 'bg-primary text-white shadow-md' : 'text-on-surface-variant hover:bg-surface-container-highest'}`}>
-                任务视图
-              </button>
-              <button onClick={() => setActiveTab('personnel')}
-                className={`px-5 py-2 text-sm font-bold rounded-lg transition-all ${activeTab === 'personnel' ? 'bg-primary text-white shadow-md' : 'text-on-surface-variant hover:bg-surface-container-highest'}`}>
-                人员视图
-              </button>
-            </div>
+          <div className={`flex items-center bg-surface-container-low rounded-2xl border border-outline-variant/10 mb-4 ${isMobile ? 'flex-col p-2.5 gap-2' : 'flex-wrap p-4 gap-4 mb-6'}`}>
+            {/* View toggle - hide personnel on mobile */}
+            {!isMobile && (
+              <div className="flex bg-surface-container p-1 rounded-xl border border-outline-variant/10 w-fit shrink-0">
+                <button onClick={() => setActiveTab('task')}
+                  className={`px-5 py-2 text-sm font-bold rounded-lg transition-all ${activeTab === 'task' ? 'bg-primary text-white shadow-md' : 'text-on-surface-variant hover:bg-surface-container-highest'}`}>
+                  任务视图
+                </button>
+                <button onClick={() => setActiveTab('personnel')}
+                  className={`px-5 py-2 text-sm font-bold rounded-lg transition-all ${activeTab === 'personnel' ? 'bg-primary text-white shadow-md' : 'text-on-surface-variant hover:bg-surface-container-highest'}`}>
+                  人员视图
+                </button>
+              </div>
+            )}
 
-            {activeTab === 'task' ? (
+            {(isMobile || activeTab === 'task') ? (
               <>
-                <div className="relative flex-1 min-w-[200px] max-w-sm">
-                  <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-[18px]">search</span>
-                  <input type="text" placeholder="搜索任务标题或描述..." value={searchKey} onChange={e => setSearchKey(e.target.value)}
-                    className="w-full pl-9 pr-4 py-2 bg-surface-container border border-outline-variant/30 rounded-xl text-xs text-on-surface focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all" />
+                {/* Search bar */}
+                <div className={`relative ${isMobile ? 'w-full' : 'flex-1 min-w-[200px] max-w-sm'}`}>
+                  <span className="material-symbols-outlined absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-[16px]">search</span>
+                  <input type="text" placeholder="搜索任务..." value={searchKey} onChange={e => setSearchKey(e.target.value)}
+                    className={`w-full pl-8 pr-3 bg-surface-container border border-outline-variant/30 rounded-lg text-on-surface focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all ${isMobile ? 'py-1.5 text-[13px]' : 'py-2 text-xs'}`} />
                 </div>
-                <div className="flex items-center gap-1 bg-surface-container rounded-xl p-1">
-                  {statusBtns.map(b => (
-                    <button key={b.key} onClick={() => setStatusFilter(b.key)}
-                      className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-all ${statusFilter === b.key ? 'bg-primary text-white shadow-sm' : 'text-on-surface-variant hover:bg-surface-container-highest'}`}>
-                      {b.label}
+                {/* Status + Bonus filters: horizontal scroll on mobile */}
+                <div className={`flex items-center gap-1.5 ${isMobile ? 'w-full overflow-x-auto scrollbar-hide' : ''}`}>
+                  <div className={`flex items-center gap-0.5 bg-surface-container rounded-lg p-0.5 shrink-0`}>
+                    {statusBtns.map(b => (
+                      <button key={b.key} onClick={() => setStatusFilter(b.key)}
+                        className={`shrink-0 px-2 py-1 text-[11px] font-medium rounded-md transition-all ${statusFilter === b.key ? 'bg-primary text-white shadow-sm' : 'text-on-surface-variant hover:bg-surface-container-highest'}`}>
+                        {b.label}
+                      </button>
+                    ))}
+                  </div>
+                  <div className={`flex items-center gap-0.5 bg-surface-container rounded-lg p-0.5 shrink-0`}>
+                    {bonusBtns.map(b => (
+                      <button key={b.key} onClick={() => setBonusFilter(b.key)}
+                        className={`shrink-0 px-2 py-1 text-[11px] font-medium rounded-md transition-all ${bonusFilter === b.key ? 'bg-primary text-white shadow-sm' : 'text-on-surface-variant hover:bg-surface-container-highest'}`}>
+                        {b.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                {/* Dept + sort row */}
+                <div className={`flex items-center ${isMobile ? 'w-full justify-between' : 'gap-2'}`}>
+                  <select value={deptFilter} onChange={e => setDeptFilter(e.target.value)}
+                    className={`bg-surface-container border-none ring-1 ring-outline-variant/30 rounded-lg focus:ring-2 focus:ring-primary outline-none text-on-surface font-medium ${isMobile ? 'text-[11px] px-2 py-1' : 'text-xs px-3 py-2 rounded-xl'}`}>
+                    {DEPTS.map(d => <option key={d}>{d}</option>)}
+                  </select>
+                  <div className="flex items-center gap-1.5">
+                    {!isMobile && <span className="text-xs text-on-surface-variant">奖金排序</span>}
+                    <button onClick={() => setSortByBonus(p => !p)}
+                      className={`relative w-8 h-4 rounded-full transition-colors ${sortByBonus ? 'bg-primary' : 'bg-slate-200 dark:bg-slate-700'}`}>
+                      <span className={`absolute top-0.5 w-3 h-3 bg-white rounded-full shadow transition-transform ${sortByBonus ? 'translate-x-4' : 'translate-x-0.5'}`}/>
                     </button>
-                  ))}
-                </div>
-                <div className="flex items-center gap-1 bg-surface-container rounded-xl p-1">
-                  {bonusBtns.map(b => (
-                    <button key={b.key} onClick={() => setBonusFilter(b.key)}
-                      className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-all ${bonusFilter === b.key ? 'bg-primary text-white shadow-sm' : 'text-on-surface-variant hover:bg-surface-container-highest'}`}>
-                      {b.label}
-                    </button>
-                  ))}
-                </div>
-                <select value={deptFilter} onChange={e => setDeptFilter(e.target.value)}
-                  className="bg-surface-container border-none ring-1 ring-outline-variant/30 rounded-xl text-xs px-3 py-2 focus:ring-2 focus:ring-primary outline-none text-on-surface font-medium">
-                  {DEPTS.map(d => <option key={d}>{d}</option>)}
-                </select>
-                <div className="ml-auto flex items-center gap-2">
-                  <span className="text-xs text-on-surface-variant">奖金排序</span>
-                  <button onClick={() => setSortByBonus(p => !p)}
-                    className={`relative w-9 h-5 rounded-full transition-colors ${sortByBonus ? 'bg-primary' : 'bg-slate-200 dark:bg-slate-700'}`}>
-                    <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${sortByBonus ? 'translate-x-4' : 'translate-x-0.5'}`}/>
-                  </button>
-                  <span className="text-xs text-on-surface-variant font-bold">{displayed.length} 个任务</span>
+                    <span className={`text-on-surface-variant font-bold ${isMobile ? 'text-[11px]' : 'text-xs'}`}>{displayed.length} 个任务</span>
+                  </div>
                 </div>
               </>
             ) : (
@@ -496,18 +506,18 @@ export default function CompanyPerformance({ navigate }: { navigate: (view: stri
                 const isScore = task.reward_type === 'score';
                 return (
                   <div key={task.id}
-                    className="group bg-surface-container-low rounded-2xl p-5 border border-outline-variant/10 hover:shadow-2xl hover:shadow-primary/5 transition-all duration-300 flex flex-col cursor-pointer"
+                    className={`group bg-surface-container-low border border-outline-variant/10 hover:shadow-2xl hover:shadow-primary/5 transition-all duration-300 flex flex-col cursor-pointer ${isMobile ? 'rounded-xl p-3' : 'rounded-2xl p-5'}`}
                     onClick={() => !full && openTaskDetail(task)}
                   >
-                    <div className="flex justify-between items-start mb-3">
-                      <span className={`${badge.cls} text-[10px] font-bold px-2.5 py-1 rounded-full uppercase label-font`}>{badge.label}</span>
-                      <div className="flex items-center gap-1.5">
+                    <div className={`flex justify-between items-start ${isMobile ? 'mb-2' : 'mb-3'}`}>
+                      <span className={`${badge.cls} text-[10px] font-bold px-2 py-0.5 rounded-full uppercase label-font`}>{badge.label}</span>
+                      <div className="flex items-center gap-1">
                         {isScore ? (
-                          <span className="text-orange-500 font-black text-lg tracking-tight">{task.bonus.toLocaleString()}分</span>
+                          <span className={`text-orange-500 font-black tracking-tight ${isMobile ? 'text-base' : 'text-lg'}`}>{task.bonus.toLocaleString()}分</span>
                         ) : (
-                          <span className="text-primary font-black text-lg tracking-tight">¥{task.bonus.toLocaleString()}</span>
+                          <span className={`text-primary font-black tracking-tight ${isMobile ? 'text-base' : 'text-lg'}`}>¥{task.bonus.toLocaleString()}</span>
                         )}
-                        {canDeleteTask && (
+                        {canDeleteTask && !isMobile && (
                           <button onClick={(e) => { e.stopPropagation(); handleDelete(task); }}
                             title="移入回收站"
                             className="opacity-0 group-hover:opacity-100 flex items-center justify-center w-6 h-6 rounded-full text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-all">
@@ -516,26 +526,26 @@ export default function CompanyPerformance({ navigate }: { navigate: (view: stri
                         )}
                       </div>
                     </div>
-                    <h3 className="text-sm font-bold text-on-surface mb-3 line-clamp-2 leading-snug">{task.title}</h3>
-                    <div className="flex flex-wrap gap-1.5 mb-4">
-                      {task.department && <span className="px-2 py-0.5 bg-surface-container-lowest text-on-surface-variant text-[10px] rounded border border-outline-variant/20">{task.department}</span>}
-                      <span className={`px-2 py-0.5 text-[10px] rounded border border-transparent ${DIFFICULTY_COLOR[task.difficulty] || 'bg-slate-100 text-slate-600'}`}>
-                        难度: {DIFFICULTY_MAP[task.difficulty] || task.difficulty}
+                    <h3 className={`font-bold text-on-surface line-clamp-2 leading-snug ${isMobile ? 'text-[13px] mb-2' : 'text-sm mb-3'}`}>{task.title}</h3>
+                    <div className={`flex flex-wrap gap-1 ${isMobile ? 'mb-2' : 'mb-4'}`}>
+                      {task.department && <span className="px-1.5 py-0.5 bg-surface-container-lowest text-on-surface-variant text-[10px] rounded border border-outline-variant/20">{task.department}</span>}
+                      <span className={`px-1.5 py-0.5 text-[10px] rounded border border-transparent ${DIFFICULTY_COLOR[task.difficulty] || 'bg-slate-100 text-slate-600'}`}>
+                        {DIFFICULTY_MAP[task.difficulty] || task.difficulty}
                       </span>
                     </div>
                     <div className="mt-auto">
-                      <div className="flex justify-between items-center text-[10px] text-on-surface-variant mb-1.5">
-                        <span>{task.current_participants}/{task.max_participants} 人参与</span>
+                      <div className="flex justify-between items-center text-[10px] text-on-surface-variant mb-1">
+                        <span>{task.current_participants}/{task.max_participants} 人</span>
                         <span className="font-bold text-primary">{pct}%</span>
                       </div>
-                      <div className="w-full bg-surface-container-highest h-1.5 rounded-full overflow-hidden mb-4">
+                      <div className={`w-full bg-surface-container-highest rounded-full overflow-hidden ${isMobile ? 'h-1 mb-2.5' : 'h-1.5 mb-4'}`}>
                         <div className="bg-primary h-full rounded-full transition-all" style={{ width: `${pct}%` }}></div>
                       </div>
                       {full ? (
-                        <button disabled className="w-full py-2.5 text-xs bg-surface-container-lowest text-on-surface-variant font-bold rounded-xl border border-outline-variant/20 cursor-not-allowed">人数已满</button>
+                        <button disabled className={`w-full text-xs bg-surface-container-lowest text-on-surface-variant font-bold rounded-lg border border-outline-variant/20 cursor-not-allowed ${isMobile ? 'py-1.5' : 'py-2.5 rounded-xl'}`}>已满</button>
                       ) : (
                         <button onClick={(e) => { e.stopPropagation(); openTaskDetail(task); }}
-                          className="w-full py-2.5 text-xs bg-surface-container-lowest text-primary font-bold rounded-xl border border-primary/20 hover:bg-primary hover:text-white transition-all">
+                          className={`w-full text-xs bg-surface-container-lowest text-primary font-bold rounded-lg border border-primary/20 hover:bg-primary hover:text-white transition-all ${isMobile ? 'py-1.5' : 'py-2.5 rounded-xl'}`}>
                           立即加入
                         </button>
                       )}
