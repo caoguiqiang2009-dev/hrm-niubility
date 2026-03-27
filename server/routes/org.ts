@@ -258,4 +258,82 @@ router.put('/users/:id/department', authMiddleware, requireRole('admin', 'hr'), 
   return res.json({ code: 0, message: `已将 ${user.name} 调至 ${dept.name}` });
 });
 
+// ── 部门管理 CRUD ─────────────────────────────────────────────────────
+
+// 创建子部门
+router.post('/departments', authMiddleware, requireRole('admin', 'hr'), (req: AuthRequest, res) => {
+  const { name, parent_id } = req.body;
+  const db = getDb();
+  if (!name?.trim()) return res.status(400).json({ code: 400, message: '部门名称不能为空' });
+
+  const parentId = parent_id || 0;
+  if (parentId > 0) {
+    const parent = db.prepare('SELECT id FROM departments WHERE id = ?').get(parentId);
+    if (!parent) return res.status(404).json({ code: 404, message: '上级部门不存在' });
+  }
+
+  const result = db.prepare('INSERT INTO departments (name, parent_id) VALUES (?, ?)').run(name.trim(), parentId);
+  return res.json({ code: 0, data: { id: result.lastInsertRowid }, message: `已创建部门「${name.trim()}」` });
+});
+
+// 重命名部门
+router.put('/departments/:id', authMiddleware, requireRole('admin', 'hr'), (req: AuthRequest, res) => {
+  const { name } = req.body;
+  const db = getDb();
+  if (!name?.trim()) return res.status(400).json({ code: 400, message: '部门名称不能为空' });
+
+  const dept = db.prepare('SELECT id FROM departments WHERE id = ?').get(req.params.id);
+  if (!dept) return res.status(404).json({ code: 404, message: '部门不存在' });
+
+  db.prepare('UPDATE departments SET name = ? WHERE id = ?').run(name.trim(), req.params.id);
+  return res.json({ code: 0, message: `已重命名为「${name.trim()}」` });
+});
+
+// 移动部门 (修改上级)
+router.put('/departments/:id/parent', authMiddleware, requireRole('admin', 'hr'), (req: AuthRequest, res) => {
+  const { parent_id } = req.body;
+  const db = getDb();
+  const deptId = Number(req.params.id);
+
+  if (parent_id === undefined) return res.status(400).json({ code: 400, message: '缺少目标上级部门' });
+  if (Number(parent_id) === deptId) return res.status(400).json({ code: 400, message: '不能将部门移动到自身下级' });
+
+  const dept = db.prepare('SELECT id, name FROM departments WHERE id = ?').get(deptId) as any;
+  if (!dept) return res.status(404).json({ code: 404, message: '部门不存在' });
+
+  if (Number(parent_id) > 0) {
+    const parent = db.prepare('SELECT id, name FROM departments WHERE id = ?').get(parent_id) as any;
+    if (!parent) return res.status(404).json({ code: 404, message: '目标上级部门不存在' });
+    db.prepare('UPDATE departments SET parent_id = ? WHERE id = ?').run(parent_id, deptId);
+    return res.json({ code: 0, message: `已将「${dept.name}」移至「${parent.name}」下` });
+  }
+
+  db.prepare('UPDATE departments SET parent_id = 0 WHERE id = ?').run(deptId);
+  return res.json({ code: 0, message: `已将「${dept.name}」移至顶级` });
+});
+
+// 删除部门
+router.delete('/departments/:id', authMiddleware, requireRole('admin', 'hr'), (req: AuthRequest, res) => {
+  const db = getDb();
+  const deptId = Number(req.params.id);
+
+  const dept = db.prepare('SELECT id, name FROM departments WHERE id = ?').get(deptId) as any;
+  if (!dept) return res.status(404).json({ code: 404, message: '部门不存在' });
+
+  // 检查是否有子部门
+  const children = db.prepare('SELECT COUNT(*) as count FROM departments WHERE parent_id = ?').get(deptId) as any;
+  if (children.count > 0) {
+    return res.status(400).json({ code: 400, message: `「${dept.name}」下还有 ${children.count} 个子部门，请先移走或删除子部门` });
+  }
+
+  // 检查是否有成员
+  const members = db.prepare('SELECT COUNT(*) as count FROM users WHERE department_id = ?').get(deptId) as any;
+  if (members.count > 0) {
+    return res.status(400).json({ code: 400, message: `「${dept.name}」下还有 ${members.count} 名成员，请先将成员调至其他部门` });
+  }
+
+  db.prepare('DELETE FROM departments WHERE id = ?').run(deptId);
+  return res.json({ code: 0, message: `已删除部门「${dept.name}」` });
+});
+
 export default router;

@@ -1099,7 +1099,7 @@ export default function SmartTaskModal({ isOpen, onClose, onSubmit, title, type,
                             isProgress ? 'bg-blue-50 border-blue-100 text-blue-700' :
                             'bg-white border-slate-200 text-slate-700 shadow-sm'
                           }`}>
-                            <span className="font-bold">{log.user_id}</span>
+                            <span className="font-bold">{log.user_name || log.user_id}</span>
                             <span className="text-[10px] opacity-70">
                               {log.action === 'submit' ? '发起申请' : 
                                log.action === 'resubmit' ? '重新提交' :

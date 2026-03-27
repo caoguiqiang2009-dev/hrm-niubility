@@ -166,7 +166,9 @@ router.put('/plans/:id/progress', authMiddleware, (req: AuthRequest, res) => {
 // 进度日志
 router.get('/plans/:id/logs', authMiddleware, (req, res) => {
   const db = getDb();
-  const logs = db.prepare('SELECT * FROM perf_logs WHERE plan_id = ? ORDER BY created_at DESC').all(req.params.id);
+  const logs = db.prepare(
+    `SELECT pl.*, u.name as user_name FROM perf_logs pl LEFT JOIN users u ON pl.user_id = u.id WHERE pl.plan_id = ? ORDER BY pl.created_at DESC`
+  ).all(req.params.id);
   return res.json({ code: 0, data: logs });
 });
 

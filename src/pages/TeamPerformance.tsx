@@ -194,27 +194,37 @@ export default function TeamPerformance({ navigate }: { navigate: (view: string)
               <p className="text-sm font-bold">{currentUser?.role === 'employee' ? '暂无部门同事数据' : '暂无下属成员数据'}</p>
             </div>
           ) : (
-            subordinates.map(sub => (
+            subordinates.map((sub, idx) => {
+            const cardColors = [
+              { ring: 'ring-rose-300', accent: 'text-rose-500', bg: 'from-rose-400/20 to-pink-400/20', dot: 'bg-rose-400' },
+              { ring: 'ring-blue-300', accent: 'text-blue-500', bg: 'from-blue-400/20 to-cyan-400/20', dot: 'bg-blue-400' },
+              { ring: 'ring-emerald-300', accent: 'text-emerald-500', bg: 'from-emerald-400/20 to-teal-400/20', dot: 'bg-emerald-400' },
+              { ring: 'ring-amber-300', accent: 'text-amber-500', bg: 'from-amber-400/20 to-orange-400/20', dot: 'bg-amber-400' },
+              { ring: 'ring-violet-300', accent: 'text-violet-500', bg: 'from-violet-400/20 to-purple-400/20', dot: 'bg-violet-400' },
+              { ring: 'ring-cyan-300', accent: 'text-cyan-500', bg: 'from-cyan-400/20 to-sky-400/20', dot: 'bg-cyan-400' },
+            ];
+            const cc = cardColors[idx % cardColors.length];
+            return (
               <div key={sub.id} className="flex-none w-72 snap-center bg-surface-container-low rounded-xl p-6 transition-all hover:shadow-2xl hover:shadow-primary/5 group flex flex-col" style={{ height: 'calc(100vh - 320px)', minHeight: '400px' }}>
                 <div className="flex justify-between items-start mb-6 shrink-0">
                   <div className="flex items-center space-x-4">
                     <div className="relative shrink-0">
                       {sub.avatar_url ? (
-                        <img alt={sub.name} className="w-16 h-16 rounded-2xl object-cover ring-4 ring-white shadow-sm" src={sub.avatar_url} />
+                        <img alt={sub.name} className={`w-16 h-16 rounded-2xl object-cover ring-4 ${cc.ring} shadow-sm`} src={sub.avatar_url} />
                       ) : (
-                        <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-primary/20 to-secondary/20 flex items-center justify-center font-black text-xl text-primary ring-4 ring-white shadow-sm">
+                        <div className={`w-16 h-16 rounded-2xl bg-gradient-to-br ${cc.bg} flex items-center justify-center font-black text-xl ${cc.accent} ring-4 ${cc.ring} shadow-sm`}>
                           {sub.name[0]}
                         </div>
                       )}
-                      <span className={`absolute -bottom-1 -right-1 w-4 h-4 border-2 border-white rounded-full ${sub.role === 'manager' ? 'bg-amber-400' : 'bg-secondary'}`}></span>
+                      <span className={`absolute -bottom-1 -right-1 w-4 h-4 border-2 border-white rounded-full ${sub.role === 'manager' ? 'bg-amber-400' : cc.dot}`}></span>
                     </div>
                     <div className="min-w-0">
-                      <h3 className="text-lg font-black font-headline truncate">{sub.name} ({sub.id})</h3>
-                      <p className="text-xs text-on-surface-variant font-label tracking-wide uppercase truncate">{sub.title || '员工'}</p>
+                      <h3 className="text-lg font-black font-headline truncate">{sub.name}</h3>
+                      <p className="text-xs text-on-surface-variant font-label tracking-wide truncate">{sub.title || '员工'}</p>
                     </div>
                   </div>
                   <div className="flex flex-col items-end shrink-0 pl-2">
-                    <span className="text-2xl font-black text-primary">{sub.score || 90}</span>
+                    <span className={`text-2xl font-black ${cc.accent}`}>{sub.score || 90}</span>
                     <span className="text-[10px] text-on-surface-variant font-label uppercase">绩效预估</span>
                   </div>
                 </div>
@@ -260,7 +270,7 @@ export default function TeamPerformance({ navigate }: { navigate: (view: string)
                   </div>
                 </div>
               </div>
-            ))
+            )})
           )}
         </div>
         </div>

@@ -46,6 +46,8 @@ function TreeNode({
   onSelect,
   expandedIds,
   onToggle,
+  canManage,
+  onDeptAction,
 }: {
   node: DeptNode;
   depth: number;
@@ -53,10 +55,20 @@ function TreeNode({
   onSelect: (id: number) => void;
   expandedIds: Set<number>;
   onToggle: (id: number) => void;
+  canManage?: boolean;
+  onDeptAction?: (action: 'create' | 'rename' | 'move' | 'delete', deptId: number, deptName: string) => void;
 }) {
   const hasChildren = node.children.length > 0;
   const isExpanded = expandedIds.has(node.id);
   const isSelected = selectedId === node.id;
+  const [showMenu, setShowMenu] = useState(false);
+  const menuRef = React.useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handle = (e: MouseEvent) => { if (menuRef.current && !menuRef.current.contains(e.target as Node)) setShowMenu(false); };
+    if (showMenu) document.addEventListener('mousedown', handle);
+    return () => document.removeEventListener('mousedown', handle);
+  }, [showMenu]);
 
   const depthColors = [
     'border-primary/40',
@@ -121,14 +133,6 @@ function TreeNode({
           >
             {node.name}
           </p>
-          <div className="flex items-center gap-2 mt-0.5">
-            {node.region && (
-              <span className="text-[10px] text-slate-400 flex items-center gap-0.5">
-                <span className="material-symbols-outlined text-[10px]">location_on</span>
-                {node.region}
-              </span>
-            )}
-          </div>
         </div>
 
         {/* 人数徽章 */}
@@ -141,6 +145,37 @@ function TreeNode({
         >
           {node.member_count} 人
         </span>
+
+        {/* 管理菜单 */}
+        {canManage && (
+          <div ref={menuRef} className="relative shrink-0">
+            <button
+              onClick={(e) => { e.stopPropagation(); setShowMenu(!showMenu); }}
+              className="w-6 h-6 flex items-center justify-center rounded-md text-slate-400 hover:text-slate-700 hover:bg-slate-200 dark:hover:bg-slate-700 opacity-0 group-hover:opacity-100 transition-all"
+            >
+              <span className="material-symbols-outlined text-[16px]">more_vert</span>
+            </button>
+            {showMenu && (
+              <div className="absolute right-0 top-full mt-1 w-36 bg-white dark:bg-slate-900 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 py-1 z-50 animate-in fade-in zoom-in-95 duration-100">
+                {[
+                  { action: 'create' as const, icon: 'create_new_folder', label: '新建子部门', color: 'text-blue-600' },
+                  { action: 'rename' as const, icon: 'edit', label: '重命名', color: 'text-amber-600' },
+                  { action: 'move' as const, icon: 'drive_file_move', label: '移动部门', color: 'text-emerald-600' },
+                  { action: 'delete' as const, icon: 'delete', label: '删除部门', color: 'text-red-500' },
+                ].map(item => (
+                  <button
+                    key={item.action}
+                    onClick={(e) => { e.stopPropagation(); setShowMenu(false); onDeptAction?.(item.action, node.id, node.name); }}
+                    className={`w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors ${item.color}`}
+                  >
+                    <span className="material-symbols-outlined text-[15px]">{item.icon}</span>
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* 子节点递归 */}
@@ -155,6 +190,8 @@ function TreeNode({
               onSelect={onSelect}
               expandedIds={expandedIds}
               onToggle={onToggle}
+              canManage={canManage}
+              onDeptAction={onDeptAction}
             />
           ))}
         </div>
@@ -220,7 +257,7 @@ function MemberCard({
             <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${rc.bg} ${rc.color}`}>
               {rc.label}
             </span>
-            <span className="text-[10px] text-slate-400">ID: {user.id}</span>
+        
           </div>
         </div>
       </div>
@@ -282,6 +319,11 @@ export default function OrgChart({ navigate }: { navigate: (view: string) => voi
   const [moveTarget, setMoveTarget] = useState<{ userId: string; name: string } | null>(null);
   const [moveDeptId, setMoveDeptId] = useState<number | null>(null);
 
+  // 部门管理状态
+  const [deptAction, setDeptAction] = useState<{ action: 'create' | 'rename' | 'move' | 'delete'; deptId: number; deptName: string } | null>(null);
+  const [deptInputName, setDeptInputName] = useState('');
+  const [deptMoveTargetId, setDeptMoveTargetId] = useState<number | null>(null);
+
   // 统计
   const [stats, setStats] = useState({ deptCount: 0, totalMembers: 0 });
 
@@ -309,33 +351,33 @@ export default function OrgChart({ navigate }: { navigate: (view: string) => voi
     return ids;
   }, []);
 
-  // 拉取组织树
-  useEffect(() => {
-    (async () => {
-      try {
-        const token = localStorage.getItem('token');
-        const res = await fetch('/api/org/tree', {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        const data = await res.json();
-        if (data.code === 0) {
-          setTree(data.data);
-          const c = countTree(data.data);
-          setStats({ deptCount: c.depts, totalMembers: c.members });
-          // 默认展开全部
-          setExpandedIds(new Set(collectAllIds(data.data)));
-          // 自动选中第一个
-          if (data.data.length > 0) {
-            setSelectedDeptId(data.data[0].id);
-          }
+  // 拉取/刷新组织树
+  const refreshTree = useCallback(async (keepSelection = true) => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch('/api/org/tree', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (data.code === 0) {
+        setTree(data.data);
+        const c = countTree(data.data);
+        setStats({ deptCount: c.depts, totalMembers: c.members });
+        setExpandedIds(new Set(collectAllIds(data.data)));
+        if (!keepSelection && data.data.length > 0) {
+          setSelectedDeptId(data.data[0].id);
         }
-      } catch (err) {
-        console.error('获取组织树失败', err);
-      } finally {
-        setLoading(false);
       }
-    })();
+    } catch (err) {
+      console.error('获取组织树失败', err);
+    } finally {
+      setLoading(false);
+    }
   }, [countTree, collectAllIds]);
+
+  useEffect(() => {
+    refreshTree(false);
+  }, [refreshTree]);
 
   // 拉取部门详情
   useEffect(() => {
@@ -430,6 +472,62 @@ export default function OrgChart({ navigate }: { navigate: (view: string) => voi
     return result;
   }, [tree]);
 
+  // ── 部门管理 CRUD 操作 ──
+  const handleDeptAction = (action: 'create' | 'rename' | 'move' | 'delete', deptId: number, deptName: string) => {
+    setDeptAction({ action, deptId, deptName });
+    if (action === 'rename') setDeptInputName(deptName);
+    else if (action === 'create') setDeptInputName('');
+    else if (action === 'move') setDeptMoveTargetId(null);
+  };
+
+  const handleDeptCrud = async () => {
+    if (!deptAction) return;
+    const token = localStorage.getItem('token');
+    const { action, deptId } = deptAction;
+    let url = '';
+    let method = 'POST';
+    let body: any = {};
+
+    if (action === 'create') {
+      if (!deptInputName.trim()) return;
+      url = '/api/org/departments';
+      body = { name: deptInputName.trim(), parent_id: deptId };
+    } else if (action === 'rename') {
+      if (!deptInputName.trim()) return;
+      url = `/api/org/departments/${deptId}`;
+      method = 'PUT';
+      body = { name: deptInputName.trim() };
+    } else if (action === 'move') {
+      if (deptMoveTargetId === null) return;
+      url = `/api/org/departments/${deptId}/parent`;
+      method = 'PUT';
+      body = { parent_id: deptMoveTargetId };
+    } else if (action === 'delete') {
+      url = `/api/org/departments/${deptId}`;
+      method = 'DELETE';
+    }
+
+    try {
+      const res = await fetch(url, {
+        method,
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        ...(method !== 'DELETE' ? { body: JSON.stringify(body) } : {}),
+      });
+      const json = await res.json();
+      if (json.code === 0) {
+        setDeptAction(null);
+        await refreshTree();
+        // 若删除了当前选中的部门,清除选择
+        if (action === 'delete' && selectedDeptId === deptId) {
+          setSelectedDeptId(null);
+          setDeptDetail(null);
+        }
+      } else {
+        alert(json.message || '操作失败');
+      }
+    } catch { alert('网络异常'); }
+  };
+
   return (
     <div className="flex h-screen overflow-hidden bg-background text-on-surface font-body selection:bg-primary-fixed">
       <Sidebar currentView="org" navigate={navigate} />
@@ -519,6 +617,8 @@ export default function OrgChart({ navigate }: { navigate: (view: string) => voi
                         onSelect={setSelectedDeptId}
                         expandedIds={expandedIds}
                         onToggle={handleToggle}
+                        canManage={canManage}
+                        onDeptAction={handleDeptAction}
                       />
                     ))
                   )}
@@ -680,6 +780,93 @@ export default function OrgChart({ navigate }: { navigate: (view: string) => voi
           </section>
         </div>
       </main>
+
+      {/* 部门管理弹窗 (新建/重命名/移动/删除) */}
+      {deptAction && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm" onClick={() => setDeptAction(null)} />
+          <div className="relative bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-4 animate-in zoom-in-95 fade-in duration-200">
+            <h3 className="text-lg font-black flex items-center gap-2">
+              <span className="material-symbols-outlined text-primary">
+                {deptAction.action === 'create' ? 'create_new_folder' :
+                 deptAction.action === 'rename' ? 'edit' :
+                 deptAction.action === 'move' ? 'drive_file_move' : 'delete'}
+              </span>
+              {deptAction.action === 'create' ? `在「${deptAction.deptName}」下新建子部门` :
+               deptAction.action === 'rename' ? `重命名「${deptAction.deptName}」` :
+               deptAction.action === 'move' ? `移动「${deptAction.deptName}」` :
+               `删除「${deptAction.deptName}」`}
+            </h3>
+
+            {/* 新建 / 重命名 → 输入框 */}
+            {(deptAction.action === 'create' || deptAction.action === 'rename') && (
+              <input
+                autoFocus
+                value={deptInputName}
+                onChange={e => setDeptInputName(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && handleDeptCrud()}
+                placeholder={deptAction.action === 'create' ? '输入新部门名称' : '输入新名称'}
+                className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/40"
+              />
+            )}
+
+            {/* 移动 → 部门选择器 */}
+            {deptAction.action === 'move' && (
+              <div className="max-h-64 overflow-y-auto rounded-xl border border-slate-200 dark:border-slate-700">
+                <button
+                  onClick={() => setDeptMoveTargetId(0)}
+                  className={`w-full text-left px-4 py-2.5 text-sm font-bold hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors ${deptMoveTargetId === 0 ? 'bg-primary/10 text-primary' : 'text-slate-600'}`}
+                >
+                  📌 顶级（无上级）
+                </button>
+                {flatDepts
+                  .filter(d => d.id !== deptAction.deptId)
+                  .map(d => (
+                    <button
+                      key={d.id}
+                      onClick={() => setDeptMoveTargetId(d.id)}
+                      className={`w-full text-left px-4 py-2.5 text-sm hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors ${deptMoveTargetId === d.id ? 'bg-primary/10 text-primary font-bold' : 'text-slate-600'}`}
+                      style={{ paddingLeft: `${d.depth * 20 + 16}px` }}
+                    >
+                      {'└ '.repeat(d.depth > 0 ? 1 : 0)}{d.name}
+                    </button>
+                  ))}
+              </div>
+            )}
+
+            {/* 删除 → 确认提示 */}
+            {deptAction.action === 'delete' && (
+              <div className="p-4 bg-red-50 dark:bg-red-900/20 rounded-xl border border-red-100 dark:border-red-800">
+                <p className="text-sm text-red-600 font-medium">
+                  确定要删除「{deptAction.deptName}」吗？此操作不可撤销。
+                </p>
+                <p className="text-xs text-red-400 mt-1">
+                  注意：如果该部门下有子部门或成员，需先移走才能删除。
+                </p>
+              </div>
+            )}
+
+            <div className="flex justify-end gap-3 pt-2">
+              <button
+                onClick={() => setDeptAction(null)}
+                className="px-5 py-2 text-sm font-bold text-slate-500 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors"
+              >
+                取消
+              </button>
+              <button
+                onClick={handleDeptCrud}
+                className={`px-5 py-2 text-sm font-bold text-white rounded-xl transition-colors ${
+                  deptAction.action === 'delete' ? 'bg-red-500 hover:bg-red-600' : 'bg-primary hover:bg-primary/90'
+                }`}
+              >
+                {deptAction.action === 'create' ? '创建' :
+                 deptAction.action === 'rename' ? '保存' :
+                 deptAction.action === 'move' ? '确认移动' : '确认删除'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 调整部门弹窗 */}
       {moveTarget && (

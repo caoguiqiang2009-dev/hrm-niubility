@@ -518,7 +518,7 @@ function WorkflowCard({ item, tab, onClick }: { item: any; tab: TabKey; onClick:
                       isApprove ? 'bg-emerald-50 border-emerald-100 text-emerald-700' : 
                       'bg-slate-50 border-slate-200 text-slate-600'
                     }`}>
-                      <span className="font-bold">{log.user_id}</span>
+                      <span className="font-bold">{log.user_name || log.user_id}</span>
                       <span className="text-[9px] opacity-70">
                         {log.action === 'submit' ? '发起申请' : 
                          isReject ? '已驳回' : 
