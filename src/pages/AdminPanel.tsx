@@ -843,15 +843,16 @@ const ASSIGNEE_TYPES: { value: string; label: string; icon: string }[] = [
   { value: 'role_admin', label: '指定角色: 管理员', icon: 'admin_panel_settings' },
 ];
 
-const BUSINESS_TYPES: { value: string; label: string; icon: string }[] = [
-  { value: 'perf_submit', label: '绩效申请', icon: 'trending_up' },
-  { value: 'perf_assign', label: '绩效下发', icon: 'assignment_ind' },
-  { value: 'pool_proposal', label: '绩效池提案', icon: 'lightbulb' },
-  { value: 'leave_request', label: '请假申请', icon: 'event_note' },
-  { value: 'expense_claim', label: '报销申请', icon: 'receipt_long' },
-  { value: 'transfer', label: '调岗申请', icon: 'swap_horiz' },
-  { value: 'onboarding', label: '入职审批', icon: 'badge' },
-  { value: 'offboarding', label: '离职审批', icon: 'exit_to_app' },
+const BUSINESS_TYPES: { value: string; label: string; icon: string; desc: string }[] = [
+  { value: 'perf_submit', label: '绩效申请', icon: 'trending_up', desc: '员工提交绩效目标' },
+  { value: 'perf_assign', label: '绩效下发', icon: 'assignment_ind', desc: '主管向下分配任务' },
+  { value: 'pool_proposal', label: '绩效池提案', icon: 'lightbulb', desc: '提交赏金池任务提案' },
+  { value: 'pool_claim', label: '绩效池认领', icon: 'volunteer_activism', desc: '认领赏金池悬赏任务' },
+  { value: 'leave_request', label: '请假申请', icon: 'event_note', desc: '员工请假审批' },
+  { value: 'expense_claim', label: '报销申请', icon: 'receipt_long', desc: '费用报销审批' },
+  { value: 'transfer', label: '调岗申请', icon: 'swap_horiz', desc: '岗位调动审批' },
+  { value: 'onboarding', label: '入职审批', icon: 'badge', desc: '新员工入职流程' },
+  { value: 'offboarding', label: '离职审批', icon: 'exit_to_app', desc: '员工离职流程' },
 ];
 
 function SearchableUserSelect({ userList, selectedIds, onSelect }: { userList: any[], selectedIds: string[], onSelect: (id: string) => void }) {
@@ -1078,8 +1079,17 @@ function ApprovalFlowModule() {
               <span className="material-symbols-outlined text-[16px] text-slate-600">arrow_back</span>
             </button>
             <div>
-              <h4 className="text-base font-bold text-slate-800 dark:text-slate-100">{editing.name}</h4>
-              <p className="text-xs text-slate-400">{editing.description || '审批流程设置'}</p>
+              <input
+                value={editing.name}
+                onChange={e => setEditing({ ...editing, name: e.target.value })}
+                className="text-base font-bold text-slate-800 dark:text-slate-100 bg-transparent border-b border-transparent hover:border-slate-300 focus:border-[#0060a9] outline-none w-full transition-colors"
+              />
+              <input
+                value={editing.description || ''}
+                onChange={e => setEditing({ ...editing, description: e.target.value })}
+                placeholder="添加描述说明..."
+                className="text-xs text-slate-400 bg-transparent border-b border-transparent hover:border-slate-200 focus:border-[#0060a9] outline-none w-full mt-0.5 transition-colors"
+              />
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -1154,8 +1164,11 @@ function ApprovalFlowModule() {
                         <span className="text-slate-500">{node.config?.scope || '所有人'}</span>
                       ) : node.node_type === 'approver' || node.node_type === 'handler' ? (
                         <span className="text-slate-500 text-xs">
-                          {ASSIGNEE_TYPES.find(a => a.value === (node.config?.assigneeType || 'specified'))?.label}
-                          {(node.config?.assigneeType || 'specified') === 'specified' && node.config?.assignees?.length > 0
+                          {(() => {
+                            const types = node.config?.assigneeTypes || (node.config?.assigneeType ? [node.config.assigneeType] : ['specified']);
+                            return types.map((t: string) => ASSIGNEE_TYPES.find(a => a.value === t)?.label || t).join(' + ');
+                          })()}
+                          {(node.config?.assigneeTypes || [node.config?.assigneeType || 'specified']).includes('specified') && node.config?.assignees?.length > 0
                             ? ` · ${node.config.assignees.length}人` : ''}
                           {node.node_type === 'approver' && ` · ${node.approve_type === 'or_sign' ? '或签' : node.approve_type === 'parallel' ? '会签' : '依次'}`}
                         </span>
@@ -1287,26 +1300,35 @@ function ApprovalFlowModule() {
                   {/* ── Approver/Handler Config (Tab: 审批人设置) ── */}
                   {(selectedNode.node_type === 'approver' || selectedNode.node_type === 'handler') && configTab === 'approver' && (
                     <>
-                      {/* Assignee Type (radio grid) */}
+                      {/* Assignee Type (checkbox multi-select) */}
                       <div>
                         <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 mb-2">
-                          {selectedNode.node_type === 'handler' ? '办理人' : '审批人'}
+                          {selectedNode.node_type === 'handler' ? '办理人（可多选）' : '审批人（可多选）'}
                         </label>
                         <div className="grid grid-cols-3 gap-x-4 gap-y-2.5">
-                          {ASSIGNEE_TYPES.map(at => (
-                            <label key={at.value} className="flex items-center gap-1.5 cursor-pointer">
-                              <input type="radio" name={`assignee_type_${selectedNodeIdx}`}
-                                checked={(selectedNode.config?.assigneeType || 'specified') === at.value}
-                                onChange={() => updateNode(selectedNodeIdx!, { config: { ...selectedNode.config, assigneeType: at.value } })}
-                                className="w-3.5 h-3.5 text-[#0060a9]" />
-                              <span className="text-xs text-slate-600 dark:text-slate-300">{at.label}</span>
-                            </label>
-                          ))}
+                          {ASSIGNEE_TYPES.map(at => {
+                            const types: string[] = selectedNode.config?.assigneeTypes || (selectedNode.config?.assigneeType ? [selectedNode.config.assigneeType] : ['specified']);
+                            const isChecked = types.includes(at.value);
+                            return (
+                              <label key={at.value} className="flex items-center gap-1.5 cursor-pointer">
+                                <input type="checkbox"
+                                  checked={isChecked}
+                                  onChange={() => {
+                                    const cur = [...types];
+                                    const next = isChecked ? cur.filter(x => x !== at.value) : [...cur, at.value];
+                                    if (next.length === 0) return;
+                                    updateNode(selectedNodeIdx!, { config: { ...selectedNode.config, assigneeTypes: next, assigneeType: next[0] } });
+                                  }}
+                                  className="w-3.5 h-3.5 rounded text-[#0060a9]" />
+                                <span className="text-xs text-slate-600 dark:text-slate-300">{at.label}</span>
+                              </label>
+                            );
+                          })}
                         </div>
                       </div>
 
-                      {/* Person picker — when specified */}
-                      {(selectedNode.config?.assigneeType || 'specified') === 'specified' && (() => {
+                      {/* Person picker — when specified is among selected types */}
+                      {(selectedNode.config?.assigneeTypes || [selectedNode.config?.assigneeType || 'specified']).includes('specified') && (() => {
                         const selectedIds: string[] = selectedNode.config?.assignees || [];
                         return (
                           <div>
@@ -1336,7 +1358,7 @@ function ApprovalFlowModule() {
                       })()}
 
                       {/* Selection scope */}
-                      {selectedNode.config?.assigneeType === 'self_select' && (
+                      {(selectedNode.config?.assigneeTypes || [selectedNode.config?.assigneeType || 'specified']).includes('self_select') && (
                         <>
                           <div>
                             <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 mb-2">可选范围</label>

@@ -336,4 +336,56 @@ router.delete('/departments/:id', authMiddleware, requireRole('admin', 'hr'), (r
   return res.json({ code: 0, message: `已删除部门「${dept.name}」` });
 });
 
+// ─── 部门绩效统计 ─────────────────────────────────────────────────
+router.get('/departments/:id/stats', authMiddleware, (req: AuthRequest, res) => {
+  const db = getDb();
+  const deptId = parseInt(req.params.id);
+
+  // Get member IDs in this department
+  const members = db.prepare('SELECT id, name FROM users WHERE department_id = ? AND status = ?').all(deptId, 'active') as any[];
+  const memberIds = members.map((m: any) => m.id);
+
+  if (memberIds.length === 0) {
+    return res.json({
+      code: 0,
+      data: { memberCount: 0, totalTasks: 0, completed: 0, inProgress: 0, pending: 0, completionRate: 0, avgProgress: 0, recentTasks: [] }
+    });
+  }
+
+  const placeholders = memberIds.map(() => '?').join(',');
+
+  // Task statistics
+  const totalTasks = (db.prepare(`SELECT COUNT(*) as c FROM perf_plans WHERE assignee_id IN (${placeholders})`).get(...memberIds) as any)?.c || 0;
+  const completed = (db.prepare(`SELECT COUNT(*) as c FROM perf_plans WHERE assignee_id IN (${placeholders}) AND status IN ('completed', 'assessed')`).get(...memberIds) as any)?.c || 0;
+  const inProgress = (db.prepare(`SELECT COUNT(*) as c FROM perf_plans WHERE assignee_id IN (${placeholders}) AND status = 'in_progress'`).get(...memberIds) as any)?.c || 0;
+  const pending = (db.prepare(`SELECT COUNT(*) as c FROM perf_plans WHERE assignee_id IN (${placeholders}) AND status IN ('pending_review', 'draft')`).get(...memberIds) as any)?.c || 0;
+
+  // Average progress
+  const avgRow = db.prepare(`SELECT AVG(progress) as avg FROM perf_plans WHERE assignee_id IN (${placeholders}) AND status NOT IN ('completed', 'assessed')`).get(...memberIds) as any;
+  const avgProgress = Math.round(avgRow?.avg || 0);
+
+  // Recent tasks (top 5)
+  const recentTasks = db.prepare(`
+    SELECT pp.id, pp.title, pp.status, pp.progress, pp.deadline, u.name as assignee_name
+    FROM perf_plans pp
+    LEFT JOIN users u ON pp.assignee_id = u.id
+    WHERE pp.assignee_id IN (${placeholders})
+    ORDER BY pp.created_at DESC LIMIT 5
+  `).all(...memberIds);
+
+  return res.json({
+    code: 0,
+    data: {
+      memberCount: memberIds.length,
+      totalTasks,
+      completed,
+      inProgress,
+      pending,
+      completionRate: totalTasks > 0 ? Math.round((completed / totalTasks) * 100) : 0,
+      avgProgress,
+      recentTasks
+    }
+  });
+});
+
 export default router;
