@@ -293,4 +293,23 @@ router.post('/tasks/:id/close', authMiddleware, (_req, res) => {
   return res.json({ code: 0, message: '已关闭' });
 });
 
+// 删除绩效池任务 (仅管理员/HR)
+router.delete('/tasks/:id', authMiddleware, (req: AuthRequest, res) => {
+  const db = getDb();
+  const user = db.prepare('SELECT role FROM users WHERE id = ?').get(req.userId) as any;
+  if (!user || !['admin', 'hr'].includes(user.role)) {
+    return res.status(403).json({ code: 403, message: '仅管理员或HR可删除任务' });
+  }
+
+  const task = db.prepare('SELECT id, title FROM pool_tasks WHERE id = ?').get(req.params.id) as any;
+  if (!task) return res.status(404).json({ code: 404, message: '任务不存在' });
+
+  // 删除关联参与者记录
+  db.prepare('DELETE FROM pool_participants WHERE pool_task_id = ?').run(task.id);
+  // 删除任务本身
+  db.prepare('DELETE FROM pool_tasks WHERE id = ?').run(task.id);
+
+  return res.json({ code: 0, message: `任务「${task.title}」已删除` });
+});
+
 export default router;

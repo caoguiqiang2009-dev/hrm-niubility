@@ -240,31 +240,28 @@ export default function CompanyPerformance({ navigate }: { navigate: (view: stri
   // ── Delete ─────────────────────────────────────────────────────────────────
   const handleDelete = (task: PoolTask) => {
     openDialog({
-      title: '移入回收站',
-      description: `确认将「${task.title}」移入回收站？管理员可随时恢复。`,
-      confirmLabel: '移入回收站',
-      confirmClass: 'bg-red-500 hover:bg-red-600 text-white',
-      onConfirm: () => {
-        closeDialog();
-        setTasks(prev => prev.filter(t => t.id !== task.id));
-        setDeletedTasks(prev => [task, ...prev]);
-      },
-    });
-  };
-
-  const handleRestore = (id: number) => {
-    const task = deletedTasks.find(t => t.id === id)!;
-    setDeletedTasks(prev => prev.filter(t => t.id !== id));
-    setTasks(prev => [...prev, task]);
-  };
-
-  const handlePermanentDelete = (task: PoolTask) => {
-    openDialog({
-      title: '永久删除',
-      description: `「${task.title}」将被永久删除，无法恢复。`,
-      confirmLabel: '永久删除',
+      title: '删除任务',
+      description: `确认永久删除「${task.title}」？此操作不可撤销。`,
+      confirmLabel: '确认删除',
       confirmClass: 'bg-red-600 hover:bg-red-700 text-white',
-      onConfirm: () => { closeDialog(); setDeletedTasks(prev => prev.filter(t => t.id !== task.id)); },
+      onConfirm: async () => {
+        closeDialog();
+        try {
+          const token = localStorage.getItem('token');
+          const res = await fetch(`/api/pool/tasks/${task.id}`, {
+            method: 'DELETE',
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          const json = await res.json();
+          if (json.code === 0) {
+            setTasks(prev => prev.filter(t => t.id !== task.id));
+          } else {
+            alert(json.message || '删除失败');
+          }
+        } catch {
+          alert('网络异常');
+        }
+      },
     });
   };
 
@@ -744,67 +741,8 @@ export default function CompanyPerformance({ navigate }: { navigate: (view: stri
         </div>
       )}
 
-      {/* ── Recycle Bin Drawer ─────────────────────────────────────────────────── */}
-      {showTrash && (
-        <div className="fixed inset-0 z-50 flex">
-          <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setShowTrash(false)} />
-          <div className="ml-auto relative w-full max-w-md bg-white dark:bg-slate-900 h-full flex flex-col shadow-2xl animate-in slide-in-from-right-8 duration-200">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-950">
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-xl bg-red-100 dark:bg-red-900/30 flex items-center justify-center">
-                  <span className="material-symbols-outlined text-red-500 text-[18px]">delete_sweep</span>
-                </div>
-                <div>
-                  <h2 className="font-bold text-sm text-slate-800 dark:text-slate-100">回收站</h2>
-                  <p className="text-[10px] text-slate-400">{deletedTasks.length > 0 ? `${deletedTasks.length} 个已删除任务` : '暂无记录'}</p>
-                </div>
-              </div>
-              <button onClick={() => setShowTrash(false)} className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-200/60 dark:hover:bg-slate-800 transition-colors">
-                <span className="material-symbols-outlined text-[20px]">close</span>
-              </button>
-            </div>
-            <div className="flex-1 overflow-y-auto p-4 space-y-3">
-              {deletedTasks.length === 0 ? (
-                <div className="flex flex-col items-center justify-center h-64 text-slate-400">
-                  <span className="material-symbols-outlined text-7xl mb-3 opacity-30">recycling</span>
-                  <p className="text-sm font-medium">回收站为空</p>
-                </div>
-              ) : deletedTasks.map(task => (
-                <div key={task.id} className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200/60 dark:border-slate-700/60 overflow-hidden">
-                  <div className="p-4">
-                    <div className="flex items-start justify-between mb-2">
-                      <span className={`${getBadge(task).cls} text-[10px] font-bold px-2 py-0.5 rounded-full uppercase`}>{getBadge(task).label}</span>
-                      <span className="text-primary font-black text-sm">¥{task.bonus.toLocaleString()}</span>
-                    </div>
-                    <p className="text-sm font-bold text-slate-800 dark:text-slate-200 mb-1 line-clamp-2">{task.title}</p>
-                    <p className="text-[10px] text-slate-400">{task.department} · 难度: {DIFFICULTY_MAP[task.difficulty] || task.difficulty}</p>
-                  </div>
-                  <div className="flex border-t border-slate-100 dark:border-slate-700/60">
-                    <button onClick={() => handleRestore(task.id)}
-                      className="flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-bold text-primary hover:bg-primary/5 transition-colors">
-                      <span className="material-symbols-outlined text-[14px]">restore</span>恢复
-                    </button>
-                    <div className="w-px bg-slate-100 dark:bg-slate-700/60"/>
-                    <button onClick={() => handlePermanentDelete(task)}
-                      className="flex items-center justify-center gap-1.5 px-4 py-2.5 text-xs font-bold text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">
-                      <span className="material-symbols-outlined text-[14px]">delete_forever</span>彻底删除
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-            {deletedTasks.length > 0 && (
-              <div className="px-4 py-3 border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-950">
-                <button onClick={handleClearTrash}
-                  className="w-full py-2.5 text-xs font-bold text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl border border-red-200/60 transition-all flex items-center justify-center gap-2">
-                  <span className="material-symbols-outlined text-[14px]">delete_sweep</span>
-                  清空回收站（{deletedTasks.length} 项）
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
+
+
 
       {/* ── Propose Task Modal ─────────────────────────────────────────────── */}
       <SmartTaskModal
