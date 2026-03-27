@@ -70,10 +70,10 @@ const SearchableUserDropdown = ({
             transition={{ duration: 0.15, ease: 'easeOut' }}
             onClick={(e) => e.stopPropagation()}
             style={{ position: 'fixed', top: pos.top, left: pos.left, zIndex: 9999 }}
-            className="w-52 bg-[#1e2640]/98 backdrop-blur-xl rounded-xl shadow-2xl shadow-black/40 border border-white/15 overflow-hidden flex flex-col"
+            className="w-52 bg-white rounded-xl shadow-xl shadow-black/10 border border-slate-200 overflow-hidden flex flex-col"
           >
             {/* Search Input */}
-            <div className="p-2.5 border-b border-white/5">
+            <div className="p-2.5 border-b border-slate-100">
               <div className="relative flex items-center">
                 <span className="material-symbols-outlined absolute left-2.5 text-slate-400 text-[14px]">search</span>
                 <input 
@@ -81,7 +81,7 @@ const SearchableUserDropdown = ({
                   value={search}
                   onChange={e => setSearch(e.target.value)}
                   placeholder="搜索人员..."
-                  className="w-full bg-white/5 text-white text-xs py-2 pl-8 pr-3 rounded-lg outline-none border border-white/5 focus:border-blue-400/40 focus:bg-white/8 transition-all placeholder:text-slate-500"
+                  className="w-full bg-slate-50 text-slate-800 text-xs py-2 pl-8 pr-3 rounded-lg outline-none border border-slate-200 focus:border-blue-400 focus:bg-white transition-all placeholder:text-slate-400"
                   autoFocus
                 />
               </div>
@@ -90,22 +90,22 @@ const SearchableUserDropdown = ({
             {/* User List */}
             <div className="max-h-56 overflow-y-auto py-1">
               <button
-                className={`w-full text-left px-4 py-2 text-xs flex items-center justify-between hover:bg-white/5 transition-colors ${!value ? 'text-blue-400 font-bold' : 'text-slate-400'}`}
+                className={`w-full text-left px-4 py-2 text-xs flex items-center justify-between hover:bg-slate-50 transition-colors ${!value ? 'text-blue-500 font-bold' : 'text-slate-500'}`}
                 onClick={() => { onChange(''); setIsOpen(false); setSearch(''); }}
               >
                 <span>{placeholder}</span>
-                {!value && <Check size={13} className="text-blue-400" />}
+                {!value && <Check size={13} className="text-blue-500" />}
               </button>
               {filteredUsers.map(u => {
                 const isSelected = u.id === value;
                 return (
                   <button
                     key={u.id}
-                    className={`w-full text-left px-4 py-2 text-xs flex items-center justify-between hover:bg-white/5 transition-colors ${isSelected ? 'text-blue-400 font-bold bg-blue-500/5' : 'text-slate-300'}`}
+                    className={`w-full text-left px-4 py-2 text-xs flex items-center justify-between hover:bg-slate-50 transition-colors ${isSelected ? 'text-blue-600 font-bold bg-blue-50' : 'text-slate-700'}`}
                     onClick={() => { onChange(u.id); setIsOpen(false); setSearch(''); }}
                   >
                     <span>{u.name}</span>
-                    {isSelected && <Check size={13} className="text-blue-400" />}
+                    {isSelected && <Check size={13} className="text-blue-500" />}
                   </button>
                 )
               })}
@@ -204,25 +204,25 @@ const MultiSelectUserDropdown = ({
             transition={{ duration: 0.15, ease: 'easeOut' }}
             onClick={(e) => e.stopPropagation()}
             style={{ position: 'fixed', top: pos.top, left: pos.left, zIndex: 9999 }}
-            className="w-56 bg-[#1e2640]/98 backdrop-blur-xl rounded-xl shadow-2xl shadow-black/40 border border-white/15 overflow-hidden flex flex-col"
+            className="w-56 bg-white rounded-xl shadow-xl shadow-black/10 border border-slate-200 overflow-hidden flex flex-col"
           >
             {/* Selected Tags */}
             {selectedNames.length > 0 && (
-              <div className="px-3 pt-2.5 pb-1 flex flex-wrap gap-1.5 border-b border-white/5">
+              <div className="px-3 pt-2.5 pb-1 flex flex-wrap gap-1.5 border-b border-slate-100">
                 {selectedIds.map(id => {
                   const name = users.find(u => u.id === id)?.name;
                   if (!name) return null;
                   return (
-                    <span key={id} className="inline-flex items-center gap-1 bg-blue-500/20 text-blue-300 text-[10px] font-bold px-2 py-0.5 rounded-md">
+                    <span key={id} className="inline-flex items-center gap-1 bg-blue-50 text-blue-600 text-[10px] font-bold px-2 py-0.5 rounded-md border border-blue-200">
                       {name}
-                      {!readonly && <X size={10} className="cursor-pointer hover:text-white transition-colors" onClick={(e) => { e.stopPropagation(); toggleUser(id); }} />}
+                      {!readonly && <X size={10} className="cursor-pointer hover:text-blue-800 transition-colors" onClick={(e) => { e.stopPropagation(); toggleUser(id); }} />}
                     </span>
                   );
                 })}
               </div>
             )}
             {/* Search Input */}
-            <div className="p-2.5 border-b border-white/5">
+            <div className="p-2.5 border-b border-slate-100">
               <div className="relative flex items-center">
                 <span className="material-symbols-outlined absolute left-2.5 text-slate-400 text-[14px]">search</span>
                 <input 
@@ -230,7 +230,7 @@ const MultiSelectUserDropdown = ({
                   value={search}
                   onChange={e => setSearch(e.target.value)}
                   placeholder="搜索人员..."
-                  className="w-full bg-white/5 text-white text-xs py-2 pl-8 pr-3 rounded-lg outline-none border border-white/5 focus:border-blue-400/40 focus:bg-white/8 transition-all placeholder:text-slate-500"
+                  className="w-full bg-slate-50 text-slate-800 text-xs py-2 pl-8 pr-3 rounded-lg outline-none border border-slate-200 focus:border-blue-400 focus:bg-white transition-all placeholder:text-slate-400"
                   autoFocus
                 />
               </div>
@@ -243,11 +243,11 @@ const MultiSelectUserDropdown = ({
                 return (
                   <button
                     key={u.id}
-                    className={`w-full text-left px-4 py-2 text-xs flex items-center justify-between hover:bg-white/5 transition-colors ${isSelected ? 'text-blue-400 font-bold bg-blue-500/5' : 'text-slate-300'}`}
+                    className={`w-full text-left px-4 py-2 text-xs flex items-center justify-between hover:bg-slate-50 transition-colors ${isSelected ? 'text-blue-600 font-bold bg-blue-50' : 'text-slate-700'}`}
                     onClick={(e) => { e.stopPropagation(); toggleUser(u.id); }}
                   >
                     <span>{u.name}</span>
-                    <div className={`w-4 h-4 rounded border flex items-center justify-center transition-all ${isSelected ? 'bg-blue-500 border-blue-500' : 'border-slate-500'}`}>
+                    <div className={`w-4 h-4 rounded border flex items-center justify-center transition-all ${isSelected ? 'bg-blue-500 border-blue-500' : 'border-slate-300'}`}>
                       {isSelected && <Check size={10} className="text-white" />}
                     </div>
                   </button>
@@ -310,16 +310,16 @@ const TaskTypeDropdown = ({ value, onChange, readonly }: { value: string; onChan
             exit={{ opacity: 0, y: -4, scale: 0.97 }}
             transition={{ duration: 0.15, ease: 'easeOut' }}
             style={{ position: 'fixed', top: pos.top, left: pos.left, zIndex: 9999 }}
-            className="w-44 bg-[#1e2640]/98 backdrop-blur-xl rounded-xl shadow-2xl shadow-black/40 border border-white/15 overflow-hidden py-1"
+            className="w-44 bg-white rounded-xl shadow-xl shadow-black/10 border border-slate-200 overflow-hidden py-1"
           >
             {TASK_TYPE_OPTIONS.map(opt => (
               <button
                 key={opt}
-                className={`w-full text-left px-4 py-2.5 text-xs flex items-center justify-between hover:bg-white/8 transition-colors ${value === opt ? 'text-blue-400 font-bold bg-blue-500/8' : 'text-slate-300'}`}
+                className={`w-full text-left px-4 py-2.5 text-xs flex items-center justify-between hover:bg-slate-50 transition-colors ${value === opt ? 'text-blue-600 font-bold bg-blue-50' : 'text-slate-700'}`}
                 onClick={() => { onChange(opt); setIsOpen(false); }}
               >
                 <span>{opt}</span>
-                {value === opt && <Check size={13} className="text-blue-400" />}
+                {value === opt && <Check size={13} className="text-blue-500" />}
               </button>
             ))}
           </motion.div>
