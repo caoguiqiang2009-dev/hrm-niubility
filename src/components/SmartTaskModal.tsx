@@ -234,40 +234,58 @@ const MultiSelectUserDropdown = ({
   );
 };
 
-/* ── 任务属性下拉 ── */
+/* ── 任务属性下拉 (fixed positioning to avoid overflow clip) ── */
 const TASK_TYPE_OPTIONS = ['常规任务', '重点项目', '创新探索', '临时指派'];
 const TaskTypeDropdown = ({ value, onChange, readonly }: { value: string; onChange: (v: string) => void; readonly?: boolean }) => {
   const [isOpen, setIsOpen] = useState(false);
-  const ref = React.useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState({ top: 0, left: 0 });
+  const triggerRef = React.useRef<HTMLDivElement>(null);
+  const panelRef = React.useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const handle = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setIsOpen(false); };
+    const handle = (e: MouseEvent) => {
+      if (triggerRef.current?.contains(e.target as Node)) return;
+      if (panelRef.current?.contains(e.target as Node)) return;
+      setIsOpen(false);
+    };
     document.addEventListener('mousedown', handle);
     return () => document.removeEventListener('mousedown', handle);
   }, []);
 
+  const handleToggle = () => {
+    if (readonly) return;
+    if (!isOpen && triggerRef.current) {
+      const rect = triggerRef.current.getBoundingClientRect();
+      setPos({ top: rect.bottom + 6, left: rect.left });
+    }
+    setIsOpen(!isOpen);
+  };
+
   return (
-    <div ref={ref} className={`flex items-center bg-white/10 backdrop-blur-sm rounded-lg px-3.5 py-2 border border-white/20 ${readonly ? '' : 'hover:bg-white/20 hover:border-white/30 cursor-pointer'} transition-all duration-200 relative`} onClick={() => !readonly && setIsOpen(!isOpen)}>
-      <span className="text-[11px] font-black text-white/70 mr-2 tracking-wider uppercase">任务属性</span>
-      <div className="flex items-center gap-1 select-none">
-        <span className={`text-sm tracking-wide font-semibold ${value ? 'text-white' : 'text-white/50'}`}>{value || '选择属性'}</span>
-        {!readonly && <ChevronDown size={13} className={`text-white/50 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />}
+    <>
+      <div ref={triggerRef} className={`flex items-center bg-white/10 backdrop-blur-sm rounded-lg px-3.5 py-2 border border-white/20 ${readonly ? '' : 'hover:bg-white/20 hover:border-white/30 cursor-pointer'} transition-all duration-200`} onClick={handleToggle}>
+        <span className="text-[11px] font-black text-white/70 mr-2 tracking-wider uppercase">任务属性</span>
+        <div className="flex items-center gap-1 select-none">
+          <span className={`text-sm tracking-wide font-semibold ${value ? 'text-white' : 'text-white/50'}`}>{value || '选择属性'}</span>
+          {!readonly && <ChevronDown size={13} className={`text-white/50 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />}
+        </div>
       </div>
 
       <AnimatePresence>
         {isOpen && (
           <motion.div
-            initial={{ opacity: 0, y: 5, scale: 0.97 }}
+            ref={panelRef}
+            initial={{ opacity: 0, y: -4, scale: 0.97 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 5, scale: 0.97 }}
+            exit={{ opacity: 0, y: -4, scale: 0.97 }}
             transition={{ duration: 0.15, ease: 'easeOut' }}
-            onClick={e => e.stopPropagation()}
-            className="absolute top-full left-0 mt-2 w-40 bg-[#1e2640]/95 backdrop-blur-xl rounded-xl shadow-2xl shadow-black/30 border border-white/10 overflow-hidden z-50 py-1"
+            style={{ position: 'fixed', top: pos.top, left: pos.left, zIndex: 9999 }}
+            className="w-44 bg-[#1e2640]/98 backdrop-blur-xl rounded-xl shadow-2xl shadow-black/40 border border-white/15 overflow-hidden py-1"
           >
             {TASK_TYPE_OPTIONS.map(opt => (
               <button
                 key={opt}
-                className={`w-full text-left px-4 py-2 text-xs flex items-center justify-between hover:bg-white/5 transition-colors ${value === opt ? 'text-blue-400 font-bold bg-blue-500/5' : 'text-slate-300'}`}
+                className={`w-full text-left px-4 py-2.5 text-xs flex items-center justify-between hover:bg-white/8 transition-colors ${value === opt ? 'text-blue-400 font-bold bg-blue-500/8' : 'text-slate-300'}`}
                 onClick={() => { onChange(opt); setIsOpen(false); }}
               >
                 <span>{opt}</span>
@@ -277,7 +295,7 @@ const TaskTypeDropdown = ({ value, onChange, readonly }: { value: string; onChan
           </motion.div>
         )}
       </AnimatePresence>
-    </div>
+    </>
   );
 };
 
