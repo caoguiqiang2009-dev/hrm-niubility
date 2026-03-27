@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { changelogData, getLatestVersion } from '../data/changelog';
 import { useAuth } from '../context/AuthContext';
 import UserGuide from './UserGuide';
+import { useIsMobile } from '../hooks/useIsMobile';
 
 interface SidebarProps {
   currentView: string;
@@ -9,6 +10,7 @@ interface SidebarProps {
 }
 
 export default function Sidebar({ currentView, navigate }: SidebarProps) {
+  const isMobile = useIsMobile();
   const [isNotifOpen, setIsNotifOpen] = useState(false);
   const [hasUnread, setHasUnread] = useState(false);
   const [isAvatarMenuOpen, setIsAvatarMenuOpen] = useState(false);
@@ -136,9 +138,20 @@ export default function Sidebar({ currentView, navigate }: SidebarProps) {
     setPayslipLoading(false);
   };
 
+  // ── 移动端底部 Tab 配置 ──
+  const mobileTabs = [
+    { id: 'dashboard', icon: 'home', label: '首页' },
+    { id: 'company', icon: 'local_fire_department', label: '赏金榜' },
+    { id: 'workflows', icon: 'assignment', label: '流程' },
+    { id: 'personal', icon: 'flag', label: '目标' },
+    { id: '_me', icon: 'person', label: '我的' },
+  ];
+  const [showMePanel, setShowMePanel] = useState(false);
+
   return (
     <>
-    <header className="h-16 w-full fixed top-0 left-0 right-0 flex items-center justify-between px-6 border-b border-slate-200/60 dark:border-slate-800/60 bg-slate-50 dark:bg-slate-950 font-['Inter'] z-50 transition-all duration-200">
+    {/* ── Desktop Header (unchanged) ── */}
+    <header className={`h-16 w-full fixed top-0 left-0 right-0 flex items-center justify-between px-6 border-b border-slate-200/60 dark:border-slate-800/60 bg-slate-50 dark:bg-slate-950 font-['Inter'] z-50 transition-all duration-200 ${isMobile ? 'px-4' : ''}`}>
       {/* Left Logo */}
       <div className="flex items-center gap-1.5 cursor-pointer" onClick={() => navigate('dashboard')}>
         <h1 className="text-[17px] font-black bg-gradient-to-br from-[#0060a9] to-[#409eff] text-transparent bg-clip-text tracking-tighter">You!Niubility!</h1>
@@ -457,6 +470,151 @@ export default function Sidebar({ currentView, navigate }: SidebarProps) {
     )}
 
     <UserGuide isOpen={showGuide} onClose={() => setShowGuide(false)} />
+
+    {/* ── Mobile Bottom Tab Bar ── */}
+    {isMobile && (
+      <nav className="fixed bottom-0 left-0 right-0 z-50 mobile-bottom-bar border-t border-slate-200/60 dark:border-slate-800/60 pb-safe">
+        <div className="flex items-stretch justify-around h-14">
+          {mobileTabs.map(tab => {
+            const isMe = tab.id === '_me';
+            const isActive = isMe ? showMePanel : currentView === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => {
+                  if (isMe) {
+                    setShowMePanel(p => !p);
+                  } else {
+                    setShowMePanel(false);
+                    navigate(tab.id);
+                  }
+                }}
+                className={`flex flex-col items-center justify-center flex-1 gap-0.5 transition-colors relative ${
+                  isActive
+                    ? 'text-[#0060a9] dark:text-[#409eff]'
+                    : 'text-slate-400 dark:text-slate-500'
+                }`}
+              >
+                <span
+                  className={`material-symbols-outlined text-[22px] transition-all ${
+                    isActive ? 'scale-110' : ''
+                  }`}
+                  style={isActive ? { fontVariationSettings: "'FILL' 1" } : {}}
+                >
+                  {tab.icon}
+                </span>
+                <span className={`text-[10px] font-bold leading-none ${isActive ? '' : 'font-medium'}`}>
+                  {tab.label}
+                </span>
+                {/* Badge for 流程 */}
+                {tab.id === 'workflows' && unreadCount > 0 && (
+                  <span className="absolute top-1 right-1/2 translate-x-3 min-w-[16px] h-4 bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center px-1">
+                    {unreadCount > 99 ? '99+' : unreadCount}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      </nav>
+    )}
+
+    {/* ── Mobile "我的" Panel ── */}
+    {isMobile && showMePanel && (
+      <div className="fixed inset-0 z-[60]">
+        <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" onClick={() => setShowMePanel(false)} />
+        <div className="absolute bottom-[calc(3.5rem+env(safe-area-inset-bottom,0px))] left-0 right-0 bg-white dark:bg-slate-900 rounded-t-3xl shadow-2xl mobile-drawer-enter overflow-hidden max-h-[70vh]">
+          {/* User Info Header */}
+          <div className="px-6 pt-6 pb-4 border-b border-slate-100 dark:border-slate-800">
+            <div className="flex items-center gap-4">
+              <div className="w-14 h-14 rounded-2xl flex items-center justify-center bg-gradient-to-br from-[#0060a9] to-[#3085d6] text-white font-bold text-xl shadow-lg">
+                {(currentUser?.name || 'U').charAt(0).toUpperCase()}
+              </div>
+              <div>
+                <p className="text-lg font-black text-slate-800 dark:text-slate-100">{currentUser?.name}</p>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  {currentUser?.role === 'admin' ? '系统管理员' : currentUser?.role === 'hr' ? 'HR总监' : currentUser?.role === 'manager' ? '主管' : '员工'}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Quick Stats */}
+          <div className="grid grid-cols-3 gap-px bg-slate-100 dark:bg-slate-800 border-b border-slate-100 dark:border-slate-800">
+            {[
+              { label: '未读消息', value: unreadCount, icon: 'mail', color: 'text-blue-500' },
+              { label: '我的团队', value: '—', icon: 'groups', color: 'text-emerald-500' },
+              { label: '本月考勤', value: '—', icon: 'calendar_month', color: 'text-amber-500' },
+            ].map(s => (
+              <div key={s.label} className="bg-white dark:bg-slate-900 py-4 text-center">
+                <span className={`material-symbols-outlined text-[18px] ${s.color} mb-1 block`}>{s.icon}</span>
+                <p className="text-lg font-black text-slate-800 dark:text-slate-100">{s.value}</p>
+                <p className="text-[10px] text-slate-400 font-medium">{s.label}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* Menu Items */}
+          <div className="py-2">
+            {[
+              { icon: 'groups', label: '我的团队', color: 'text-indigo-500', view: 'team' },
+              { icon: 'map', label: '人力地图', color: 'text-teal-500', view: 'hrmap' },
+              { icon: 'view_quilt', label: '全景仪表盘', color: 'text-purple-500', view: 'panorama' },
+              { icon: 'account_tree', label: '组织关系', color: 'text-cyan-500', view: 'org' },
+            ].filter(item => {
+              const permMap: Record<string, string> = { team: 'view_team_perf', hrmap: 'view_hr_map', panorama: 'view_panorama', org: 'view_org_chart' };
+              return !permMap[item.view] || hasPermission(permMap[item.view]);
+            }).map(item => (
+              <button key={item.view}
+                onClick={() => { setShowMePanel(false); navigate(item.view); }}
+                className="w-full flex items-center gap-4 px-6 py-3.5 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors active:bg-slate-100 dark:active:bg-slate-700">
+                <span className={`material-symbols-outlined text-[20px] ${item.color}`} style={{ fontVariationSettings: "'FILL' 1" }}>{item.icon}</span>
+                {item.label}
+                <span className="material-symbols-outlined text-[16px] text-slate-300 ml-auto">chevron_right</span>
+              </button>
+            ))}
+
+            <div className="h-px bg-slate-100 dark:bg-slate-800 mx-4 my-1" />
+
+            <button onClick={() => { setShowMePanel(false); handleNotifClick(); }}
+              className="w-full flex items-center gap-4 px-6 py-3.5 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors active:bg-slate-100">
+              <span className="material-symbols-outlined text-[20px] text-amber-500">notifications</span>
+              更新通知
+              {hasUnread && <span className="w-2 h-2 bg-red-500 rounded-full"></span>}
+            </button>
+
+            <button onClick={() => { setShowMePanel(false); handleViewPayslip(); }}
+              className="w-full flex items-center gap-4 px-6 py-3.5 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors active:bg-slate-100">
+              <span className="material-symbols-outlined text-[20px] text-emerald-500">payments</span>
+              我的工资单
+            </button>
+
+            {hasPermission('view_admin') && (
+              <button onClick={() => { setShowMePanel(false); navigate('admin'); }}
+                className="w-full flex items-center gap-4 px-6 py-3.5 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors active:bg-slate-100">
+                <span className="material-symbols-outlined text-[20px] text-violet-600">admin_panel_settings</span>
+                管理后台
+              </button>
+            )}
+
+            <button onClick={() => { setShowMePanel(false); setShowGuide(true); }}
+              className="w-full flex items-center gap-4 px-6 py-3.5 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors active:bg-slate-100">
+              <span className="material-symbols-outlined text-[20px] text-blue-500">menu_book</span>
+              使用说明
+            </button>
+
+            <div className="h-px bg-slate-100 dark:bg-slate-800 mx-4 my-1" />
+
+            <button onClick={() => { setShowMePanel(false); logout(); }}
+              className="w-full flex items-center gap-4 px-6 py-3.5 text-sm text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20 transition-colors active:bg-red-100">
+              <span className="material-symbols-outlined text-[20px]">logout</span>
+              退出登录
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+
     </>
   );
 }

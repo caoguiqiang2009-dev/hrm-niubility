@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import SmartFormInputs, { SmartData, encodeSmartDescription, decodeSmartDescription } from '../components/SmartFormInputs';
 import { SmartGoalDisplayFromPlan } from '../components/SmartGoalDisplay';
 import SmartTaskModal, { SmartTaskData } from '../components/SmartTaskModal';
+import { useIsMobile } from '../hooks/useIsMobile';
 
 interface PerfPlan {
   id: number;
@@ -31,6 +32,7 @@ const statusMap: Record<string, { label: string, color: string, bg: string }> = 
 export default function PersonalGoals({ navigate }: { navigate: (view: string) => void }) {
 
   const { currentUser } = useAuth();
+  const isMobile = useIsMobile();
   const [plans, setPlans] = useState<PerfPlan[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [users, setUsers] = useState<{id: string, name: string}[]>([]);
@@ -195,21 +197,25 @@ export default function PersonalGoals({ navigate }: { navigate: (view: string) =
       <Sidebar currentView="personal" navigate={navigate} />
 
       {/* Main Content Area */}
-      <main className="flex-1 h-[calc(100vh-4rem)] mt-16 overflow-y-auto">
-        <div className="p-8">
+      <main className={`flex-1 h-[calc(100vh-4rem)] mt-16 overflow-y-auto ${isMobile ? 'pb-20' : ''}`}>
+        <div className={isMobile ? 'p-4' : 'p-8'}>
           {/* Header Section */}
-          <div className="flex flex-col md:flex-row md:items-end justify-between mb-10 gap-6">
+          <div className={`flex flex-col justify-between mb-6 gap-4 ${isMobile ? '' : 'md:flex-row md:items-end mb-10 gap-6'}`}>
             <div>
+              {!isMobile && (
               <nav className="flex text-xs font-label text-outline mb-2 space-x-2">
                 <span>主页</span>
                 <span>/</span>
                 <span className="text-primary font-medium">目标管理</span>
               </nav>
-              <h1 className="text-4xl font-extrabold tracking-tight text-on-surface">个人目标管理 ({currentUser?.name})</h1>
-              <p className="text-on-surface-variant mt-2 max-w-2xl">追踪您的关键结果，向上级发起绩效申请。本季度您已达标 {overallProgress}%。</p>
+              )}
+              <h1 className={`font-extrabold tracking-tight text-on-surface ${isMobile ? 'text-xl' : 'text-4xl'}`}>个人目标管理</h1>
+              <p className={`text-on-surface-variant mt-1 ${isMobile ? 'text-xs' : 'mt-2 max-w-2xl'}`}>
+                本季度您已达标 {overallProgress}%
+              </p>
             </div>
             <div className="flex items-center gap-3">
-              <button onClick={() => setIsModalOpen(true)} className="primary-gradient text-white px-6 py-2.5 rounded-xl font-bold flex items-center gap-2 shadow-lg shadow-primary/30 active:scale-95 transition-all">
+              <button onClick={() => setIsModalOpen(true)} className={`primary-gradient text-white rounded-xl font-bold flex items-center gap-2 shadow-lg shadow-primary/30 active:scale-95 transition-all ${isMobile ? 'px-4 py-2 text-sm w-full justify-center' : 'px-6 py-2.5'}`}>
                 <span className="material-symbols-outlined">add</span>
                 <span>申请新目标</span>
               </button>
@@ -229,7 +235,7 @@ export default function PersonalGoals({ navigate }: { navigate: (view: string) =
               { label: '专项任务', pct: calcPct(special), count: special.length, icon: 'star', gradient: 'from-[#d97706] to-[#fbbf24]' },
             ];
             return (
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-10">
+              <div className={`grid gap-4 mb-6 ${isMobile ? 'grid-cols-1' : 'grid-cols-1 md:grid-cols-3'}`}>
                 {bars.map(b => (
                   <div key={b.label} className={`bg-gradient-to-br ${b.gradient} p-5 rounded-xl text-white relative overflow-hidden shadow-lg`}>
                     <div className="flex items-center gap-2 mb-2">
@@ -260,8 +266,8 @@ export default function PersonalGoals({ navigate }: { navigate: (view: string) =
             </button>
           </div>
 
-          {/* Horizontal scroll kanban */}
-          <div className="flex gap-4 overflow-x-auto pb-4">
+          {/* Horizontal scroll kanban — stacks vertically on mobile */}
+          <div className={isMobile ? 'space-y-4' : 'flex gap-4 overflow-x-auto pb-4'}>
             {([
               { keys: ['draft', 'pending_review', 'rejected'], label: '筹备中', color: '#94a3b8', bg: '#f1f5f9', wide: false },
               { keys: ['in_progress'],                          label: '进行中', color: '#3b82f6', bg: '#eff6ff', wide: true  },
@@ -272,7 +278,7 @@ export default function PersonalGoals({ navigate }: { navigate: (view: string) =
               const colKey = col.keys[0]; // for UI keying
               return (
                 <div key={colKey}
-                  className={`flex-none flex flex-col rounded-2xl overflow-hidden shadow-sm bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800 ${col.wide ? 'w-[560px]' : 'w-72'}`}>
+                  className={`flex flex-col rounded-2xl overflow-hidden shadow-sm bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800 ${isMobile ? 'w-full' : col.wide ? 'flex-none w-[560px]' : 'flex-none w-72'}`}>
                   {/* Column header */}
                   <div className="px-4 pt-3 pb-2 border-b border-slate-100 dark:border-slate-800">
                     <div className="h-0.5 rounded-full mb-3" style={{ backgroundColor: col.color }} />

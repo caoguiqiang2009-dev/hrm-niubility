@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import Sidebar from '../components/Sidebar';
 import { useAuth } from '../context/AuthContext';
 import SmartTaskModal from '../components/SmartTaskModal';
+import { useIsMobile } from '../hooks/useIsMobile';
 
 interface MyWorkflowsProps {
   navigate: (view: string) => void;
@@ -65,6 +66,7 @@ export default function MyWorkflows({ navigate }: MyWorkflowsProps) {
   const [selectedTask, setSelectedTask] = useState<{ type: string, data: any, isPending: boolean, originalStatus?: string } | null>(null);
   const [submittingApprovals, setSubmittingApprovals] = useState(false);
   const { currentUser } = useAuth();
+  const isMobile = useIsMobile();
   
   const token = localStorage.getItem('token');
   const headers = { Authorization: `Bearer ${token}` };
@@ -160,34 +162,38 @@ export default function MyWorkflows({ navigate }: MyWorkflowsProps) {
   return (
     <div className="flex h-screen overflow-hidden bg-surface text-on-surface antialiased">
       <Sidebar currentView="workflows" navigate={navigate} />
-      <main className="flex-1 h-[calc(100vh-4rem)] mt-16 overflow-y-auto relative">
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className={`flex-1 h-[calc(100vh-4rem)] mt-16 overflow-y-auto relative ${isMobile ? 'pb-20' : ''}`}>
+      <div className={`max-w-5xl mx-auto py-8 ${isMobile ? 'px-4' : 'px-4 sm:px-6 lg:px-8'}`}>
         {/* Header */}
         <div className="mb-6">
-          <h1 className="text-2xl font-black text-slate-900 dark:text-white flex items-center gap-3">
-            <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl flex items-center justify-center">
-              <span className="material-symbols-outlined text-white text-xl">account_tree</span>
+          <h1 className={`font-black text-slate-900 dark:text-white flex items-center gap-3 ${isMobile ? 'text-lg' : 'text-2xl'}`}>
+            <div className={`bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl flex items-center justify-center ${isMobile ? 'w-8 h-8' : 'w-10 h-10'}`}>
+              <span className={`material-symbols-outlined text-white ${isMobile ? 'text-base' : 'text-xl'}`}>account_tree</span>
             </div>
             我的流程
           </h1>
+          {!isMobile && (
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 ml-[52px]">
             跟踪所有我发起、审核和参与的流程
           </p>
+          )}
         </div>
 
         {/* Tabs */}
-        <div className="flex gap-2 mb-6 bg-white dark:bg-slate-900 rounded-2xl p-1.5 shadow-sm border border-slate-200/60 dark:border-slate-800">
+        <div className={`flex gap-2 mb-6 bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200/60 dark:border-slate-800 ${isMobile ? 'p-1 overflow-x-auto scrollbar-hide' : 'p-1.5'}`}>
           {TABS.map(tab => (
             <button key={tab.key}
               onClick={() => setActiveTab(tab.key)}
-              className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold transition-all ${
+              className={`flex items-center justify-center gap-1.5 rounded-xl font-bold transition-all whitespace-nowrap ${
+                isMobile ? 'flex-1 min-w-0 px-2.5 py-2 text-xs' : 'flex-1 px-4 py-2.5 text-sm gap-2'
+              } ${
                 activeTab === tab.key
                   ? 'bg-gradient-to-r from-blue-500 to-indigo-500 text-white shadow-md shadow-blue-200/50'
                   : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800'
               }`}>
-              <span className="material-symbols-outlined text-[18px]"
+              <span className={`material-symbols-outlined ${isMobile ? 'text-[14px]' : 'text-[18px]'}`}
                 style={activeTab === tab.key ? { fontVariationSettings: "'FILL' 1" } : {}}>{tab.icon}</span>
-              {tab.label}
+              {isMobile ? tab.label.replace('我', '') : tab.label}
               {counts[tab.key] > 0 && (
                 <span className={`text-[10px] min-w-[18px] h-[18px] flex items-center justify-center rounded-full px-1 font-black ${
                   activeTab === tab.key ? 'bg-white/20 text-white' :
@@ -432,6 +438,7 @@ export default function MyWorkflows({ navigate }: MyWorkflowsProps) {
 
 function WorkflowCard({ item, tab, onClick }: { item: any; tab: TabKey; onClick: () => void }) {
   const isCC = tab === 'cc';
+  const isMobile = useIsMobile();
 
   if (isCC) {
     // Notification-style card
@@ -477,9 +484,9 @@ function WorkflowCard({ item, tab, onClick }: { item: any; tab: TabKey; onClick:
   return (
     <div 
       onClick={onClick}
-      className={`bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/60 dark:border-slate-800 p-4 transition-all group hover:shadow-md hover:border-blue-300 cursor-pointer`}
+      className={`bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/60 dark:border-slate-800 transition-all group hover:shadow-md hover:border-blue-300 cursor-pointer ${isMobile ? 'p-3' : 'p-4'}`}
     >
-      <div className="flex items-start gap-4">
+      <div className={`flex items-start ${isMobile ? 'gap-3' : 'gap-4'}`}>
         {/* Icon */}
         <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${iconBg}`}>
           <span className={`material-symbols-outlined text-[20px] ${iconColor}`}>{iconName}</span>
@@ -550,7 +557,8 @@ function WorkflowCard({ item, tab, onClick }: { item: any; tab: TabKey; onClick:
         )}
       </div>
 
-      {/* Approval Path */}
+      {/* Approval Path — hide on mobile */}
+      {!isMobile && (
       <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex flex-col gap-2">
         <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
           <span className="material-symbols-outlined text-[12px]">route</span>
@@ -614,6 +622,7 @@ function WorkflowCard({ item, tab, onClick }: { item: any; tab: TabKey; onClick:
           )}
         </div>
       </div>
+      )}
     </div>
   );
 }

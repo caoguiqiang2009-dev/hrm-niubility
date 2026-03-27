@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useAuth } from '../context/AuthContext';
+import { useIsMobile } from '../hooks/useIsMobile';
 
 interface Message {
   role: 'user' | 'assistant' | 'system';
@@ -34,6 +35,7 @@ export default function FloatingAiChat() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const { currentUser } = useAuth();
+  const isMobile = useIsMobile();
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -100,7 +102,7 @@ export default function FloatingAiChat() {
             exit={{ scale: 0, opacity: 0 }}
             transition={{ type: 'spring', stiffness: 300, damping: 25 }}
             onClick={() => setIsOpen(true)}
-            className="fixed bottom-6 right-6 z-[60] w-14 h-14 rounded-2xl bg-gradient-to-br from-[#0060a9] to-[#409eff] text-white shadow-xl shadow-blue-500/30 flex items-center justify-center hover:scale-105 active:scale-95 transition-transform group"
+            className={`fixed right-6 z-[60] w-14 h-14 rounded-2xl bg-gradient-to-br from-[#0060a9] to-[#409eff] text-white shadow-xl shadow-blue-500/30 flex items-center justify-center hover:scale-105 active:scale-95 transition-transform group ${isMobile ? 'bottom-[calc(4.5rem+env(safe-area-inset-bottom,0px))]' : 'bottom-6'}`}
           >
             <span className="material-symbols-outlined text-[26px]" style={{ fontVariationSettings: "'FILL' 1" }}>smart_toy</span>
             {/* Pulse ring */}
@@ -117,7 +119,11 @@ export default function FloatingAiChat() {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 30, scale: 0.95 }}
             transition={{ duration: 0.25, ease: 'easeOut' }}
-            className="fixed bottom-6 right-6 z-[60] w-[380px] h-[560px] bg-white dark:bg-slate-900 rounded-2xl shadow-2xl shadow-black/20 border border-slate-200/60 dark:border-slate-800 flex flex-col overflow-hidden"
+            className={`fixed z-[60] bg-white dark:bg-slate-900 shadow-2xl shadow-black/20 border border-slate-200/60 dark:border-slate-800 flex flex-col overflow-hidden ${
+              isMobile 
+                ? 'inset-0 rounded-none mobile-drawer-enter' 
+                : 'bottom-6 right-6 w-[380px] h-[560px] rounded-2xl'
+            }`}
           >
             {/* Header */}
             <div className="shrink-0 bg-gradient-to-r from-[#0060a9] to-[#409eff] px-5 py-4 flex items-center justify-between">

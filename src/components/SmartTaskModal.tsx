@@ -4,6 +4,7 @@ import { Check, Paperclip, Upload, Trash2, Plus, ChevronDown, X } from 'lucide-r
 import MDEditor from '@uiw/react-md-editor';
 import { useAuth } from '../context/AuthContext';
 import { useRTASR } from '../hooks/useRTASR';
+import { useIsMobile } from '../hooks/useIsMobile';
 
 const SearchableUserDropdown = ({ 
   label, 
@@ -377,6 +378,7 @@ export interface SmartTaskModalProps {
 }
 
 export default function SmartTaskModal({ isOpen, onClose, onSubmit, title, type, users, initialData, submitting, readonly, customFooter, approverMode, onApprove, onReject, onDraft }: SmartTaskModalProps) {
+  const isMobile = useIsMobile();
   const [activeSection, setActiveSection] = useState<SectionId>(null);
   const [aiActivating, setAiActivating] = useState<'full' | null>(null);
   const [tempVoice, setTempVoice] = useState('');
@@ -681,31 +683,43 @@ export default function SmartTaskModal({ isOpen, onClose, onSubmit, title, type,
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 drop-shadow-2xl">
+    <div className={`fixed inset-0 z-50 flex items-center justify-center drop-shadow-2xl ${isMobile ? '' : 'p-4 sm:p-6'}`}>
       <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm transition-opacity" onClick={onClose} />
       
-      <div className={`bg-slate-50 rounded-2xl shadow-2xl w-full ${approverMode ? 'max-w-5xl' : 'max-w-4xl'} max-h-[90vh] flex flex-col relative z-10 overflow-hidden ring-1 ring-slate-900/5 transition-all duration-300`}>
+      <div className={`bg-slate-50 shadow-2xl w-full flex flex-col relative z-10 overflow-hidden ring-1 ring-slate-900/5 transition-all duration-300 ${
+        isMobile 
+          ? 'h-full rounded-none mobile-drawer-enter' 
+          : `rounded-2xl ${approverMode ? 'max-w-5xl' : 'max-w-4xl'} max-h-[90vh]`
+      }`}>
         {/* Header */}
-        <div className="px-6 py-4 bg-[#005ea4] text-white flex items-center justify-between shrink-0 shadow-md z-20">
+        <div className={`bg-[#005ea4] text-white flex items-center justify-between shrink-0 shadow-md z-20 ${isMobile ? 'px-4 py-3' : 'px-6 py-4'}`}>
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-white/10 rounded-lg flex items-center justify-center backdrop-blur-sm border border-white/20">
-              <span className="material-symbols-outlined text-[20px]">{approverMode ? 'rate_review' : 'task_alt'}</span>
-            </div>
+            {isMobile ? (
+              <button onClick={onClose} className="p-1 hover:bg-white/10 rounded-lg transition-colors mr-1">
+                <span className="material-symbols-outlined text-[22px]">arrow_back</span>
+              </button>
+            ) : (
+              <div className="w-8 h-8 bg-white/10 rounded-lg flex items-center justify-center backdrop-blur-sm border border-white/20">
+                <span className="material-symbols-outlined text-[20px]">{approverMode ? 'rate_review' : 'task_alt'}</span>
+              </div>
+            )}
             <div>
-              <h2 className="text-lg font-black tracking-wide flex items-center gap-2">
+              <h2 className={`font-black tracking-wide flex items-center gap-2 ${isMobile ? 'text-base' : 'text-lg'}`}>
                 {title || 'SMART 目标卡内容'}
-                {initialData?.id && (
+                {!isMobile && initialData?.id && (
                   <span className="text-xs font-mono bg-white/20 px-2 py-0.5 rounded uppercase tracking-wider ml-2 border border-white/30 shadow-sm">
                     {codePrefix}-{String(initialData.id).padStart(6, '0')}
                   </span>
                 )}
               </h2>
-              <p className="text-[10px] text-blue-100/70 font-medium mt-0.5">使用完整的 SMART 原则与 PDCA 循环构建闭环计划</p>
+              {!isMobile && <p className="text-[10px] text-blue-100/70 font-medium mt-0.5">使用完整的 SMART 原则与 PDCA 循环构建闭环计划</p>}
             </div>
           </div>
+          {!isMobile && (
           <button onClick={onClose} className="p-1.5 hover:bg-white/10 rounded-lg transition-colors text-white/80 hover:text-white">
             <X size={20} />
           </button>
+          )}
         </div>
 
         {/* Output layout wrap */}

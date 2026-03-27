@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { useIsMobile } from '../hooks/useIsMobile';
 
 export default function DevRoleSwitcher() {
   const { currentUser, loginWithMock, logout } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
+  const isMobile = useIsMobile();
 
   // 生产环境隐藏测试账号切换器
   const isDev = (import.meta as any).env?.DEV;
@@ -21,7 +23,7 @@ export default function DevRoleSwitcher() {
   ];
 
   return (
-    <div className="fixed bottom-6 left-6 z-[9999]">
+    <div className={`fixed left-6 z-[9999] ${isMobile ? 'bottom-[calc(4.5rem+env(safe-area-inset-bottom,0px))]' : 'bottom-6'}`}>
       {/* 悬浮主按钮 */}
       <button 
         onClick={() => setIsOpen(!isOpen)}

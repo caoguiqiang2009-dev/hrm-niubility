@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import SmartGoalDisplay from '../components/SmartGoalDisplay';
 import SmartTaskModal, { SmartTaskData } from '../components/SmartTaskModal';
 import { decodeSmartDescription } from '../components/SmartFormInputs';
+import { useIsMobile } from '../hooks/useIsMobile';
 
 interface PoolTask {
   id: number;
@@ -91,6 +92,7 @@ export default function CompanyPerformance({ navigate }: { navigate: (view: stri
   const [publishing, setPublishing] = useState(false);
 
   const { hasPermission, currentUser } = useAuth();
+  const isMobile = useIsMobile();
   const canManagePool = hasPermission('manage_perf_pool');
   const canDeleteTask = hasPermission('delete_perf_task');
 
@@ -382,12 +384,12 @@ export default function CompanyPerformance({ navigate }: { navigate: (view: stri
     <div className="bg-background text-on-background min-h-screen">
       <Sidebar currentView="company" navigate={navigate} />
 
-      <main className="flex-1 mt-16 min-h-[calc(100vh-4rem)] overflow-y-auto">
-        <div className="px-8 pt-6 pb-10 max-w-screen-2xl mx-auto">
+      <main className={`flex-1 mt-16 min-h-[calc(100vh-4rem)] overflow-y-auto ${isMobile ? 'pb-20' : ''}`}>
+        <div className={`max-w-screen-2xl mx-auto ${isMobile ? 'px-4 pt-4 pb-6' : 'px-8 pt-6 pb-10'}`}>
 
           {/* Title Row (Action Buttons only) */}
-          <div className="flex justify-end mb-4">
-            <div className="flex items-center gap-2">
+          <div className={`flex justify-end mb-4 ${isMobile ? 'flex-wrap gap-2' : ''}`}>
+            <div className={`flex items-center gap-2 ${isMobile ? 'flex-wrap w-full' : ''}`}>
               {canDeleteTask && (
                 <button onClick={() => setShowTrash(true)}
                   className="relative flex items-center gap-1.5 px-3 py-2 bg-surface-container-low rounded-xl text-xs font-medium text-on-surface-variant hover:bg-surface-container-high transition-all border border-outline-variant/10">
@@ -423,7 +425,7 @@ export default function CompanyPerformance({ navigate }: { navigate: (view: stri
           </div>
 
           {/* Filter / Search Bar with View Toggles */}
-          <div className="flex flex-wrap items-center gap-4 mb-6 p-4 bg-surface-container-low rounded-2xl border border-outline-variant/10">
+          <div className={`flex items-center gap-4 mb-6 bg-surface-container-low rounded-2xl border border-outline-variant/10 ${isMobile ? 'flex-col p-3 gap-3' : 'flex-wrap p-4'}`}>
             <div className="flex bg-surface-container p-1 rounded-xl border border-outline-variant/10 w-fit shrink-0">
               <button onClick={() => setActiveTab('task')}
                 className={`px-5 py-2 text-sm font-bold rounded-lg transition-all ${activeTab === 'task' ? 'bg-primary text-white shadow-md' : 'text-on-surface-variant hover:bg-surface-container-highest'}`}>
@@ -486,7 +488,7 @@ export default function CompanyPerformance({ navigate }: { navigate: (view: stri
               <span className="material-symbols-outlined animate-spin mr-2">progress_activity</span>加载中…
             </div>
           ) : activeTab === 'task' ? (
-            <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-5">
+            <div className={`grid gap-5 ${isMobile ? 'grid-cols-1' : 'grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5'}`}>
               {displayed.map(task => {
                 const badge = getBadge(task);
                 const full = isFull(task);

@@ -88,3 +88,89 @@
 ::-webkit-scrollbar { width: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+
+/* ── Mobile Utilities ─────────────────────────────────────── */
+
+/* Safe area padding for bottom nav */
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+.mb-safe {
+  margin-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* Hide scrollbar but keep scrollable */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+/* Touch optimization */
+@media (max-width: 768px) {
+  /* Prevent iOS rubber banding on the body */
+  html, body {
+    overscroll-behavior: none;
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  /* Remove tap highlight */
+  * {
+    -webkit-tap-highlight-color: transparent;
+  }
+  
+  /* Ensure touch targets are at least 44px */
+  button, a, [role="button"] {
+    min-height: 36px;
+  }
+
+  /* Hide desktop scrollbars on mobile */
+  ::-webkit-scrollbar {
+    display: none;
+  }
+  
+  /* Mobile modal slide-up animation */
+  @keyframes mobile-slide-up {
+    from {
+      transform: translateY(100%);
+      opacity: 0.8;
+    }
+    to {
+      transform: translateY(0);
+      opacity: 1;
+    }
+  }
+  
+  @keyframes mobile-slide-down {
+    from {
+      transform: translateY(0);
+      opacity: 1;
+    }
+    to {
+      transform: translateY(100%);
+      opacity: 0.8;
+    }
+  }
+  
+  .mobile-drawer-enter {
+    animation: mobile-slide-up 0.3s cubic-bezier(0.32, 0.72, 0, 1) forwards;
+  }
+  
+  .mobile-drawer-exit {
+    animation: mobile-slide-down 0.25s cubic-bezier(0.32, 0.72, 0, 1) forwards;
+  }
+
+  /* Bottom tab bar glass effect */
+  .mobile-bottom-bar {
+    backdrop-filter: saturate(180%) blur(20px);
+    -webkit-backdrop-filter: saturate(180%) blur(20px);
+    background: rgba(255, 255, 255, 0.88);
+  }
+
+  .dark .mobile-bottom-bar {
+    background: rgba(15, 23, 42, 0.92);
+  }
+}
+

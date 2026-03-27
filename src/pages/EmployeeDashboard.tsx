@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Sidebar from '../components/Sidebar';
 import { useAuth } from '../context/AuthContext';
 import PersonalGoalsPanel from '../components/PersonalGoalsPanel';
+import { useIsMobile } from '../hooks/useIsMobile';
 
 /* ─── Types ─────────────────────────────────────────────────── */
 interface Task { id: number; title: string; description: string; due_date: string; priority: string; status: string; }
@@ -533,6 +534,7 @@ function saveLayout(columns: string[][], hidden: string[]) {
    ================================================================ */
 export default function EmployeeDashboard({ navigate }: { navigate: (view: string) => void }) {
   const { currentUser } = useAuth();
+  const isMobile = useIsMobile();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
   const [newTask, setNewTask] = useState({ title: '', description: '', due_date: '', priority: 'normal' });
@@ -700,15 +702,16 @@ export default function EmployeeDashboard({ navigate }: { navigate: (view: strin
     <div className="flex h-screen overflow-hidden bg-surface text-on-surface antialiased">
       <Sidebar currentView="dashboard" navigate={navigate} />
 
-      <main className="flex-1 h-[calc(100vh-4rem)] mt-16 overflow-y-auto relative">
-        <div className="max-w-6xl mx-auto p-6 space-y-6">
-          {/* Welcome section without Customization button attached directly next to greeting */}
-          <div className="flex items-end justify-between">
+      <main className={`flex-1 h-[calc(100vh-4rem)] mt-16 overflow-y-auto relative ${isMobile ? 'pb-20' : ''}`}>
+        <div className={`max-w-6xl mx-auto space-y-6 ${isMobile ? 'p-4' : 'p-6'}`}>
+          {/* Welcome section */}
+          <div className={`flex items-end justify-between ${isMobile ? 'flex-col items-start gap-2' : ''}`}>
             <div>
-              <h2 className="text-3xl font-black text-on-surface tracking-tight mb-1">{greeting}, {currentUser?.name || '同事'} 👋</h2>
-              <p className="text-sm text-on-surface-variant">{dateStr} — 以下是与您相关的事项概览</p>
+              <h2 className={`font-black text-on-surface tracking-tight mb-1 ${isMobile ? 'text-xl' : 'text-3xl'}`}>{greeting}, {currentUser?.name || '同事'} 👋</h2>
+              <p className={`text-on-surface-variant ${isMobile ? 'text-xs' : 'text-sm'}`}>{dateStr}</p>
             </div>
             
+            {!isMobile && (
             <div className="flex flex-col items-end gap-2">
               <button onClick={() => { setIsEditing(!isEditing); setShowAddPanel(false); }}
                 className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
@@ -720,10 +723,11 @@ export default function EmployeeDashboard({ navigate }: { navigate: (view: strin
                 {isEditing ? '完成编辑' : '自定义'}
               </button>
             </div>
+            )}
           </div>
 
           {/* Stat Cards */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div className={`grid gap-3 ${isMobile ? 'grid-cols-2' : 'grid-cols-2 md:grid-cols-4'}`}>
             {[
               { label: '待我审批', value: pendingWorkflows, icon: 'pending_actions', from: 'from-blue-50', to: 'to-indigo-50', text: 'text-blue-700', sub: 'text-blue-600/70', border: 'border-blue-100/60', iconBg: 'bg-blue-100', iconColor: 'text-blue-600', modal: 'workflows' as DetailModalType, badge: pendingWorkflows },
               { label: '进行中绩效', value: totalPlansCount, icon: 'trending_up', from: 'from-emerald-50', to: 'to-teal-50', text: 'text-emerald-700', sub: 'text-emerald-600/70', border: 'border-emerald-100/60', iconBg: 'bg-emerald-100', iconColor: 'text-emerald-600', modal: 'perf' as DetailModalType },
@@ -751,9 +755,9 @@ export default function EmployeeDashboard({ navigate }: { navigate: (view: strin
             ))}
           </div>
 
-          {/* ── 嵌入: 个人目标管理（原个人管理模块） ── */}
-          <div id="personal-goals-section" className="mt-10 border-t border-slate-200/60 dark:border-slate-800 pt-8 scroll-mt-20">
-            <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100 mb-5 flex items-center gap-2">
+          {/* ── 嵌入: 个人目标管理 ── */}
+          <div id="personal-goals-section" className={`border-t border-slate-200/60 dark:border-slate-800 scroll-mt-20 ${isMobile ? 'mt-6 pt-5' : 'mt-10 pt-8'}`}>
+            <h3 className={`font-bold text-slate-800 dark:text-slate-100 mb-5 flex items-center gap-2 ${isMobile ? 'text-base' : 'text-lg'}`}>
               <span className="material-symbols-outlined text-blue-500">person</span>
               个人目标与追踪
             </h3>
@@ -798,7 +802,8 @@ export default function EmployeeDashboard({ navigate }: { navigate: (view: strin
           </div>
           )}
 
-          {/* ── 自由拖拽布局区（自定义模块） ── */}
+          {/* ── 自由拖拽布局区 (desktop only) ── */}
+          {!isMobile && (
           <div className="mt-10 border-t border-slate-200/60 dark:border-slate-800 pt-8">
             <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100 mb-5 flex items-center gap-2">
               <span className="material-symbols-outlined text-purple-500">dashboard_customize</span>
@@ -905,6 +910,7 @@ export default function EmployeeDashboard({ navigate }: { navigate: (view: strin
           </div>
 
           </div>
+          )}
         </div>
       </main>
 
