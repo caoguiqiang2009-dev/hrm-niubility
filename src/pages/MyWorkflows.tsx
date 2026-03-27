@@ -212,17 +212,40 @@ export default function MyWorkflows({ navigate }: MyWorkflowsProps) {
           <div className="space-y-3">
             {data.map((item: any, idx: number) => (
               <WorkflowCard key={`${item.flow_type || item.type}-${item.id}-${idx}`} item={item} tab={activeTab} 
-                onAction={item.flow_type === 'pool_join' ? async (action: 'approve'|'reject') => {
-                  await handleApproveReject(item.id, 'pool_join', action, '');
-                } : undefined}
                 onClick={async () => {
                   const isPending = activeTab === 'pending';
                   const flowType = item.flow_type || 'unknown';
-                  if (flowType === 'pool_join') return; // handled by onAction
                   try {
                     let fullData = item;
                     let mappedData = { ...fullData };
-                    if (flowType === 'perf_plan') {
+                    if (flowType === 'pool_join') {
+                      // Fetch pool task details for the join request
+                      const r = await fetch(`/api/pool/tasks/${item.pool_task_id}`, { headers });
+                      const j = await r.json();
+                      if (j.code === 0) {
+                        const task = j.data;
+                        const desc = task.description || '';
+                        mappedData = {
+                          ...task,
+                          ...item,
+                          flow_type: 'pool_join',
+                          status: item.status,
+                          proposal_status: item.status,
+                          summary: task.title,
+                          s: desc,
+                          join_applicant: item.creator_name || item.user_id,
+                          join_role: item.role,
+                          join_reason: item.reason,
+                        };
+                      }
+                      setSelectedTask({
+                        type: 'pool_propose',
+                        data: mappedData,
+                        isPending,
+                        originalStatus: item.status,
+                      });
+                      return;
+                    } else if (flowType === 'perf_plan') {
                       const r = await fetch(`/api/perf/plans/${item.id}`, { headers });
                       const j = await r.json();
                       if (j.code === 0) {
@@ -407,7 +430,7 @@ export default function MyWorkflows({ navigate }: MyWorkflowsProps) {
   );
 }
 
-function WorkflowCard({ item, tab, onClick, onAction }: { item: any; tab: TabKey; onClick: () => void; onAction?: (action: 'approve'|'reject') => void }) {
+function WorkflowCard({ item, tab, onClick }: { item: any; tab: TabKey; onClick: () => void }) {
   const isCC = tab === 'cc';
 
   if (isCC) {
@@ -453,8 +476,8 @@ function WorkflowCard({ item, tab, onClick, onAction }: { item: any; tab: TabKey
 
   return (
     <div 
-      onClick={flowType !== 'pool_join' ? onClick : undefined}
-      className={`bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/60 dark:border-slate-800 p-4 transition-all group hover:shadow-md hover:border-blue-300 ${flowType !== 'pool_join' ? 'cursor-pointer' : ''}`}
+      onClick={onClick}
+      className={`bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/60 dark:border-slate-800 p-4 transition-all group hover:shadow-md hover:border-blue-300 cursor-pointer`}
     >
       <div className="flex items-start gap-4">
         {/* Icon */}
@@ -508,19 +531,6 @@ function WorkflowCard({ item, tab, onClick, onAction }: { item: any; tab: TabKey
             <div className="mt-2 flex items-center gap-3 text-xs text-slate-500">
               {item.role && <span>期望角色：{item.role}</span>}
               {item.reason && <span>申请理由：{item.reason}</span>}
-            </div>
-          )}
-          {/* Inline approve/reject for join requests */}
-          {flowType === 'pool_join' && tab === 'pending' && onAction && (
-            <div className="mt-3 flex items-center gap-2">
-              <button onClick={(e) => { e.stopPropagation(); onAction('approve'); }}
-                className="px-4 py-1.5 text-xs font-bold text-white bg-emerald-500 hover:bg-emerald-600 rounded-lg transition-colors shadow-sm flex items-center gap-1">
-                <span className="material-symbols-outlined text-[14px]">check</span> 批准加入
-              </button>
-              <button onClick={(e) => { e.stopPropagation(); onAction('reject'); }}
-                className="px-4 py-1.5 text-xs font-bold text-red-500 bg-white border border-red-200 hover:bg-red-50 rounded-lg transition-colors flex items-center gap-1">
-                <span className="material-symbols-outlined text-[14px]">close</span> 驳回
-              </button>
             </div>
           )}
         </div>

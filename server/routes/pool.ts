@@ -35,6 +35,36 @@ router.get('/tasks', authMiddleware, (req, res) => {
   return res.json({ code: 0, data: result });
 });
 
+// 获取单个任务详情
+router.get('/tasks/:id', authMiddleware, (req, res) => {
+  const db = getDb();
+  const task = db.prepare(
+    `SELECT pt.*, u.name as creator_name,
+       hr_u.name as hr_reviewer_name, admin_u.name as admin_reviewer_name
+     FROM pool_tasks pt
+     LEFT JOIN users u ON pt.created_by = u.id
+     LEFT JOIN users hr_u ON pt.hr_reviewer_id = hr_u.id
+     LEFT JOIN users admin_u ON pt.admin_reviewer_id = admin_u.id
+     WHERE pt.id = ?`
+  ).get(req.params.id) as any;
+  if (!task) return res.status(404).json({ code: 404, message: '任务不存在' });
+
+  const participants = db.prepare(
+    'SELECT pp.user_id, u2.name as user_name FROM pool_participants pp LEFT JOIN users u2 ON pp.user_id = u2.id WHERE pp.pool_task_id = ?'
+  ).all(task.id) as any[];
+  task.participants = participants;
+  task.current_participants = participants.length;
+  task.participant_names = participants.map((p: any) => p.user_name).filter(Boolean);
+
+  // 附加待审批的加入申请
+  const pendingJoins = db.prepare(
+    `SELECT jr.*, u.name as applicant_name FROM pool_join_requests jr LEFT JOIN users u ON jr.user_id = u.id WHERE jr.pool_task_id = ? AND jr.status = 'pending' ORDER BY jr.created_at DESC`
+  ).all(task.id) as any[];
+  task.pending_join_requests = pendingJoins;
+
+  return res.json({ code: 0, data: task });
+});
+
 // 人员榜单 (统计每个人参与的已完结任务，分为金额和积分)
 router.get('/leaderboard', authMiddleware, (req, res) => {
   const db = getDb();
