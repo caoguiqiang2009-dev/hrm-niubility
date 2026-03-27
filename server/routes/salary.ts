@@ -3,6 +3,8 @@ import { getDb } from '../config/database';
 import { authMiddleware, requireRole, AuthRequest } from '../middleware/auth';
 import { calculateSocialInsurance, calculateHousingFund, calculateNetPay } from '../services/payroll';
 import { notifyPayslip } from '../services/message';
+import { wecomConfig } from '../config/wecom';
+import * as SmartSheet from '../services/smartsheet';
 
 const router = Router();
 
@@ -175,6 +177,101 @@ router.get('/my-payslips', authMiddleware, (req: AuthRequest, res) => {
     `SELECT sr.*, ss.month, ss.title as sheet_title FROM salary_rows sr JOIN salary_sheets ss ON sr.sheet_id = ss.id WHERE sr.user_id = ? AND ss.status = 'published' ORDER BY ss.month DESC`
   ).all(req.userId);
   return res.json({ code: 0, data: payslips });
+});
+
+// ═══════════════════════════════════════════════════════════════════════
+// ─── 企微智能表格 (Cloud Smart Sheet) ──────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════
+
+const getDocConfig = () => ({
+  docid: wecomConfig.salaryDocId,
+  sheetId: wecomConfig.salarySheetId,
+});
+
+// 检查配置状态
+router.get('/smartsheet/status', authMiddleware, requireRole('admin', 'hr'), (_req, res) => {
+  const { docid, sheetId } = getDocConfig();
+  return res.json({
+    code: 0,
+    data: {
+      configured: !!(docid && sheetId),
+      docid: docid ? `${docid.slice(0, 12)}...` : '',
+      sheetId: sheetId || '',
+    },
+  });
+});
+
+// 获取字段
+router.get('/smartsheet/fields', authMiddleware, requireRole('admin', 'hr'), async (_req, res) => {
+  const { docid, sheetId } = getDocConfig();
+  if (!docid || !sheetId) return res.status(400).json({ code: 400, message: '未配置智能表格 (WECOM_SALARY_DOC_ID / WECOM_SALARY_SHEET_ID)' });
+  try {
+    const fields = await SmartSheet.getSheetFields(docid, sheetId);
+    return res.json({ code: 0, data: fields });
+  } catch (err: any) {
+    console.error('[Salary SmartSheet] getFields error:', err.message);
+    return res.status(500).json({ code: 500, message: err.message });
+  }
+});
+
+// 查询记录
+router.get('/smartsheet/records', authMiddleware, requireRole('admin', 'hr'), async (req, res) => {
+  const { docid, sheetId } = getDocConfig();
+  if (!docid || !sheetId) return res.status(400).json({ code: 400, message: '未配置智能表格' });
+  try {
+    const offset = parseInt(req.query.offset as string) || 0;
+    const limit = parseInt(req.query.limit as string) || 100;
+    const result = await SmartSheet.getRecords(docid, sheetId, { offset, limit });
+    return res.json({ code: 0, data: result });
+  } catch (err: any) {
+    console.error('[Salary SmartSheet] getRecords error:', err.message);
+    return res.status(500).json({ code: 500, message: err.message });
+  }
+});
+
+// 添加记录
+router.post('/smartsheet/records', authMiddleware, requireRole('admin', 'hr'), async (req: AuthRequest, res) => {
+  const { docid, sheetId } = getDocConfig();
+  if (!docid || !sheetId) return res.status(400).json({ code: 400, message: '未配置智能表格' });
+  try {
+    const { records } = req.body;
+    if (!records?.length) return res.status(400).json({ code: 400, message: '无记录数据' });
+    const result = await SmartSheet.addRecords(docid, sheetId, records);
+    return res.json({ code: 0, data: result });
+  } catch (err: any) {
+    console.error('[Salary SmartSheet] addRecords error:', err.message);
+    return res.status(500).json({ code: 500, message: err.message });
+  }
+});
+
+// 更新记录
+router.put('/smartsheet/records', authMiddleware, requireRole('admin', 'hr'), async (req: AuthRequest, res) => {
+  const { docid, sheetId } = getDocConfig();
+  if (!docid || !sheetId) return res.status(400).json({ code: 400, message: '未配置智能表格' });
+  try {
+    const { records } = req.body;
+    if (!records?.length) return res.status(400).json({ code: 400, message: '无记录数据' });
+    const result = await SmartSheet.updateRecords(docid, sheetId, records);
+    return res.json({ code: 0, data: result });
+  } catch (err: any) {
+    console.error('[Salary SmartSheet] updateRecords error:', err.message);
+    return res.status(500).json({ code: 500, message: err.message });
+  }
+});
+
+// 删除记录
+router.delete('/smartsheet/records', authMiddleware, requireRole('admin', 'hr'), async (req: AuthRequest, res) => {
+  const { docid, sheetId } = getDocConfig();
+  if (!docid || !sheetId) return res.status(400).json({ code: 400, message: '未配置智能表格' });
+  try {
+    const { record_ids } = req.body;
+    if (!record_ids?.length) return res.status(400).json({ code: 400, message: '无记录ID' });
+    await SmartSheet.deleteRecords(docid, sheetId, record_ids);
+    return res.json({ code: 0, message: '删除成功' });
+  } catch (err: any) {
+    console.error('[Salary SmartSheet] deleteRecords error:', err.message);
+    return res.status(500).json({ code: 500, message: err.message });
+  }
 });
 
 export default router;

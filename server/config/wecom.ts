@@ -6,4 +6,7 @@ export const wecomConfig = {
   contactSecret: process.env.WECOM_CONTACT_SECRET || '',
   // 企微API基础地址
   apiBase: 'https://qyapi.weixin.qq.com/cgi-bin',
+  // 智能表格 — 工资表
+  salaryDocId: process.env.WECOM_SALARY_DOC_ID || '',
+  salarySheetId: process.env.WECOM_SALARY_SHEET_ID || '',
 };
