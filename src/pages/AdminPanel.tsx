@@ -494,6 +494,35 @@ function PoolModule() {
   const [rejectReason, setRejectReason] = useState('');
   const [reviewMsg, setReviewMsg] = useState('');
 
+  // Join requests state
+  const [joinRequests, setJoinRequests] = useState<any[]>([]);
+  const [joinLoading, setJoinLoading] = useState(true);
+
+  const fetchJoinRequests = async () => {
+    setJoinLoading(true);
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch('/api/pool/join-requests?status=pending', { headers: { Authorization: `Bearer ${token}` } });
+      const json = await res.json();
+      if (json.code === 0) setJoinRequests(json.data || []);
+    } catch {}
+    setJoinLoading(false);
+  };
+
+  const handleJoinReview = async (id: number, action: 'approve' | 'reject', comment?: string) => {
+    const token = localStorage.getItem('token');
+    const res = await fetch(`/api/pool/join-requests/${id}/review`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ action, comment }),
+    });
+    const json = await res.json();
+    setReviewMsg(json.code === 0 ? `✅ ${json.message}` : `❌ ${json.message}`);
+    fetchJoinRequests();
+    if (action === 'approve' && json.code === 0) refetch();
+    setTimeout(() => setReviewMsg(''), 3000);
+  };
+
   const fetchProposals = async () => {
     setProposalLoading(true);
     try {
@@ -505,7 +534,7 @@ function PoolModule() {
     setProposalLoading(false);
   };
 
-  useEffect(() => { fetchProposals(); }, []);
+  useEffect(() => { fetchProposals(); fetchJoinRequests(); }, []);
 
   const handleReview = async (id: number, action: 'approve' | 'reject', reason?: string) => {
     const token = localStorage.getItem('token');
@@ -629,6 +658,46 @@ function PoolModule() {
               ))}
             </div>
           </details>
+        )}
+      </div>
+
+      {/* ── Join Request Review Section ── */}
+      <div className="mb-6">
+        <h4 className="font-bold text-slate-700 mb-3 flex items-center gap-2">
+          <span className="material-symbols-outlined text-[16px] text-blue-500">person_add</span>
+          加入申请审批
+          {joinRequests.length > 0 && (
+            <span className="text-[10px] bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-bold">{joinRequests.length} 待处理</span>
+          )}
+        </h4>
+        {joinLoading ? <p className="text-slate-400 text-sm py-4 text-center">加载中...</p> : (
+          <div className="space-y-2">
+            {joinRequests.length === 0 ? (
+              <p className="text-sm text-slate-400 text-center py-4 bg-slate-50 rounded-xl">暂无待审批加入申请</p>
+            ) : joinRequests.map((jr: any) => (
+              <div key={jr.id} className="bg-blue-50/50 rounded-xl p-4 border border-blue-100">
+                <div className="flex items-start justify-between mb-2">
+                  <div>
+                    <p className="font-bold text-sm text-slate-800">{jr.user_name || jr.user_id} <span className="text-slate-400 font-normal">申请加入</span></p>
+                    <p className="text-xs text-blue-600 font-medium mt-0.5">任务：{jr.task_title || `#${jr.pool_task_id}`}</p>
+                  </div>
+                  <span className="text-[10px] text-slate-400">{new Date(jr.created_at).toLocaleDateString()}</span>
+                </div>
+                {jr.reason && <p className="text-xs text-slate-500 mb-2">申请理由：{jr.reason}</p>}
+                {jr.role && <p className="text-xs text-slate-500 mb-2">期望角色：{jr.role}</p>}
+                <div className="flex gap-2">
+                  <button onClick={() => handleJoinReview(jr.id, 'approve')}
+                    className="px-4 py-1.5 bg-emerald-500 text-white rounded-lg text-xs font-bold hover:bg-emerald-600 flex items-center gap-1">
+                    <span className="material-symbols-outlined text-[14px]">check</span>批准加入
+                  </button>
+                  <button onClick={() => handleJoinReview(jr.id, 'reject', '不符合条件')}
+                    className="px-4 py-1.5 bg-white text-red-500 rounded-lg text-xs font-bold border border-red-200 hover:bg-red-50 flex items-center gap-1">
+                    <span className="material-symbols-outlined text-[14px]">close</span>驳回
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
         )}
       </div>
 

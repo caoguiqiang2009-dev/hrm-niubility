@@ -809,12 +809,12 @@ export default function CompanyPerformance({ navigate }: { navigate: (view: stri
             {/* Step: success */}
             {modalStep === 'success' && (
               <div className="px-8 py-10 text-center">
-                <div className="w-16 h-16 rounded-2xl bg-green-100 dark:bg-green-900/30 flex items-center justify-center mx-auto mb-5">
-                  <span className="material-symbols-outlined text-green-500 text-3xl">check_circle</span>
+                <div className="w-16 h-16 rounded-2xl bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center mx-auto mb-5">
+                  <span className="material-symbols-outlined text-amber-500 text-3xl">schedule</span>
                 </div>
                 <h3 className="text-lg font-black text-slate-800 dark:text-slate-100 mb-2">申请已提交！</h3>
                 <p className="text-sm text-slate-500 leading-relaxed mb-8">
-                  你已成功加入「{selectedTask.title}」，<br/>绩效进度将实时同步到你的个人仪表盘。
+                  你的加入申请已提交到管理员，<br/>审批通过后将正式加入「{selectedTask.title}」。
                 </p>
                 <button onClick={() => setSelectedTask(null)}
                   className="w-full py-3 rounded-xl text-sm font-bold text-white primary-gradient shadow-md hover:opacity-90 transition-opacity">

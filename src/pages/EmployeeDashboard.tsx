@@ -752,7 +752,7 @@ export default function EmployeeDashboard({ navigate }: { navigate: (view: strin
           </div>
 
           {/* ── 嵌入: 个人目标管理（原个人管理模块） ── */}
-          <div id="personal-goals-section" className="mt-10 relative z-10 border-t border-slate-200/60 dark:border-slate-800 pt-8 scroll-mt-20">
+          <div id="personal-goals-section" className="mt-10 border-t border-slate-200/60 dark:border-slate-800 pt-8 scroll-mt-20">
             <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100 mb-5 flex items-center gap-2">
               <span className="material-symbols-outlined text-blue-500">person</span>
               个人目标与追踪
@@ -762,7 +762,7 @@ export default function EmployeeDashboard({ navigate }: { navigate: (view: strin
 
           {/* 管理专属入口 (绩效管理 & 工资表管理) */}
           {(currentUser?.role === 'admin' || currentUser?.role === 'hr') && (
-            <div className="mt-10 relative z-10 border-t border-slate-200/60 dark:border-slate-800 pt-8">
+            <div className="mt-10 border-t border-slate-200/60 dark:border-slate-800 pt-8">
               <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100 mb-5 flex items-center gap-2">
                 <span className="material-symbols-outlined text-emerald-500">category</span>
                 管理专属

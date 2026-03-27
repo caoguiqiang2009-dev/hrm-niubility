@@ -118,6 +118,19 @@ export function initDatabase(): void {
       PRIMARY KEY (pool_task_id, user_id)
     );
 
+    CREATE TABLE IF NOT EXISTS pool_join_requests (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      pool_task_id INTEGER NOT NULL,
+      user_id TEXT NOT NULL,
+      reason TEXT,
+      role TEXT,
+      status TEXT DEFAULT 'pending',
+      reviewer_id TEXT,
+      review_comment TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      reviewed_at DATETIME
+    );
+
     -- ============ 通知 ============
 
     CREATE TABLE IF NOT EXISTS notifications (

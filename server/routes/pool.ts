@@ -204,7 +204,7 @@ router.put('/proposals/:id', authMiddleware, (req: AuthRequest, res) => {
 
 // 审批提案 (两级: HR审核 → Admin复核)
 router.post('/proposals/:id/review', authMiddleware, (req: AuthRequest, res) => {
-  const { action, reason } = req.body;
+  const { action, reason, bonus, reward_type, max_participants } = req.body;
   const db = getDb();
   const proposal = db.prepare('SELECT * FROM pool_tasks WHERE id = ?').get(req.params.id) as any;
   if (!proposal) return res.status(404).json({ code: 404, message: '提案不存在' });
@@ -218,7 +218,14 @@ router.post('/proposals/:id/review', authMiddleware, (req: AuthRequest, res) => 
       if (!['hr', 'admin'].includes(reviewer.role)) {
         return res.status(403).json({ code: 403, message: '仅 HR 或管理员可审核' });
       }
-      db.prepare("UPDATE pool_tasks SET proposal_status = 'pending_admin', hr_reviewer_id = ? WHERE id = ?").run(req.userId, proposal.id);
+      let updateSql = "UPDATE pool_tasks SET proposal_status = 'pending_admin', hr_reviewer_id = ?";
+      const params: any[] = [req.userId];
+      if (bonus !== undefined) { updateSql += ', bonus = ?'; params.push(Number(bonus) || 0); }
+      if (reward_type) { updateSql += ', reward_type = ?'; params.push(reward_type); }
+      if (max_participants) { updateSql += ', max_participants = ?'; params.push(Number(max_participants) || 5); }
+      updateSql += ' WHERE id = ?';
+      params.push(proposal.id);
+      db.prepare(updateSql).run(...params);
       // 通知管理员有新的待复核提案
       const admins = db.prepare("SELECT id FROM users WHERE role = 'admin'").all() as any[];
       const adminIds = admins.map((u: any) => u.id);
@@ -235,7 +242,14 @@ router.post('/proposals/:id/review', authMiddleware, (req: AuthRequest, res) => 
       if (reviewer.role !== 'admin') {
         return res.status(403).json({ code: 403, message: '仅管理员可复核' });
       }
-      db.prepare("UPDATE pool_tasks SET proposal_status = 'approved', status = 'open', admin_reviewer_id = ? WHERE id = ?").run(req.userId, proposal.id);
+      let updateSql = "UPDATE pool_tasks SET proposal_status = 'approved', status = 'open', admin_reviewer_id = ?";
+      const params: any[] = [req.userId];
+      if (bonus !== undefined) { updateSql += ', bonus = ?'; params.push(Number(bonus) || 0); }
+      if (reward_type) { updateSql += ', reward_type = ?'; params.push(reward_type); }
+      if (max_participants) { updateSql += ', max_participants = ?'; params.push(Number(max_participants) || 5); }
+      updateSql += ' WHERE id = ?';
+      params.push(proposal.id);
+      db.prepare(updateSql).run(...params);
       // 通知提案人已通过
       createNotification([proposal.created_by], 'proposal', '🎉 提案已通过', `您的提案「${proposal.title}」已通过总经理复核，任务已发布到绩效池！`, '/company');
       try { sendCardMessage([proposal.created_by], '🎉 提案已通过', `您的提案「${proposal.title}」已通过总经理复核\n任务已发布到绩效池！`, `${process.env.APP_URL || 'http://localhost:3000'}/company`); } catch(e) {}
@@ -259,28 +273,124 @@ router.post('/proposals/:id/review', authMiddleware, (req: AuthRequest, res) => 
   return res.status(400).json({ code: 400, message: `未知操作: ${action}` });
 });
 
-// 加入绩效池任务
+// 加入绩效池任务 → 创建待审批申请（不直接加入）
 router.post('/tasks/:id/join', authMiddleware, (req: AuthRequest, res) => {
   const db = getDb();
-  const task = db.prepare('SELECT * FROM pool_tasks WHERE id = ?').get(req.params.id) as any;
+  // 自动迁移
+  try { db.exec(`CREATE TABLE IF NOT EXISTS pool_join_requests (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    pool_task_id INTEGER NOT NULL,
+    user_id TEXT NOT NULL,
+    reason TEXT,
+    role TEXT,
+    status TEXT DEFAULT 'pending',
+    reviewer_id TEXT,
+    review_comment TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    reviewed_at DATETIME
+  )`); } catch(e) {}
 
+  const task = db.prepare('SELECT * FROM pool_tasks WHERE id = ?').get(req.params.id) as any;
   if (!task) return res.status(404).json({ code: 404, message: '任务不存在' });
 
+  // 检查是否已是参与者
+  const existing = db.prepare('SELECT * FROM pool_participants WHERE pool_task_id = ? AND user_id = ?').get(task.id, req.userId);
+  if (existing) return res.status(400).json({ code: 400, message: '您已是该任务的参与者' });
+
+  // 检查是否已有待审批申请
+  const pendingReq = db.prepare("SELECT * FROM pool_join_requests WHERE pool_task_id = ? AND user_id = ? AND status = 'pending'").get(task.id, req.userId);
+  if (pendingReq) return res.status(400).json({ code: 400, message: '您已提交申请，正在等待审批' });
+
+  // 检查人数上限（已批准的参与者）
   const currentCount = (db.prepare('SELECT COUNT(*) as c FROM pool_participants WHERE pool_task_id = ?').get(task.id) as any)?.c || 0;
   if (currentCount >= task.max_participants) {
     return res.status(400).json({ code: 400, message: '参与人数已满' });
   }
 
-  const existing = db.prepare('SELECT * FROM pool_participants WHERE pool_task_id = ? AND user_id = ?').get(task.id, req.userId);
-  if (existing) return res.status(400).json({ code: 400, message: '已参与该任务' });
+  const { reason, role } = req.body;
+  db.prepare('INSERT INTO pool_join_requests (pool_task_id, user_id, reason, role) VALUES (?, ?, ?, ?)').run(task.id, req.userId, reason || '', role || '');
 
-  db.prepare('INSERT INTO pool_participants (pool_task_id, user_id) VALUES (?, ?)').run(task.id, req.userId);
-
-  if (currentCount + 1 >= task.max_participants) {
-    db.prepare("UPDATE pool_tasks SET status = 'in_progress' WHERE id = ?").run(task.id);
+  // 通知 HR + Admin 有新的加入申请
+  const hrAdmins = db.prepare("SELECT id FROM users WHERE role IN ('hr', 'admin')").all() as any[];
+  const hrAdminIds = hrAdmins.map((u: any) => u.id);
+  const applicantName = (db.prepare('SELECT name FROM users WHERE id = ?').get(req.userId) as any)?.name || req.userId;
+  if (hrAdminIds.length) {
+    createNotification(hrAdminIds, 'pool_join', '📋 绩效池加入申请', `${applicantName} 申请加入任务「${task.title}」，请审批`, '/admin?module=pool');
+    try { sendCardMessage(hrAdminIds, '📋 绩效池加入申请', `${applicantName} 申请加入任务「${task.title}」\n请前往管理后台审批`, `${process.env.APP_URL || 'http://localhost:3000'}/admin`); } catch(e) {}
   }
 
-  return res.json({ code: 0, message: '加入成功' });
+  return res.json({ code: 0, message: '申请已提交，等待管理员审批' });
+});
+
+// 加入申请列表 (HR/Admin)
+router.get('/join-requests', authMiddleware, (req: AuthRequest, res) => {
+  const db = getDb();
+  const { status: reqStatus, task_id } = req.query;
+  let sql = `SELECT jr.*, u.name as user_name, pt.title as task_title 
+    FROM pool_join_requests jr 
+    LEFT JOIN users u ON jr.user_id = u.id 
+    LEFT JOIN pool_tasks pt ON jr.pool_task_id = pt.id 
+    WHERE 1=1`;
+  const params: any[] = [];
+  if (reqStatus) { sql += ' AND jr.status = ?'; params.push(reqStatus); }
+  if (task_id) { sql += ' AND jr.pool_task_id = ?'; params.push(task_id); }
+  sql += ' ORDER BY jr.created_at DESC';
+  const requests = db.prepare(sql).all(...params);
+  return res.json({ code: 0, data: requests });
+});
+
+// 审批加入申请
+router.post('/join-requests/:id/review', authMiddleware, (req: AuthRequest, res) => {
+  const db = getDb();
+  const user = db.prepare('SELECT role, name FROM users WHERE id = ?').get(req.userId) as any;
+  if (!user || !['admin', 'hr'].includes(user.role)) {
+    return res.status(403).json({ code: 403, message: '仅管理员或HR可审批加入申请' });
+  }
+
+  const joinReq = db.prepare('SELECT * FROM pool_join_requests WHERE id = ?').get(req.params.id) as any;
+  if (!joinReq) return res.status(404).json({ code: 404, message: '申请不存在' });
+  if (joinReq.status !== 'pending') return res.status(400).json({ code: 400, message: '该申请已处理' });
+
+  const { action, comment } = req.body;
+  const task = db.prepare('SELECT * FROM pool_tasks WHERE id = ?').get(joinReq.pool_task_id) as any;
+
+  if (action === 'approve') {
+    // 再次检查人数上限
+    const currentCount = (db.prepare('SELECT COUNT(*) as c FROM pool_participants WHERE pool_task_id = ?').get(joinReq.pool_task_id) as any)?.c || 0;
+    if (task && currentCount >= task.max_participants) {
+      db.prepare("UPDATE pool_join_requests SET status = 'rejected', reviewer_id = ?, review_comment = ?, reviewed_at = datetime('now') WHERE id = ?")
+        .run(req.userId, '人数已满，自动驳回', joinReq.id);
+      return res.status(400).json({ code: 400, message: '参与人数已满，无法批准' });
+    }
+
+    // 批准 → 加入参与者
+    db.prepare("UPDATE pool_join_requests SET status = 'approved', reviewer_id = ?, review_comment = ?, reviewed_at = datetime('now') WHERE id = ?")
+      .run(req.userId, comment || '同意', joinReq.id);
+    db.prepare('INSERT OR IGNORE INTO pool_participants (pool_task_id, user_id) VALUES (?, ?)').run(joinReq.pool_task_id, joinReq.user_id);
+
+    // 如果人数满了，更新任务状态
+    const newCount = (db.prepare('SELECT COUNT(*) as c FROM pool_participants WHERE pool_task_id = ?').get(joinReq.pool_task_id) as any)?.c || 0;
+    if (task && newCount >= task.max_participants) {
+      db.prepare("UPDATE pool_tasks SET status = 'in_progress' WHERE id = ?").run(joinReq.pool_task_id);
+    }
+
+    // 通知申请人
+    createNotification([joinReq.user_id], 'pool_join', '✅ 加入申请已通过', `您申请加入任务「${task?.title || ''}」已被批准`, '/company');
+    try { sendCardMessage([joinReq.user_id], '✅ 加入申请已通过', `您申请加入任务「${task?.title || ''}」已被批准`, `${process.env.APP_URL || 'http://localhost:3000'}/company`); } catch(e) {}
+
+    return res.json({ code: 0, message: '已批准加入' });
+  }
+
+  if (action === 'reject') {
+    db.prepare("UPDATE pool_join_requests SET status = 'rejected', reviewer_id = ?, review_comment = ?, reviewed_at = datetime('now') WHERE id = ?")
+      .run(req.userId, comment || '不符合条件', joinReq.id);
+    
+    createNotification([joinReq.user_id], 'pool_join', '❌ 加入申请被驳回', `您申请加入任务「${task?.title || ''}」被驳回，原因：${comment || '不符合条件'}`, '/company');
+    
+    return res.json({ code: 0, message: '已驳回' });
+  }
+
+  return res.status(400).json({ code: 400, message: `未知操作: ${action}` });
 });
 
 // 创建绩效池任务 (HR / Admin 直接创建，无需审批)

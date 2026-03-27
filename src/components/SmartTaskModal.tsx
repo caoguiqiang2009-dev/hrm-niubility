@@ -338,6 +338,7 @@ export interface SmartTaskData {
   e: string; // 验收人
   bonus: string;
   rewardType: 'money' | 'score';
+  maxParticipants: string;
   taskType: string;
   summary: string;
   s: string;
@@ -370,7 +371,7 @@ export interface SmartTaskModalProps {
   readonly?: boolean;
   customFooter?: React.ReactNode;
   approverMode?: boolean;
-  onApprove?: (comment: string, updatedData?: { bonus?: string; rewardType?: string }) => void;
+  onApprove?: (comment: string, updatedData?: { bonus?: string; rewardType?: string; maxParticipants?: string }) => void;
   onReject?: (comment: string) => void;
   onDraft?: (data: SmartTaskData) => void;
 }
@@ -463,7 +464,8 @@ export default function SmartTaskModal({ isOpen, onClose, onSubmit, title, type,
     e: initialData?.e || '',
     bonus: initialData?.bonus || '0',
     rewardType: initialData?.rewardType || 'money',
-    taskType: initialData?.taskType || '常规任务'
+    taskType: initialData?.taskType || '常规任务',
+    maxParticipants: initialData?.maxParticipants || '5'
   });
 
   const [formData, setFormData] = useState({
@@ -489,7 +491,8 @@ export default function SmartTaskModal({ isOpen, onClose, onSubmit, title, type,
         e: initialData?.e || '',
         bonus: initialData?.bonus || '0',
         rewardType: initialData?.rewardType || 'money',
-        taskType: initialData?.taskType || '常规任务'
+        taskType: initialData?.taskType || '常规任务',
+        maxParticipants: initialData?.maxParticipants || '5'
       });
       setFormData({
         summary: initialData?.summary || '',
@@ -769,6 +772,29 @@ export default function SmartTaskModal({ isOpen, onClose, onSubmit, title, type,
                       )}
                       {headerSelections.rewardType === 'score' && <span className="text-white text-sm ml-1">分</span>}
                     </div>
+                  </div>
+                )}
+
+                {/* 参与人数上限 */}
+                {(type === 'pool_propose' || type === 'pool_publish') && (
+                  <div className="flex items-center bg-white/10 rounded-md px-3 py-1.5 border border-white/20 transition-colors">
+                    <span className="text-[11px] font-black text-white/70 mr-2 tracking-wider uppercase">上限</span>
+                    {(readonly && !approverMode) ? (
+                      <span className="text-sm text-white font-medium">{headerSelections.maxParticipants || '5'}人</span>
+                    ) : (
+                      <div className="flex items-center">
+                        <input 
+                          type="number"
+                          value={headerSelections.maxParticipants}
+                          onChange={e => setHeaderSelections({...headerSelections, maxParticipants: e.target.value})}
+                          className="bg-transparent text-sm text-center text-white outline-none w-10 border-b border-transparent focus:border-white/30 font-medium placeholder:text-white/50 transition-colors"
+                          placeholder="5"
+                          min="1"
+                          max="50"
+                        />
+                        <span className="text-white text-sm ml-0.5">人</span>
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -1221,7 +1247,7 @@ export default function SmartTaskModal({ isOpen, onClose, onSubmit, title, type,
               <button
                 onClick={() => {
                   const aggregated = sections.map(s => comments[s.id] ? `[${s.letter} ${s.title}]: ${comments[s.id]}` : '').filter(Boolean).join('\n\n');
-                  onApprove?.(aggregated || '同意', { bonus: headerSelections.bonus, rewardType: headerSelections.rewardType });
+                  onApprove?.(aggregated || '同意', { bonus: headerSelections.bonus, rewardType: headerSelections.rewardType, maxParticipants: headerSelections.maxParticipants });
                 }}
                 disabled={submitting}
                 className="px-8 py-2 text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg transition-colors shadow-sm disabled:opacity-50"
