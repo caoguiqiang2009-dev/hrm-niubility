@@ -71,9 +71,10 @@ router.get('/pending', authMiddleware, (req: AuthRequest, res) => {
 
   // 1. 待我审批的绩效计划
   let perfPending = db.prepare(
-    `SELECT pp.*, u.name as creator_name, 'perf_plan' as flow_type
+    `SELECT pp.*, u.name as creator_name, au.name as approver_name, 'perf_plan' as flow_type
      FROM perf_plans pp
      LEFT JOIN users u ON pp.creator_id = u.id
+     LEFT JOIN users au ON pp.approver_id = au.id
      WHERE pp.approver_id = ? AND pp.status = 'pending_review'
      ORDER BY pp.created_at DESC`
   ).all(userId);
@@ -83,9 +84,12 @@ router.get('/pending', authMiddleware, (req: AuthRequest, res) => {
   // 2. 待我审核的提案 (HR可审 pending_hr, Admin可审 pending_admin)
   if (['hr', 'admin'].includes(role)) {
     const hrPending = db.prepare(
-      `SELECT pt.*, u.name as creator_name, 'proposal' as flow_type
+      `SELECT pt.*, u.name as creator_name, 'proposal' as flow_type,
+         hr_u.name as hr_reviewer_name, admin_u.name as admin_reviewer_name
        FROM pool_tasks pt
        LEFT JOIN users u ON pt.created_by = u.id
+       LEFT JOIN users hr_u ON pt.hr_reviewer_id = hr_u.id
+       LEFT JOIN users admin_u ON pt.admin_reviewer_id = admin_u.id
        WHERE pt.proposal_status = 'pending_hr'
        ORDER BY pt.created_at DESC`
     ).all();
@@ -93,9 +97,12 @@ router.get('/pending', authMiddleware, (req: AuthRequest, res) => {
   }
   if (role === 'admin') {
     const adminPending = db.prepare(
-      `SELECT pt.*, u.name as creator_name, 'proposal' as flow_type
+      `SELECT pt.*, u.name as creator_name, 'proposal' as flow_type,
+         hr_u.name as hr_reviewer_name, admin_u.name as admin_reviewer_name
        FROM pool_tasks pt
        LEFT JOIN users u ON pt.created_by = u.id
+       LEFT JOIN users hr_u ON pt.hr_reviewer_id = hr_u.id
+       LEFT JOIN users admin_u ON pt.admin_reviewer_id = admin_u.id
        WHERE pt.proposal_status = 'pending_admin'
        ORDER BY pt.created_at DESC`
     ).all();
@@ -134,9 +141,12 @@ router.get('/reviewed', authMiddleware, (req: AuthRequest, res) => {
 
   // 2. 我审核过的提案
   const proposalReviewed = db.prepare(
-    `SELECT pt.*, u.name as creator_name, 'proposal' as flow_type
+    `SELECT pt.*, u.name as creator_name, 'proposal' as flow_type,
+       hr_u.name as hr_reviewer_name, admin_u.name as admin_reviewer_name
      FROM pool_tasks pt
      LEFT JOIN users u ON pt.created_by = u.id
+     LEFT JOIN users hr_u ON pt.hr_reviewer_id = hr_u.id
+     LEFT JOIN users admin_u ON pt.admin_reviewer_id = admin_u.id
      WHERE pt.hr_reviewer_id = ? OR pt.admin_reviewer_id = ?
      ORDER BY pt.created_at DESC`
   ).all(userId, userId);

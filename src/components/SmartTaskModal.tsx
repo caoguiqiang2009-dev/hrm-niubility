@@ -398,22 +398,41 @@ export default function SmartTaskModal({ isOpen, onClose, onSubmit, title, type,
           .then(j => setFetchedLogs(j.data || []))
           .catch(() => setFetchedLogs([]));
       } else {
-        // Proposals: synthesize approval nodes from initialData fields
+        // Proposals: synthesize two-step approval nodes (HR → Admin)
         const syntheticLogs: any[] = [];
         const d = initialData as any;
         const creator = d.creator_name || d.creator_id || d.proposer_name || '发起人';
-        const approver = d.approver_name || d.approver_id || '系统/审批人';
+        const hrReviewer = d.hr_reviewer_name || (d.hr_reviewer_id ? `审批人(${d.hr_reviewer_id})` : '人事审核');
+        const adminReviewer = d.admin_reviewer_name || (d.admin_reviewer_id ? `审批人(${d.admin_reviewer_id})` : '总经理复核');
         const st = d.status || d.proposal_status;
+        
         // Node 1: creator submitted
-        syntheticLogs.push({ user_id: creator, action: 'submit', new_value: 'pending_review' });
-        // Node 2: approver action based on status
-        if (['approved', 'open', 'in_progress', 'closed', 'completed'].includes(st)) {
-          syntheticLogs.push({ user_id: approver, action: 'approve', new_value: 'approved' });
-        } else if (st === 'rejected') {
-          syntheticLogs.push({ user_id: approver, action: 'reject', new_value: 'rejected' });
-        } else if (st === 'pending_review') {
-          syntheticLogs.push({ user_id: approver, action: 'pending', new_value: 'pending' });
+        syntheticLogs.push({ user_name: creator, user_id: creator, action: 'submit', new_value: 'pending_review' });
+        
+        // Node 2: HR reviewer
+        if (['pending_admin', 'approved', 'open', 'in_progress', 'closed', 'completed'].includes(st)) {
+          // HR已通过
+          syntheticLogs.push({ user_name: hrReviewer, user_id: hrReviewer, action: 'approve', new_value: 'approved' });
+        } else if (st === 'rejected' && d.hr_reviewer_id && !d.admin_reviewer_id) {
+          // HR驳回
+          syntheticLogs.push({ user_name: hrReviewer, user_id: hrReviewer, action: 'reject', new_value: 'rejected' });
+        } else if (st === 'pending_hr') {
+          // 等待HR审核
+          syntheticLogs.push({ user_name: hrReviewer, user_id: hrReviewer, action: 'pending', new_value: 'pending' });
         }
+        
+        // Node 3: Admin reviewer (only if past HR stage)
+        if (['approved', 'open', 'in_progress', 'closed', 'completed'].includes(st)) {
+          // Admin已通过
+          syntheticLogs.push({ user_name: adminReviewer, user_id: adminReviewer, action: 'approve', new_value: 'approved' });
+        } else if (st === 'rejected' && d.admin_reviewer_id) {
+          // Admin驳回
+          syntheticLogs.push({ user_name: adminReviewer, user_id: adminReviewer, action: 'reject', new_value: 'rejected' });
+        } else if (st === 'pending_admin') {
+          // 等待Admin复核
+          syntheticLogs.push({ user_name: adminReviewer, user_id: adminReviewer, action: 'pending', new_value: 'pending' });
+        }
+        
         setFetchedLogs(syntheticLogs);
       }
     } else {
