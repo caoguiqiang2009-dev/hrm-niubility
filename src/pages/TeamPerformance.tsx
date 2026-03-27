@@ -148,8 +148,8 @@ export default function TeamPerformance({ navigate }: { navigate: (view: string)
                 <span className="material-symbols-outlined text-primary group-hover:text-white">add_task</span>
               </div>
               <div>
-                <h4 className="font-bold text-on-surface tracking-tight">向下发起任务</h4>
-                <p className="text-xs text-on-surface-variant mt-0.5">给团队成员强势派发新指标</p>
+                <h4 className="font-bold text-on-surface tracking-tight">团队内发起任务</h4>
+                <p className="text-xs text-on-surface-variant mt-0.5">为团队成员分配绩效目标与关键任务</p>
               </div>
             </div>
           )}
