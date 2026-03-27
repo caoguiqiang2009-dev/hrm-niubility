@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { changelogData, getLatestVersion } from '../data/changelog';
 import { useAuth } from '../context/AuthContext';
+import UserGuide from './UserGuide';
 
 interface SidebarProps {
   currentView: string;
@@ -14,6 +15,7 @@ export default function Sidebar({ currentView, navigate }: SidebarProps) {
   const [payslipData, setPayslipData] = useState<any>(null);
   const [payslipLoading, setPayslipLoading] = useState(false);
   const [showPayslipModal, setShowPayslipModal] = useState(false);
+  const [showGuide, setShowGuide] = useState(false);
   const notifRef = useRef<HTMLDivElement>(null);
   const avatarRef = useRef<HTMLDivElement>(null);
   const { currentUser, logout, hasPermission } = useAuth();
@@ -290,10 +292,10 @@ export default function Sidebar({ currentView, navigate }: SidebarProps) {
                     管理后台
                   </button>
                 )}
-                <button onClick={() => alert('帮助文档开发中')}
+                <button onClick={() => { setIsAvatarMenuOpen(false); setShowGuide(true); }}
                   className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
-                  <span className="material-symbols-outlined text-[16px] text-slate-500">help</span>
-                  帮助中心
+                  <span className="material-symbols-outlined text-[16px] text-blue-500">menu_book</span>
+                  使用说明
                 </button>
               </div>
               <div className="border-t border-slate-100 dark:border-slate-800 py-1">
@@ -454,6 +456,7 @@ export default function Sidebar({ currentView, navigate }: SidebarProps) {
       </div>
     )}
 
+    <UserGuide isOpen={showGuide} onClose={() => setShowGuide(false)} />
     </>
   );
 }

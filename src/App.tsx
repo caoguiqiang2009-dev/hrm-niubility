@@ -13,6 +13,7 @@ import PerfAnalyticsPage from './pages/PerfAnalyticsPage';
 import SalaryManager from './pages/SalaryManager';
 import DevRoleSwitcher from './components/DevRoleSwitcher';
 import Watermark from './components/Watermark';
+import FloatingAiChat from './components/FloatingAiChat';
 import { useAuth } from './context/AuthContext';
 
 export default function App() {
@@ -106,6 +107,7 @@ export default function App() {
       {renderView()}
       <DevRoleSwitcher />
       <Watermark text={currentUser.name} />
+      <FloatingAiChat />
     </>
   );
 }
