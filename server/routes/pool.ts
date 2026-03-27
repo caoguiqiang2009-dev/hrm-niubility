@@ -6,11 +6,17 @@ import { sendCardMessage } from '../services/message';
 
 const router = Router();
 
-// 绩效池任务列表 (只显示 proposal_status = 'approved' 的任务)
+// ── 自动迁移: 添加 deleted_at 列 ──
+try {
+  const db0 = getDb();
+  db0.exec("ALTER TABLE pool_tasks ADD COLUMN deleted_at DATETIME");
+} catch(e) { /* column already exists */ }
+
+// 绩效池任务列表 (只显示 proposal_status = 'approved' 且未删除的任务)
 router.get('/tasks', authMiddleware, (req, res) => {
   const db = getDb();
   const { status, department } = req.query;
-  let sql = "SELECT pt.*, u.name as creator_name FROM pool_tasks pt LEFT JOIN users u ON pt.created_by = u.id WHERE pt.proposal_status = 'approved'";
+  let sql = "SELECT pt.*, u.name as creator_name FROM pool_tasks pt LEFT JOIN users u ON pt.created_by = u.id WHERE pt.proposal_status = 'approved' AND pt.deleted_at IS NULL";
   const params: any[] = [];
   if (status) { sql += ' AND pt.status = ?'; params.push(status); }
   if (department) { sql += ' AND pt.department = ?'; params.push(department); }
@@ -293,23 +299,60 @@ router.post('/tasks/:id/close', authMiddleware, (_req, res) => {
   return res.json({ code: 0, message: '已关闭' });
 });
 
-// 删除绩效池任务 (仅管理员/HR)
+// 回收站列表 (仅管理员/HR)
+router.get('/tasks/trash', authMiddleware, (req: AuthRequest, res) => {
+  const db = getDb();
+  const user = db.prepare('SELECT role FROM users WHERE id = ?').get(req.userId) as any;
+  if (!user || !['admin', 'hr'].includes(user.role)) {
+    return res.status(403).json({ code: 403, message: '仅管理员或HR可查看回收站' });
+  }
+  const tasks = db.prepare(
+    "SELECT pt.*, u.name as creator_name FROM pool_tasks pt LEFT JOIN users u ON pt.created_by = u.id WHERE pt.deleted_at IS NOT NULL ORDER BY pt.deleted_at DESC"
+  ).all();
+  return res.json({ code: 0, data: tasks });
+});
+
+// 软删除 → 移入回收站 (仅管理员/HR)
 router.delete('/tasks/:id', authMiddleware, (req: AuthRequest, res) => {
   const db = getDb();
   const user = db.prepare('SELECT role FROM users WHERE id = ?').get(req.userId) as any;
   if (!user || !['admin', 'hr'].includes(user.role)) {
     return res.status(403).json({ code: 403, message: '仅管理员或HR可删除任务' });
   }
-
-  const task = db.prepare('SELECT id, title FROM pool_tasks WHERE id = ?').get(req.params.id) as any;
+  const task = db.prepare('SELECT id, title FROM pool_tasks WHERE id = ? AND deleted_at IS NULL').get(req.params.id) as any;
   if (!task) return res.status(404).json({ code: 404, message: '任务不存在' });
 
-  // 删除关联参与者记录
-  db.prepare('DELETE FROM pool_participants WHERE pool_task_id = ?').run(task.id);
-  // 删除任务本身
-  db.prepare('DELETE FROM pool_tasks WHERE id = ?').run(task.id);
+  db.prepare("UPDATE pool_tasks SET deleted_at = datetime('now') WHERE id = ?").run(task.id);
+  return res.json({ code: 0, message: `任务「${task.title}」已移入回收站` });
+});
 
-  return res.json({ code: 0, message: `任务「${task.title}」已删除` });
+// 从回收站恢复 (仅管理员/HR)
+router.post('/tasks/:id/restore', authMiddleware, (req: AuthRequest, res) => {
+  const db = getDb();
+  const user = db.prepare('SELECT role FROM users WHERE id = ?').get(req.userId) as any;
+  if (!user || !['admin', 'hr'].includes(user.role)) {
+    return res.status(403).json({ code: 403, message: '权限不足' });
+  }
+  const task = db.prepare('SELECT id, title FROM pool_tasks WHERE id = ? AND deleted_at IS NOT NULL').get(req.params.id) as any;
+  if (!task) return res.status(404).json({ code: 404, message: '任务不在回收站中' });
+
+  db.prepare('UPDATE pool_tasks SET deleted_at = NULL WHERE id = ?').run(task.id);
+  return res.json({ code: 0, message: `任务「${task.title}」已恢复` });
+});
+
+// 永久删除 (仅管理员/HR)
+router.delete('/tasks/:id/purge', authMiddleware, (req: AuthRequest, res) => {
+  const db = getDb();
+  const user = db.prepare('SELECT role FROM users WHERE id = ?').get(req.userId) as any;
+  if (!user || !['admin', 'hr'].includes(user.role)) {
+    return res.status(403).json({ code: 403, message: '权限不足' });
+  }
+  const task = db.prepare('SELECT id, title FROM pool_tasks WHERE id = ? AND deleted_at IS NOT NULL').get(req.params.id) as any;
+  if (!task) return res.status(404).json({ code: 404, message: '任务不在回收站中' });
+
+  db.prepare('DELETE FROM pool_participants WHERE pool_task_id = ?').run(task.id);
+  db.prepare('DELETE FROM pool_tasks WHERE id = ?').run(task.id);
+  return res.json({ code: 0, message: `任务「${task.title}」已永久删除` });
 });
 
 export default router;
