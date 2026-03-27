@@ -524,7 +524,7 @@ export default function SmartTaskModal({ isOpen, onClose, onSubmit, title, type,
   };
 
   const handleSubmit = () => {
-    if (type === 'personal' || type === 'team' || type === 'pool_publish') {
+    if (type === 'personal' || type === 'team' || type === 'pool_publish' || type === 'pool_propose') {
       const required = [
         { key: 'summary', label: '目标简述' },
         { key: 's', label: '明确目标 (S)' },
@@ -539,7 +539,12 @@ export default function SmartTaskModal({ isOpen, onClose, onSubmit, title, type,
         alert(`请填写完整以下必填项才能提交：\n${missing.map(m => m.label).join('、')}`);
         return;
       }
-      if (!headerSelections.r || !headerSelections.a || !headerSelections.c || !headerSelections.e || !headerSelections.taskType) {
+      if (type === 'pool_propose') {
+        if (!headerSelections.taskType) {
+          alert('请选择任务属性！');
+          return;
+        }
+      } else if (!headerSelections.r || !headerSelections.a || !headerSelections.c || !headerSelections.e || !headerSelections.taskType) {
         alert(`请在顶部完整选择配置：负责人、执行人、咨询人、验收人以及任务属性！`);
         return;
       }
@@ -589,6 +594,8 @@ export default function SmartTaskModal({ isOpen, onClose, onSubmit, title, type,
             {/* Dropdowns Row */}
             <div className="bg-[#005ea4] p-4 sm:px-6 text-white shrink-0">
               <div className="flex flex-wrap items-center gap-3">
+                {type !== 'pool_propose' && (
+                  <>
                 <SearchableUserDropdown 
                   label="R" 
                   value={headerSelections.r} 
@@ -621,6 +628,8 @@ export default function SmartTaskModal({ isOpen, onClose, onSubmit, title, type,
                   placeholder="选择验收人"
                   readonly={readonly}
                 />
+                  </>
+                )}
 
                 {/* 奖励机制 (奖金/积分) Dropdown & Input */}
                 {(type === 'pool_propose' || type === 'pool_publish' || type === 'team') && (
