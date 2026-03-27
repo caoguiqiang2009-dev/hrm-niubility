@@ -1160,7 +1160,13 @@ function ApprovalFlowModule() {
                           {node.node_type === 'approver' && ` · ${node.approve_type === 'or_sign' ? '或签' : node.approve_type === 'parallel' ? '会签' : '依次'}`}
                         </span>
                       ) : node.node_type === 'cc' ? (
-                        <span className="text-slate-500 text-xs">{node.config?.assigneeType === 'self_select' ? '申请人自选' : '指定成员'}</span>
+                        <span className="text-slate-500 text-xs">
+                          {(() => {
+                            const types = node.config?.assigneeTypes || (node.config?.assigneeType ? [node.config.assigneeType] : ['specified']);
+                            const labels: Record<string, string> = { specified: '指定成员', self_select: '申请人自选', related_roles: '任务相关人员' };
+                            return types.map((t: string) => labels[t] || t).join(' + ');
+                          })()}
+                        </span>
                       ) : (
                         <span className="text-xs text-slate-500">条件分支</span>
                       )}
@@ -1464,46 +1470,62 @@ function ApprovalFlowModule() {
                   {selectedNode.node_type === 'cc' && (
                     <>
                       <div>
-                        <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 mb-2">抄送人类型</label>
+                        <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 mb-2">抄送人类型（可多选）</label>
                         <div className="space-y-2">
-                          {[{ v: 'specified', l: '指定成员' }, { v: 'self_select', l: '申请人自选' }, { v: 'related_roles', l: '对应任务卡相关人员' }].map(t => (
-                            <label key={t.v} className="flex items-center gap-1.5 cursor-pointer">
-                              <input type="radio" name={`cc_type_${selectedNodeIdx}`}
-                                checked={(selectedNode.config?.assigneeType || 'specified') === t.v}
-                                onChange={() => updateNode(selectedNodeIdx!, { config: { ...selectedNode.config, assigneeType: t.v } })}
-                                className="w-3.5 h-3.5 text-[#0060a9]" />
-                              <span className="text-xs text-slate-600 dark:text-slate-300">{t.l}</span>
-                            </label>
-                          ))}
+                          {[{ v: 'specified', l: '指定成员' }, { v: 'self_select', l: '申请人自选' }, { v: 'related_roles', l: '对应任务卡相关人员' }].map(t => {
+                            const types: string[] = selectedNode.config?.assigneeTypes || (selectedNode.config?.assigneeType ? [selectedNode.config.assigneeType] : ['specified']);
+                            const isChecked = types.includes(t.v);
+                            return (
+                              <label key={t.v} className="flex items-center gap-1.5 cursor-pointer">
+                                <input type="checkbox"
+                                  checked={isChecked}
+                                  onChange={() => {
+                                    const cur = [...types];
+                                    const next = isChecked ? cur.filter(x => x !== t.v) : [...cur, t.v];
+                                    if (next.length === 0) return; // must have at least one
+                                    updateNode(selectedNodeIdx!, { config: { ...selectedNode.config, assigneeTypes: next, assigneeType: next[0] } });
+                                  }}
+                                  className="w-3.5 h-3.5 rounded text-[#0060a9]" />
+                                <span className="text-xs text-slate-600 dark:text-slate-300">{t.l}</span>
+                              </label>
+                            );
+                          })}
                         </div>
                       </div>
                       
-                      {(selectedNode.config?.assigneeType) === 'related_roles' && (
-                        <div>
-                          <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 mb-2 mt-4">选择相关角色</label>
-                          <div className="space-y-2">
-                            {[
-                              { k: 'creator', l: '提报者/创建人' },
-                              { k: 'assignee', l: '责任人/接收人' },
-                              { k: 'manager', l: '直属主管' },
-                              { k: 'collaborators', l: '协作者(RACI成员)' }
-                            ].map(role => (
-                              <label key={role.k} className="flex items-center gap-2 cursor-pointer">
-                                <input type="checkbox"
-                                  checked={(selectedNode.config?.relatedRoles || []).includes(role.k)}
-                                  onChange={e => {
-                                    const cur = selectedNode.config?.relatedRoles || [];
-                                    const next = e.target.checked ? [...cur, role.k] : cur.filter((x: string) => x !== role.k);
-                                    updateNode(selectedNodeIdx!, { config: { ...selectedNode.config, relatedRoles: next } });
-                                  }}
-                                  className="w-3.5 h-3.5 rounded text-[#0060a9]" />
-                                <span className="text-xs text-slate-600 dark:text-slate-300">{role.l}</span>
-                              </label>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                      {(selectedNode.config?.assigneeType || 'specified') === 'specified' && (() => {
+                      {(() => {
+                        const types: string[] = selectedNode.config?.assigneeTypes || (selectedNode.config?.assigneeType ? [selectedNode.config.assigneeType] : ['specified']);
+                        return (
+                          <>
+                            {types.includes('related_roles') && (
+                              <div>
+                                <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 mb-2">选择相关角色</label>
+                                <div className="space-y-2">
+                                  {[
+                                    { k: 'creator', l: '提报者/创建人' },
+                                    { k: 'assignee', l: '责任人/接收人' },
+                                    { k: 'manager', l: '直属主管' },
+                                    { k: 'collaborators', l: '协作者(RACI成员)' }
+                                  ].map(role => (
+                                    <label key={role.k} className="flex items-center gap-2 cursor-pointer">
+                                      <input type="checkbox"
+                                        checked={(selectedNode.config?.relatedRoles || []).includes(role.k)}
+                                        onChange={e => {
+                                          const cur = selectedNode.config?.relatedRoles || [];
+                                          const next = e.target.checked ? [...cur, role.k] : cur.filter((x: string) => x !== role.k);
+                                          updateNode(selectedNodeIdx!, { config: { ...selectedNode.config, relatedRoles: next } });
+                                        }}
+                                        className="w-3.5 h-3.5 rounded text-[#0060a9]" />
+                                      <span className="text-xs text-slate-600 dark:text-slate-300">{role.l}</span>
+                                    </label>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </>
+                        );
+                      })()}
+                      {(selectedNode.config?.assigneeTypes || [selectedNode.config?.assigneeType || 'specified']).includes('specified') && (() => {
                         const selectedIds: string[] = selectedNode.config?.assignees || [];
                         return (
                           <div>
