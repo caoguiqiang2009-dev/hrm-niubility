@@ -899,6 +899,32 @@ export default function CompanyPerformance({ navigate }: { navigate: (view: stri
         type="pool_propose"
         users={users}
         submitting={proposing}
+        onDraft={async (data) => {
+          try {
+            const token = localStorage.getItem('token');
+            const smartDescription = `【目标 S】${data.s}\n【指标 M】${data.m}\n【方案 A】${data.a_smart}\n【相关 R】${data.r_smart}\n【时限 T】${data.t}`;
+            const res = await fetch('/api/pool/tasks/propose', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+              body: JSON.stringify({
+                title: data.summary || '草稿提案',
+                description: smartDescription,
+                department: data.taskType || '',
+                difficulty: '中',
+                reward_type: data.rewardType,
+                bonus: Number(data.bonus) || 0,
+                max_participants: 5,
+                is_draft: true,
+              }),
+            });
+            const json = await res.json();
+            if (json.code === 0) {
+              alert('草稿已保存');
+              fetchMyProposals();
+              setShowPropose(false);
+            } else { alert(json.message); }
+          } catch { alert('保存失败'); }
+        }}
         initialData={{
           summary: '提出公司级或跨部门的新项目提案，经审批后入池',
           s: '预期达成什么样的关键结果？',

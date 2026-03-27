@@ -58,7 +58,7 @@ router.get('/leaderboard', authMiddleware, (req, res) => {
 
 // 员工提议新任务 (任何人都可以提)
 router.post('/tasks/propose', authMiddleware, (req: AuthRequest, res) => {
-  const { title, description, department, difficulty, reward_type, bonus, max_participants } = req.body;
+  const { title, description, department, difficulty, reward_type, bonus, max_participants, is_draft } = req.body;
   if (!title) return res.status(400).json({ code: 400, message: '任务标题不能为空' });
   const db = getDb();
 
@@ -70,10 +70,12 @@ router.post('/tasks/propose', authMiddleware, (req: AuthRequest, res) => {
   try { db.exec("ALTER TABLE pool_tasks ADD COLUMN reject_reason TEXT"); } catch(e) {}
   try { db.exec("ALTER TABLE pool_tasks ADD COLUMN reward_type TEXT DEFAULT 'money'"); } catch(e) {}
 
+  const proposalStatus = is_draft ? 'draft' : 'pending_hr';
+
   const result = db.prepare(
     `INSERT INTO pool_tasks (title, description, department, difficulty, reward_type, bonus, max_participants, created_by, status, proposal_status) 
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'draft', 'pending_hr')`
-  ).run(title, description || null, department || null, difficulty || 'normal', reward_type || 'money', bonus || 0, max_participants || 5, req.userId);
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?)`
+  ).run(title, description || null, department || null, difficulty || 'normal', reward_type || 'money', bonus || 0, max_participants || 5, req.userId, proposalStatus);
 
   // 站内通知 HR + Admin
   const hrAdmins = db.prepare("SELECT id FROM users WHERE role IN ('hr', 'admin')").all() as any[];

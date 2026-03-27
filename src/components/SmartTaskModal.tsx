@@ -22,40 +22,55 @@ const SearchableUserDropdown = ({
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState('');
-  const dropdownRef = React.useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState({ top: 0, left: 0 });
+  const triggerRef = React.useRef<HTMLDivElement>(null);
+  const panelRef = React.useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
-        setIsOpen(false);
-      }
+    const handle = (e: MouseEvent) => {
+      if (triggerRef.current?.contains(e.target as Node)) return;
+      if (panelRef.current?.contains(e.target as Node)) return;
+      setIsOpen(false);
     };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    document.addEventListener('mousedown', handle);
+    return () => document.removeEventListener('mousedown', handle);
   }, []);
+
+  const handleToggle = () => {
+    if (readonly) return;
+    if (!isOpen && triggerRef.current) {
+      const rect = triggerRef.current.getBoundingClientRect();
+      setPos({ top: rect.bottom + 6, left: rect.left });
+    }
+    setIsOpen(!isOpen);
+  };
 
   const filteredUsers = users.filter(u => u.name.toLowerCase().includes(search.toLowerCase()));
   const selectedUser = users.find(u => u.id === value);
 
   return (
-    <div className={`flex items-center bg-white/10 backdrop-blur-sm rounded-lg px-3.5 py-2 border border-white/20 ${readonly ? '' : 'hover:bg-white/20 hover:border-white/30 cursor-pointer'} transition-all duration-200 relative`} ref={dropdownRef} onClick={() => !readonly && setIsOpen(!isOpen)}>
-      <span className="text-[11px] font-black text-white/70 mr-2 tracking-wider uppercase">{label}</span>
-      <div className="flex items-center gap-1 select-none">
-        <span className={`text-sm tracking-wide font-semibold ${selectedUser ? 'text-white' : 'text-white/50'}`}>
-          {selectedUser ? selectedUser.name : placeholder.replace('选择', '')}
-        </span>
-        {!readonly && <ChevronDown size={13} className={`text-white/50 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />}
+    <>
+      <div ref={triggerRef} className={`flex items-center bg-white/10 backdrop-blur-sm rounded-lg px-3.5 py-2 border border-white/20 ${readonly ? '' : 'hover:bg-white/20 hover:border-white/30 cursor-pointer'} transition-all duration-200`} onClick={handleToggle}>
+        <span className="text-[11px] font-black text-white/70 mr-2 tracking-wider uppercase">{label}</span>
+        <div className="flex items-center gap-1 select-none">
+          <span className={`text-sm tracking-wide font-semibold ${selectedUser ? 'text-white' : 'text-white/50'}`}>
+            {selectedUser ? selectedUser.name : placeholder.replace('选择', '')}
+          </span>
+          {!readonly && <ChevronDown size={13} className={`text-white/50 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />}
+        </div>
       </div>
 
       <AnimatePresence>
         {isOpen && (
           <motion.div 
-            initial={{ opacity: 0, y: 5, scale: 0.97 }}
+            ref={panelRef}
+            initial={{ opacity: 0, y: -4, scale: 0.97 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 5, scale: 0.97 }}
+            exit={{ opacity: 0, y: -4, scale: 0.97 }}
             transition={{ duration: 0.15, ease: 'easeOut' }}
             onClick={(e) => e.stopPropagation()}
-            className="absolute top-full left-0 mt-2 w-52 bg-[#1e2640]/95 backdrop-blur-xl rounded-xl shadow-2xl shadow-black/30 border border-white/10 overflow-hidden z-50 flex flex-col"
+            style={{ position: 'fixed', top: pos.top, left: pos.left, zIndex: 9999 }}
+            className="w-52 bg-[#1e2640]/98 backdrop-blur-xl rounded-xl shadow-2xl shadow-black/40 border border-white/15 overflow-hidden flex flex-col"
           >
             {/* Search Input */}
             <div className="p-2.5 border-b border-white/5">
@@ -101,7 +116,7 @@ const SearchableUserDropdown = ({
           </motion.div>
         )}
       </AnimatePresence>
-    </div>
+    </>
   );
 };
 
@@ -123,19 +138,30 @@ const MultiSelectUserDropdown = ({
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState('');
-  const dropdownRef = React.useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState({ top: 0, left: 0 });
+  const triggerRef = React.useRef<HTMLDivElement>(null);
+  const panelRef = React.useRef<HTMLDivElement>(null);
 
   const selectedIds = value ? value.split(',').filter(Boolean) : [];
 
   useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
-        setIsOpen(false);
-      }
+    const handle = (e: MouseEvent) => {
+      if (triggerRef.current?.contains(e.target as Node)) return;
+      if (panelRef.current?.contains(e.target as Node)) return;
+      setIsOpen(false);
     };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    document.addEventListener('mousedown', handle);
+    return () => document.removeEventListener('mousedown', handle);
   }, []);
+
+  const handleToggle = () => {
+    if (readonly) return;
+    if (!isOpen && triggerRef.current) {
+      const rect = triggerRef.current.getBoundingClientRect();
+      setPos({ top: rect.bottom + 6, left: rect.left });
+    }
+    setIsOpen(!isOpen);
+  };
 
   const filteredUsers = users.filter(u => u.name.toLowerCase().includes(search.toLowerCase()));
   const selectedNames = selectedIds.map(id => users.find(u => u.id === id)?.name).filter(Boolean);
@@ -154,27 +180,31 @@ const MultiSelectUserDropdown = ({
       : `${selectedNames[0]} 等${selectedNames.length}人`;
 
   return (
-    <div className={`flex items-center bg-white/10 backdrop-blur-sm rounded-lg px-3.5 py-2 border border-white/20 ${readonly ? '' : 'hover:bg-white/20 hover:border-white/30 cursor-pointer'} transition-all duration-200 relative`} ref={dropdownRef} onClick={() => !readonly && setIsOpen(!isOpen)}>
-      <span className="text-[11px] font-black text-white/70 mr-2 tracking-wider uppercase">{label}</span>
-      <div className="flex items-center gap-1 select-none">
-        <span className={`text-sm tracking-wide font-semibold ${selectedNames.length > 0 ? 'text-white' : 'text-white/50'}`}>
-          {displayText}
-        </span>
-        {selectedNames.length > 0 && (
-          <span className="ml-1 text-[10px] font-bold bg-white/20 text-white/80 rounded-full w-4 h-4 flex items-center justify-center">{selectedNames.length}</span>
-        )}
-        {!readonly && <ChevronDown size={13} className={`text-white/50 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />}
+    <>
+      <div ref={triggerRef} className={`flex items-center bg-white/10 backdrop-blur-sm rounded-lg px-3.5 py-2 border border-white/20 ${readonly ? '' : 'hover:bg-white/20 hover:border-white/30 cursor-pointer'} transition-all duration-200`} onClick={handleToggle}>
+        <span className="text-[11px] font-black text-white/70 mr-2 tracking-wider uppercase">{label}</span>
+        <div className="flex items-center gap-1 select-none">
+          <span className={`text-sm tracking-wide font-semibold ${selectedNames.length > 0 ? 'text-white' : 'text-white/50'}`}>
+            {displayText}
+          </span>
+          {selectedNames.length > 0 && (
+            <span className="ml-1 text-[10px] font-bold bg-white/20 text-white/80 rounded-full w-4 h-4 flex items-center justify-center">{selectedNames.length}</span>
+          )}
+          {!readonly && <ChevronDown size={13} className={`text-white/50 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />}
+        </div>
       </div>
 
       <AnimatePresence>
         {isOpen && (
           <motion.div 
-            initial={{ opacity: 0, y: 5, scale: 0.97 }}
+            ref={panelRef}
+            initial={{ opacity: 0, y: -4, scale: 0.97 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 5, scale: 0.97 }}
+            exit={{ opacity: 0, y: -4, scale: 0.97 }}
             transition={{ duration: 0.15, ease: 'easeOut' }}
             onClick={(e) => e.stopPropagation()}
-            className="absolute top-full left-0 mt-2 w-56 bg-[#1e2640]/95 backdrop-blur-xl rounded-xl shadow-2xl shadow-black/30 border border-white/10 overflow-hidden z-50 flex flex-col"
+            style={{ position: 'fixed', top: pos.top, left: pos.left, zIndex: 9999 }}
+            className="w-56 bg-[#1e2640]/98 backdrop-blur-xl rounded-xl shadow-2xl shadow-black/40 border border-white/15 overflow-hidden flex flex-col"
           >
             {/* Selected Tags */}
             {selectedNames.length > 0 && (
@@ -230,7 +260,7 @@ const MultiSelectUserDropdown = ({
           </motion.div>
         )}
       </AnimatePresence>
-    </div>
+    </>
   );
 };
 
@@ -340,11 +370,12 @@ export interface SmartTaskModalProps {
   readonly?: boolean;
   customFooter?: React.ReactNode;
   approverMode?: boolean;
-  onApprove?: (comment: string) => void;
+  onApprove?: (comment: string, updatedData?: { bonus?: string; rewardType?: string }) => void;
   onReject?: (comment: string) => void;
+  onDraft?: (data: SmartTaskData) => void;
 }
 
-export default function SmartTaskModal({ isOpen, onClose, onSubmit, title, type, users, initialData, submitting, readonly, customFooter, approverMode, onApprove, onReject }: SmartTaskModalProps) {
+export default function SmartTaskModal({ isOpen, onClose, onSubmit, title, type, users, initialData, submitting, readonly, customFooter, approverMode, onApprove, onReject, onDraft }: SmartTaskModalProps) {
   const [activeSection, setActiveSection] = useState<SectionId>(null);
   const [aiActivating, setAiActivating] = useState<'full' | null>(null);
   const [tempVoice, setTempVoice] = useState('');
@@ -705,7 +736,7 @@ export default function SmartTaskModal({ isOpen, onClose, onSubmit, title, type,
                 {(type === 'pool_propose' || type === 'pool_publish' || type === 'team') && (
                   <div className="flex items-center bg-white/10 rounded-md px-3 py-1.5 border border-white/20 transition-colors">
                     <div className="relative flex items-center mr-2">
-                      {readonly ? (
+                      {(readonly && !approverMode) ? (
                         <span className="bg-transparent text-sm font-bold text-white/90 pr-2">
                           {headerSelections.rewardType === 'money' ? '专项奖金' : '绩效分数'}
                         </span>
@@ -725,7 +756,7 @@ export default function SmartTaskModal({ isOpen, onClose, onSubmit, title, type,
                     </div>
                     <div className="relative flex items-center">
                       <span className="text-white text-sm mr-1">{headerSelections.rewardType === 'money' ? '¥' : ''}</span>
-                      {readonly ? (
+                      {(readonly && !approverMode) ? (
                         <span className="bg-transparent text-sm text-white font-medium">{headerSelections.bonus || '0'}</span>
                       ) : (
                         <input 
@@ -1150,7 +1181,7 @@ export default function SmartTaskModal({ isOpen, onClose, onSubmit, title, type,
                 <button onClick={onClose} disabled={submitting} className="px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100 rounded-xl transition-colors disabled:opacity-50">
                   取消
                 </button>
-                <button disabled={submitting} className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 rounded-xl transition-colors shadow-sm disabled:opacity-50">
+                <button onClick={() => { onDraft?.({...headerSelections, ...formData}); }} disabled={submitting} className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 rounded-xl transition-colors shadow-sm disabled:opacity-50">
                   存为草稿
                 </button>
                 <button 
@@ -1190,7 +1221,7 @@ export default function SmartTaskModal({ isOpen, onClose, onSubmit, title, type,
               <button
                 onClick={() => {
                   const aggregated = sections.map(s => comments[s.id] ? `[${s.letter} ${s.title}]: ${comments[s.id]}` : '').filter(Boolean).join('\n\n');
-                  onApprove?.(aggregated || '同意');
+                  onApprove?.(aggregated || '同意', { bonus: headerSelections.bonus, rewardType: headerSelections.rewardType });
                 }}
                 disabled={submitting}
                 className="px-8 py-2 text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg transition-colors shadow-sm disabled:opacity-50"
