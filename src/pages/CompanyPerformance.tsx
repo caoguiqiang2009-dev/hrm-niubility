@@ -416,7 +416,7 @@ export default function CompanyPerformance({ navigate }: { navigate: (view: stri
                 <span className="material-symbols-outlined text-[16px]">pending_actions</span>
                 我的提案
                 {myProposals.length > 0 && (
-                  <span className="absolute -top-1.5 -right-1.5 min-w-[16px] h-4 bg-violet-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1">{myProposals.length}</span>
+                  <span className="absolute -top-1.5 -right-1.5 min-w-[16px] h-4 bg-violet-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1 pointer-events-none">{myProposals.length}</span>
                 )}
               </button>
             </div>
@@ -490,7 +490,7 @@ export default function CompanyPerformance({ navigate }: { navigate: (view: stri
               {displayed.map(task => {
                 const badge = getBadge(task);
                 const full = isFull(task);
-                const pct = Math.round((task.current_participants / task.max_participants) * 100);
+                const pct = task.max_participants > 0 ? Math.round((task.current_participants / task.max_participants) * 100) : 0;
                 const isScore = task.reward_type === 'score';
                 return (
                   <div key={task.id}

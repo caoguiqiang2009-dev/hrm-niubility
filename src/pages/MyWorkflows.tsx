@@ -587,7 +587,7 @@ function WorkflowCard({ item, tab, onClick }: { item: any; tab: TabKey; onClick:
                 <>
                   <span className="material-symbols-outlined text-[14px] text-slate-300">arrow_right_alt</span>
                   <div className="flex flex-col rounded-lg px-2 py-1 border border-dashed border-amber-300 bg-amber-50 text-amber-600">
-                    <span className="font-bold">{approver || '审批人'}</span>
+                    <span className="font-bold">{approver || '待指定'}</span>
                     <span className="text-[9px] opacity-80">待审核</span>
                   </div>
                 </>
@@ -605,7 +605,7 @@ function WorkflowCard({ item, tab, onClick }: { item: any; tab: TabKey; onClick:
                 status === 'approved' ? 'bg-emerald-50 border-emerald-100 text-emerald-700' :
                 'border-dashed border-amber-300 bg-amber-50 text-amber-600'
               }`}>
-                <span className="font-bold">{item.pending_reviewer_name || approver || (flowType === 'pool_join' ? '管理员' : '审批人')}</span>
+                <span className="font-bold">{item.pending_reviewer_name || approver || '待指定'}</span>
                 <span className="text-[9px] opacity-80">
                   {status === 'rejected' ? '已驳回' : status === 'approved' ? '已完成' : '待处理'}
                 </span>
