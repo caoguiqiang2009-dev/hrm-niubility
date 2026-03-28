@@ -15,6 +15,9 @@ interface PerfPlan {
   deadline: string;
   quarter: string;
   collaborators?: string;
+  creator_id?: string;
+  assignee_id?: string;
+  approver_id?: string;
 }
 
 const statusMap: Record<string, { label: string, color: string, bg: string }> = {
@@ -86,7 +89,7 @@ export default function PersonalGoalsPanel() {
     setSubmitting(true);
     try {
       const token = localStorage.getItem('token');
-      // 1. 创建草稿
+      if (!token) { alert('登录已过期，请重新登录'); window.location.reload(); return; }
       const approverId = currentUser?.role === 'employee' ? 'zhangwei' : 'lifang';
       const targetValue = `S: ${data.s}\nM: ${data.m}\nT: ${data.t}`;
       const createRes = await fetch('/api/perf/plans', {
@@ -101,14 +104,14 @@ export default function PersonalGoalsPanel() {
           target_value: targetValue,
           deadline: data.t,
           collaborators: data.c,
-          // 向上申请
           assignee_id: currentUser?.id,
           approver_id: approverId
         })
       });
+
+      if (createRes.status === 401) { alert('登录已过期，请重新登录后再试'); localStorage.removeItem('token'); window.location.reload(); return; }
       const createData = await createRes.json();
 
-      // 2. 立即送审
       if (createData.code === 0 && createData.data?.id) {
         await fetch(`/api/perf/plans/${createData.data.id}/submit`, {
           method: 'POST',
@@ -116,9 +119,12 @@ export default function PersonalGoalsPanel() {
         });
         setIsModalOpen(false);
         fetchPlans();
+      } else {
+        alert(createData.message || '提交失败，请重试');
       }
     } catch (err) {
       console.error(err);
+      alert('网络异常，请检查连接后重试');
     } finally {
       setSubmitting(false);
     }
@@ -164,20 +170,44 @@ export default function PersonalGoalsPanel() {
     try {
       const token = localStorage.getItem('token');
       const targetValue = `S: ${data.s}\nM: ${data.m}\nT: ${data.t}`;
-      await fetch(`/api/perf/plans/${editingPlan.id}/resubmit`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify({
-          title: data.summary || editingPlan.title,
-          description: encodeSmartDescription(data.a_smart, data.r_smart, {
-            plan: data.planTime, do: data.doTime, check: data.checkTime, act: data.actTime
+
+      if (editingPlan.status === 'draft') {
+        // 草稿：先 PUT 更新，再 POST submit
+        await fetch(`/api/perf/plans/${editingPlan.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+          body: JSON.stringify({
+            title: data.summary || editingPlan.title,
+            description: encodeSmartDescription(data.a_smart, data.r_smart, {
+              plan: data.planTime, do: data.doTime, check: data.checkTime, act: data.actTime
+            }),
+            category: data.taskType || editingPlan.category,
+            target_value: targetValue,
+            deadline: data.t,
+            collaborators: data.c
           }),
-          category: data.taskType || editingPlan.category,
-          target_value: targetValue,
-          deadline: data.t,
-          collaborators: data.c
-        }),
-      });
+        });
+        await fetch(`/api/perf/plans/${editingPlan.id}/submit`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+      } else {
+        // 驳回：POST resubmit
+        await fetch(`/api/perf/plans/${editingPlan.id}/resubmit`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+          body: JSON.stringify({
+            title: data.summary || editingPlan.title,
+            description: encodeSmartDescription(data.a_smart, data.r_smart, {
+              plan: data.planTime, do: data.doTime, check: data.checkTime, act: data.actTime
+            }),
+            category: data.taskType || editingPlan.category,
+            target_value: targetValue,
+            deadline: data.t,
+            collaborators: data.c
+          }),
+        });
+      }
       setEditingPlan(null);
       fetchPlans();
     } catch (err) {
@@ -438,7 +468,7 @@ export default function PersonalGoalsPanel() {
         isOpen={!!editingPlan}
         onClose={() => setEditingPlan(null)}
         onSubmit={handleResubmitSmart}
-        title="修改并重新提交"
+        title={editingPlan?.status === 'draft' ? '编辑草稿并提交' : '修改并重新提交'}
         type="personal"
         users={users}
         submitting={resubmitting}
@@ -491,63 +521,142 @@ export default function PersonalGoalsPanel() {
             planTime: decoded.planTime,
             doTime: decoded.doTime,
             checkTime: decoded.checkTime,
-            actTime: decoded.actTime
+            actTime: decoded.actTime,
+            approver_id: selectedPlan.approver_id,
+            creator_id: selectedPlan.creator_id,
+            assignee_id: selectedPlan.assignee_id
           };
         })()}
         customFooter={(() => {
           if (!selectedPlan) return null;
           const sp = selectedPlan;
           const pct = sp.progress || 0;
+          const isAssigned = sp.creator_id !== sp.assignee_id;
           const accentColor = {
             in_progress: '#3b82f6', pending_review: '#f59e0b', completed: '#8b5cf6',
-            approved: '#10b981', rejected: '#ef4444', draft: '#94a3b8',
+            approved: '#10b981', rejected: '#ef4444', draft: '#94a3b8', returned: '#f97316',
           }[sp.status] || '#94a3b8';
+
+          // 退回操作
+          const handleReturn = async () => {
+            const reason = prompt('请输入退回原因（可选）：');
+            if (reason === null) return;
+            try {
+              const token = localStorage.getItem('token');
+              await fetch(`/api/perf/plans/${sp.id}/return`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify({ reason })
+              });
+              setSelectedPlan(null);
+              fetchPlans();
+            } catch (err) { console.error(err); }
+          };
+
+          // 删除草稿
+          const handleDeleteDraft = async () => {
+            if (!confirm('确认删除此草稿？')) return;
+            try {
+              const token = localStorage.getItem('token');
+              await fetch(`/api/perf/plans/${sp.id}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${token}` }
+              });
+              setSelectedPlan(null);
+              fetchPlans();
+            } catch (err) { console.error(err); }
+          };
+
+          // 提交审批
+          const handleSubmitDraft = async () => {
+            try {
+              const token = localStorage.getItem('token');
+              await fetch(`/api/perf/plans/${sp.id}/submit`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}` }
+              });
+              setSelectedPlan(null);
+              fetchPlans();
+            } catch (err) { console.error(err); }
+          };
           
           return (
-            <div className="w-full flex items-end justify-between gap-4">
-              <div className="flex-1 max-w-md bg-slate-50 dark:bg-slate-800/40 rounded-xl px-4 py-3">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-bold text-slate-600 dark:text-slate-300 flex items-center gap-1.5">
-                    <span className="material-symbols-outlined text-[14px]">trending_up</span>当前进度
-                  </span>
-                  <span className="text-lg font-black" style={{ color: accentColor }}>
-                    <span data-pct-label={`modal-${sp.id}`}>{pct}</span>%
-                  </span>
-                </div>
-                <div className="relative">
-                  <div className="w-full h-3 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
-                    <div data-pct-bar={`modal-${sp.id}`} className="h-full rounded-full transition-all duration-300" style={{ width: `${pct}%`, backgroundColor: accentColor }} />
+            <div className="w-full flex flex-col gap-3">
+              <div className="flex items-end justify-between gap-4">
+                <div className="flex-1 max-w-md bg-slate-50 dark:bg-slate-800/40 rounded-xl px-4 py-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-bold text-slate-600 dark:text-slate-300 flex items-center gap-1.5">
+                      <span className="material-symbols-outlined text-[14px]">trending_up</span>当前进度
+                    </span>
+                    <span className="text-lg font-black" style={{ color: accentColor }}>
+                      <span data-pct-label={`modal-${sp.id}`}>{pct}</span>%
+                    </span>
                   </div>
-                  {sp.status === 'in_progress' && (
-                    <input type="range" min="0" max="100" defaultValue={pct}
-                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                      onInput={e => {
-                        const v = parseInt((e.target as HTMLInputElement).value);
-                        const bar = document.querySelector(`[data-pct-bar="modal-${sp.id}"]`) as HTMLElement;
-                        const label = document.querySelector(`[data-pct-label="modal-${sp.id}"]`) as HTMLElement;
-                        if (bar) bar.style.width = `${v}%`;
-                        if (label) label.textContent = String(v);
-                      }}
-                      onChange={e => {
-                        const v = parseInt((e.target as HTMLInputElement).value);
-                        submitProgress(sp.id, v);
-                      }}
-                    />
-                  )}
+                  <div className="relative">
+                    <div className="w-full h-3 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                      <div data-pct-bar={`modal-${sp.id}`} className="h-full rounded-full transition-all duration-300" style={{ width: `${pct}%`, backgroundColor: accentColor }} />
+                    </div>
+                    {sp.status === 'in_progress' && (
+                      <input type="range" min="0" max="100" defaultValue={pct}
+                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                        onInput={e => {
+                          const v = parseInt((e.target as HTMLInputElement).value);
+                          const bar = document.querySelector(`[data-pct-bar="modal-${sp.id}"]`) as HTMLElement;
+                          const label = document.querySelector(`[data-pct-label="modal-${sp.id}"]`) as HTMLElement;
+                          if (bar) bar.style.width = `${v}%`;
+                          if (label) label.textContent = String(v);
+                        }}
+                        onChange={e => {
+                          const v = parseInt((e.target as HTMLInputElement).value);
+                          submitProgress(sp.id, v);
+                        }}
+                      />
+                    )}
+                  </div>
                 </div>
-              </div>
-              <div className="flex items-center gap-3 shrink-0">
-                {sp.status === 'rejected' && (
-                  <button onClick={() => { setSelectedPlan(null); handleOpenEdit(sp); }}
-                    className="flex items-center gap-2 px-5 py-2.5 bg-amber-50 text-amber-600 text-sm font-bold rounded-lg border border-amber-200 hover:bg-amber-100 transition-colors">
-                    <span className="material-symbols-outlined text-[16px]">edit_note</span>
-                    修改后重新提交
+                {/* 操作按钮区域 */}
+                <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
+                  {/* 草稿：删除 + 编辑 + 提交审批 */}
+                  {sp.status === 'draft' && (
+                    <>
+                      <button onClick={handleDeleteDraft}
+                        className="flex items-center gap-1.5 px-4 py-2.5 text-red-500 bg-red-50 text-sm font-bold rounded-lg border border-red-200 hover:bg-red-100 transition-colors">
+                        <span className="material-symbols-outlined text-[16px]">delete</span>
+                        删除
+                      </button>
+                      <button onClick={() => { setSelectedPlan(null); handleOpenEdit(sp); }}
+                        className="flex items-center gap-1.5 px-4 py-2.5 bg-blue-50 text-blue-600 text-sm font-bold rounded-lg border border-blue-200 hover:bg-blue-100 transition-colors">
+                        <span className="material-symbols-outlined text-[16px]">edit</span>
+                        编辑
+                      </button>
+                      <button onClick={handleSubmitDraft}
+                        className="flex items-center gap-1.5 px-4 py-2.5 bg-[#005ea4] text-white text-sm font-bold rounded-lg hover:bg-[#0077ce] transition-colors shadow-sm">
+                        <span className="material-symbols-outlined text-[16px]">send</span>
+                        提交审批
+                      </button>
+                    </>
+                  )}
+                  {/* 驳回/退回：编辑重新提交 */}
+                  {(sp.status === 'rejected' || sp.status === 'returned') && (
+                    <button onClick={() => { setSelectedPlan(null); handleOpenEdit(sp); }}
+                      className="flex items-center gap-2 px-5 py-2.5 bg-amber-50 text-amber-600 text-sm font-bold rounded-lg border border-amber-200 hover:bg-amber-100 transition-colors">
+                      <span className="material-symbols-outlined text-[16px]">edit_note</span>
+                      修改后重新提交
+                    </button>
+                  )}
+                  {/* 进行中 + 上级下发的 → 退回按钮 */}
+                  {sp.status === 'in_progress' && isAssigned && (
+                    <button onClick={handleReturn}
+                      className="flex items-center gap-1.5 px-4 py-2.5 bg-orange-50 text-orange-600 text-sm font-bold rounded-lg border border-orange-200 hover:bg-orange-100 transition-colors">
+                      <span className="material-symbols-outlined text-[16px]">reply</span>
+                      退回
+                    </button>
+                  )}
+                  <button onClick={() => setSelectedPlan(null)}
+                    className="px-6 py-2.5 bg-slate-100 text-slate-700 text-sm font-bold rounded-lg hover:bg-slate-200 transition-colors">
+                    关闭
                   </button>
-                )}
-                <button onClick={() => setSelectedPlan(null)}
-                  className="px-6 py-2.5 bg-slate-100 text-slate-700 text-sm font-bold rounded-lg hover:bg-slate-200 transition-colors">
-                  关闭
-                </button>
+                </div>
               </div>
             </div>
           );

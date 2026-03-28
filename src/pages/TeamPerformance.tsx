@@ -87,6 +87,11 @@ export default function TeamPerformance({ navigate }: { navigate: (view: string)
     setSubmitting(true);
     try {
       const token = localStorage.getItem('token');
+      if (!token) {
+        alert('登录已过期，请重新登录');
+        window.location.reload();
+        return;
+      }
       const targetValue = `S: ${data.s}\nM: ${data.m}\nT: ${data.t}`;
       
       const createRes = await fetch('/api/perf/plans', {
@@ -101,25 +106,35 @@ export default function TeamPerformance({ navigate }: { navigate: (view: string)
           target_value: targetValue,
           deadline: data.t,
           collaborators: data.c,
-          assignee_id: data.a || subordinates[0]?.id || '', // 从下拉框获取，未选则默认第一个下属
+          assignee_id: data.a || subordinates[0]?.id || '',
           quarter: '2024 Q2', 
           creator_id: currentUser?.id,
-          approver_id: currentUser?.id // 主管自己做审批人
+          approver_id: currentUser?.id
         })
       });
+
+      if (createRes.status === 401) {
+        alert('登录已过期，请重新登录后再试');
+        localStorage.removeItem('token');
+        window.location.reload();
+        return;
+      }
+
       const createData = await createRes.json();
       
-      // 2. 将草稿提交并立刻审批通过 -> 进入 in_progress 状态
       if (createData.code === 0 && createData.data?.id) {
         const planId = createData.data.id;
         await fetch(`/api/perf/plans/${planId}/submit`, { method: 'POST', headers: { 'Authorization': `Bearer ${token}` } });
         await fetch(`/api/perf/plans/${planId}/approve`, { method: 'POST', headers: { 'Authorization': `Bearer ${token}` } });
         
         setIsAssignModalOpen(false);
-        fetchTeamStatus(); // Refresh subordinates' tasks after assigning
+        fetchTeamStatus();
+      } else {
+        alert(createData.message || '创建任务失败，请重试');
       }
     } catch (err) {
       console.error(err);
+      alert('网络异常，请检查网络连接后重试');
     } finally {
       setSubmitting(false);
     }
@@ -289,6 +304,7 @@ export default function TeamPerformance({ navigate }: { navigate: (view: string)
           setSubmitting(true);
           try {
             const token = localStorage.getItem('token');
+            if (!token) { alert('登录已过期，请重新登录'); window.location.reload(); return; }
             const targetValue = `S: ${data.s}\nM: ${data.m}\nT: ${data.t}`;
             const res = await fetch('/api/perf/plans', {
               method: 'POST',
@@ -308,13 +324,14 @@ export default function TeamPerformance({ navigate }: { navigate: (view: string)
                 approver_id: currentUser?.id,
               })
             });
+            if (res.status === 401) { alert('登录已过期，请重新登录后再试'); localStorage.removeItem('token'); window.location.reload(); return; }
             const json = await res.json();
             if (json.code === 0) {
               alert('草稿已保存');
               setIsAssignModalOpen(false);
               fetchTeamStatus();
             } else { alert(json.message || '保存失败'); }
-          } catch { alert('保存失败'); } finally { setSubmitting(false); }
+          } catch { alert('网络异常，请重试'); } finally { setSubmitting(false); }
         }}
         initialData={{
           a: subordinates[0]?.id || '',
@@ -357,7 +374,10 @@ export default function TeamPerformance({ navigate }: { navigate: (view: string)
             planTime: decoded.planTime,
             doTime: decoded.doTime,
             checkTime: decoded.checkTime,
-            actTime: decoded.actTime
+            actTime: decoded.actTime,
+            approver_id: selectedTask.approver_id || currentUser?.id,
+            creator_id: selectedTask.creator_id || currentUser?.id,
+            assignee_id: selectedTask.assignee_id
           };
         })()}
       />

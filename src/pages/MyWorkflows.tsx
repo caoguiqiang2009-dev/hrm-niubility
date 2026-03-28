@@ -28,6 +28,8 @@ const STATUS_MAP: Record<string, { label: string; color: string; bg: string }> =
   pending_admin: { label: '待总经理复核', color: 'text-orange-600', bg: 'bg-orange-50' },
   open:          { label: '进行中',     color: 'text-blue-600',  bg: 'bg-blue-50' },
   completed:     { label: '已完成',     color: 'text-emerald-600', bg: 'bg-emerald-50' },
+  in_progress:   { label: '进行中',     color: 'text-blue-600',   bg: 'bg-blue-50' },
+  returned:      { label: '已退回',     color: 'text-orange-600', bg: 'bg-orange-50' },
 };
 
 function StatusBadge({ status }: { status: string }) {

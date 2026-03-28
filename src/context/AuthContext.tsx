@@ -131,14 +131,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     initializeAuth();
   }, []);
 
-  // ── 外部浏览器 30 分钟无操作自动登出 ──────────────────────────────
+  // ── 外部浏览器 2 小时无操作自动登出 ──────────────────────────────
   const inactivityTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const INACTIVITY_TIMEOUT = 30 * 60 * 1000; // 30 minutes
+  const warningTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const INACTIVITY_TIMEOUT = 2 * 60 * 60 * 1000; // 2 hours
+  const WARNING_BEFORE = 5 * 60 * 1000; // warn 5 min before
 
   const resetInactivityTimer = useCallback(() => {
     if (inactivityTimerRef.current) clearTimeout(inactivityTimerRef.current);
+    if (warningTimerRef.current) clearTimeout(warningTimerRef.current);
+    // 提前 5 分钟弹出警告
+    warningTimerRef.current = setTimeout(() => {
+      alert('⚠️ 您已长时间未操作，5 分钟后将自动退出登录。请保存您的工作。');
+    }, INACTIVITY_TIMEOUT - WARNING_BEFORE);
     inactivityTimerRef.current = setTimeout(() => {
-      // 30 分钟无操作 → 清除登录状态并跳转扫码
       localStorage.removeItem('token');
       localStorage.setItem('hrm_session_expired', '1');
       setCurrentUser(null);
@@ -151,13 +157,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // 仅对外部浏览器启用超时检测（企微内部浏览器免密，无需超时）
     if (isWecom || !currentUser) return;
 
-    const events = ['mousedown', 'mousemove', 'keydown', 'scroll', 'touchstart', 'click'];
+    const events = ['mousedown', 'mousemove', 'keydown', 'scroll', 'touchstart', 'click', 'input', 'change'];
     events.forEach(ev => window.addEventListener(ev, resetInactivityTimer, { passive: true }));
     resetInactivityTimer(); // 初始启动计时器
 
     return () => {
       events.forEach(ev => window.removeEventListener(ev, resetInactivityTimer));
       if (inactivityTimerRef.current) clearTimeout(inactivityTimerRef.current);
+      if (warningTimerRef.current) clearTimeout(warningTimerRef.current);
     };
   }, [currentUser, resetInactivityTimer]);
 

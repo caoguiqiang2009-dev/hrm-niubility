@@ -7,7 +7,7 @@ const VALID_TRANSITIONS: Record<string, string[]> = {
   pending_review: ['approved', 'rejected'],
   rejected: ['draft'],
   approved: ['in_progress'],
-  in_progress: ['pending_assessment'],
+  in_progress: ['pending_assessment', 'returned'],
   pending_assessment: ['assessed'],
   assessed: ['pending_reward'],
   pending_reward: ['completed'],
@@ -51,6 +51,11 @@ export async function transitionPlan(
     case 'rejected':
       if (extra?.comment) updates.push(`reject_reason = '${extra.comment}'`);
       notifyAction = 'rejected';
+      notifyUsers.push(plan.creator_id);
+      break;
+    case 'returned':
+      if (extra?.comment) updates.push(`reject_reason = '${extra.comment.replace(/'/g, "''")}'`);
+      notifyAction = 'returned';
       notifyUsers.push(plan.creator_id);
       break;
     case 'assessed':

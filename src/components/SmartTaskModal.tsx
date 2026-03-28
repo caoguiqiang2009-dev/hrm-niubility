@@ -1202,71 +1202,129 @@ export default function SmartTaskModal({ isOpen, onClose, onSubmit, title, type,
                 <div className="flex flex-wrap items-center gap-2 text-[12px]">
                   {(() => {
                     const allLogs = initialData?.logs || fetchedLogs;
-                    // Filter out progress updates from approval path - only show status changes
                     const statusLogs = allLogs.filter((log: any) => log.action !== 'progress_update');
-                    // Get latest progress for summary
                     const progressLogs = allLogs.filter((log: any) => log.action === 'progress_update');
                     const latestProgress = progressLogs.length > 0 ? progressLogs[progressLogs.length - 1] : null;
 
-                    return statusLogs.length > 0 ? (
-                    <>
-                    {statusLogs.map((log: any, i: number, arr: any[]) => {
+                    // 把 action 转为友好标签
+                    const actionLabel = (log: any) => {
                       const isReject = log.new_value === 'rejected' || log.action === 'reject';
                       const isApprove = log.new_value === 'approved' || log.action === 'approve';
                       const isWithdraw = log.action === 'withdraw';
-                      return (
-                        <React.Fragment key={i}>
-                          <div className={`flex flex-col rounded-lg px-3 py-1.5 border ${
-                            isReject ? 'bg-red-50 border-red-100 text-red-700' : 
-                            isApprove ? 'bg-emerald-50 border-emerald-100 text-emerald-700' :
-                            isWithdraw ? 'bg-amber-50 border-amber-100 text-amber-700' :
-                            'bg-white border-slate-200 text-slate-700 shadow-sm'
-                          }`}>
-                            <span className="font-bold">{log.user_name || log.user_id}</span>
-                            <span className="text-[10px] opacity-70">
-                              {log.action === 'submit' ? '发起申请' : 
-                               log.action === 'resubmit' ? '重新提交' :
-                               isWithdraw ? '已撤回' :
-                               isReject ? '已驳回' : 
-                               isApprove ? '已通过' : log.action || '审阅中'}
-                            </span>
-                          </div>
-                          {i < arr.length - 1 && (
-                            <span className="material-symbols-outlined text-[16px] text-slate-300">arrow_right_alt</span>
-                          )}
-                        </React.Fragment>
-                      );
-                    })}
-                    {/* Show latest progress as a single summary node */}
-                    {latestProgress && (
+                      const isReturn = log.new_value === 'returned' || log.action === 'return';
+                      if (log.action === 'submit') return '发起申请';
+                      if (log.action === 'resubmit') return '重新提交';
+                      if (isWithdraw) return '已撤回';
+                      if (isReject) return '已驳回';
+                      if (isApprove) return '已通过';
+                      if (isReturn) return '已退回';
+                      if (log.action === 'status_change') {
+                        const v = log.new_value;
+                        if (v === 'pending_review') return '发起申请';
+                        if (v === 'in_progress') return '已通过';
+                        if (v === 'rejected') return '已驳回';
+                        if (v === 'returned') return '已退回';
+                        if (v === 'assessed') return '已评分';
+                        if (v === 'completed') return '已完成';
+                        return '状态变更';
+                      }
+                      return log.action || '审阅中';
+                    };
+
+                    const actionStyle = (log: any) => {
+                      const isReject = log.new_value === 'rejected' || log.action === 'reject';
+                      const isApprove = log.new_value === 'approved' || log.action === 'approve' || log.new_value === 'in_progress';
+                      const isWithdraw = log.action === 'withdraw';
+                      const isReturn = log.new_value === 'returned' || log.action === 'return';
+                      if (isReject) return 'bg-red-50 border-red-100 text-red-700';
+                      if (isReturn) return 'bg-orange-50 border-orange-100 text-orange-700';
+                      if (isApprove) return 'bg-emerald-50 border-emerald-100 text-emerald-700';
+                      if (isWithdraw) return 'bg-amber-50 border-amber-100 text-amber-700';
+                      return 'bg-white border-slate-200 text-slate-700 shadow-sm';
+                    };
+
+                    // 解析 approver 名称
+                    const approverName = (initialData as any).approver_name 
+                      || ((initialData as any).approver_id ? (users.find(u => u.id === (initialData as any).approver_id)?.name || (initialData as any).approver_id) : null);
+                    // 解析 assignee 名称
+                    const assigneeName = (initialData as any).assignee_name 
+                      || ((initialData as any).assignee_id ? (users.find(u => u.id === (initialData as any).assignee_id)?.name || (initialData as any).assignee_id) : null);
+                    // 解析 creator 名称
+                    const creatorName = (initialData as any).creator_name 
+                      || ((initialData as any).creator_id ? (users.find(u => u.id === (initialData as any).creator_id)?.name || (initialData as any).creator_id) : null);
+
+                    // 构建完整流程节点
+                    const currentStatus = initialData.status || 'draft';
+                    const flowSteps: { name: string; label: string; style: string; future?: boolean }[] = [];
+
+                    if (statusLogs.length > 0) {
+                      // 已有日志 → 显示历史节点
+                      statusLogs.forEach((log: any) => {
+                        flowSteps.push({
+                          name: log.user_name || log.user_id,
+                          label: actionLabel(log),
+                          style: actionStyle(log)
+                        });
+                      });
+                      // 进度汇总
+                      if (latestProgress) {
+                        flowSteps.push({
+                          name: latestProgress.user_name || latestProgress.user_id,
+                          label: `进度${latestProgress.new_value}% (${progressLogs.length}次更新)`,
+                          style: 'bg-blue-50 border-blue-100 text-blue-700'
+                        });
+                      }
+                    } else {
+                      // 无日志（草稿）→ 显示创建人节点
+                      flowSteps.push({
+                        name: creatorName || '创建人',
+                        label: currentStatus === 'draft' ? '草稿' : '已创建',
+                        style: 'bg-slate-100 border-slate-200 text-slate-500'
+                      });
+                    }
+
+                    // 根据当前状态添加未来节点
+                    const futureSteps: { name: string; label: string }[] = [];
+                    if (currentStatus === 'draft') {
+                      futureSteps.push({ name: approverName || '审批人', label: '待审核' });
+                      futureSteps.push({ name: assigneeName || creatorName || '执行人', label: '待执行' });
+                    } else if (currentStatus === 'pending_review') {
+                      futureSteps.push({ name: approverName || '审批人', label: '待审核' });
+                      futureSteps.push({ name: assigneeName || creatorName || '执行人', label: '待执行' });
+                    } else if (currentStatus === 'in_progress') {
+                      futureSteps.push({ name: approverName || '审批人', label: '待考核' });
+                    } else if (currentStatus === 'pending_assessment') {
+                      futureSteps.push({ name: approverName || '审批人', label: '待评分' });
+                    } else if (currentStatus === 'assessed') {
+                      futureSteps.push({ name: 'HR', label: '待发放奖励' });
+                    }
+
+                    return (
                       <>
-                        <span className="material-symbols-outlined text-[16px] text-slate-300">arrow_right_alt</span>
-                        <div className="flex flex-col rounded-lg px-3 py-1.5 border bg-blue-50 border-blue-100 text-blue-700">
-                          <span className="font-bold">{latestProgress.user_name || latestProgress.user_id}</span>
-                          <span className="text-[10px] opacity-70">进度{latestProgress.new_value}% ({progressLogs.length}次更新)</span>
-                        </div>
+                        {flowSteps.map((step, i) => (
+                          <React.Fragment key={`log-${i}`}>
+                            <div className={`flex flex-col rounded-lg px-3 py-1.5 border ${step.style}`}>
+                              <span className="font-bold">{step.name}</span>
+                              <span className="text-[10px] opacity-70">{step.label}</span>
+                            </div>
+                            {(i < flowSteps.length - 1 || futureSteps.length > 0) && (
+                              <span className="material-symbols-outlined text-[16px] text-slate-300">arrow_right_alt</span>
+                            )}
+                          </React.Fragment>
+                        ))}
+                        {futureSteps.map((step, i) => (
+                          <React.Fragment key={`future-${i}`}>
+                            <div className="flex flex-col rounded-lg px-3 py-1.5 border border-dashed border-amber-300 bg-amber-50 text-amber-600">
+                              <span className="font-bold">{step.name}</span>
+                              <span className="text-[10px] opacity-80">{step.label}</span>
+                            </div>
+                            {i < futureSteps.length - 1 && (
+                              <span className="material-symbols-outlined text-[16px] text-slate-300">arrow_right_alt</span>
+                            )}
+                          </React.Fragment>
+                        ))}
                       </>
-                    )}
-                    {initialData?.status && !['approved', 'rejected', 'completed', 'assessed'].includes(initialData.status) && (
-                      <>
-                        <span className="material-symbols-outlined text-[16px] text-slate-300">arrow_right_alt</span>
-                        <div className="flex flex-col rounded-lg px-3 py-1.5 border border-dashed border-amber-300 bg-amber-50 text-amber-600">
-                          <span className="font-bold">{initialData.approver_name || ((initialData as any).approver_id ? (users.find(u => u.id === (initialData as any).approver_id)?.name || (initialData as any).approver_id) : '待指定')}</span>
-                          <span className="text-[10px] opacity-80">
-                            {initialData.status === 'pending_review' ? '待审核' : 
-                             initialData.status === 'in_progress' ? '进行中' :
-                             initialData.status === 'draft' ? '待提交' : '待处理'}
-                          </span>
-                        </div>
-                      </>
-                    )}
-                    </>
-                  ) : (
-                    <div className="flex flex-col rounded-lg px-3 py-1.5 border bg-slate-100 border-slate-200 text-slate-500">
-                      <span className="font-bold">{initialData.status === 'draft' ? '草稿' : '已创建'}</span>
-                      <span className="text-[10px] opacity-70">等待提交</span>
-                    </div>
-                  );
+                    );
                   })()}
                 </div>
               </div>

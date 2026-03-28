@@ -180,8 +180,8 @@ router.get('/reviewed', authMiddleware, (req: AuthRequest, res) => {
      FROM pool_join_requests jr
      LEFT JOIN users u ON jr.user_id = u.id
      LEFT JOIN pool_tasks pt ON jr.pool_task_id = pt.id
-     WHERE jr.reviewed_by = ? AND jr.status IN ('approved', 'rejected')
-     ORDER BY jr.updated_at DESC`
+     WHERE jr.reviewer_id = ? AND jr.status IN ('approved', 'rejected')
+     ORDER BY jr.reviewed_at DESC`
   ).all(userId);
   joinReviewed.forEach((j: any) => {
     j.title = `${j.creator_name || j.user_id} 申请加入「${j.task_title || '任务#' + j.pool_task_id}」`;

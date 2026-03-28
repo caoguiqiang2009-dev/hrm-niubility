@@ -100,6 +100,32 @@ router.post('/plans/:id/withdraw', authMiddleware, (req: AuthRequest, res) => {
   return res.json({ code: 0, message: '已撤回，可重新编辑后提交' });
 });
 
+// 退回：被指派人退回上级下发的绩效 (in_progress → returned)
+router.post('/plans/:id/return', authMiddleware, async (req: AuthRequest, res) => {
+  const { reason } = req.body;
+  const db = getDb();
+  const plan = db.prepare('SELECT * FROM perf_plans WHERE id = ?').get(req.params.id) as any;
+  if (!plan) return res.status(404).json({ code: 404, message: '计划不存在' });
+  if (plan.assignee_id !== req.userId) return res.status(403).json({ code: 403, message: '只有被指派人可以退回' });
+  if (plan.status !== 'in_progress') return res.json({ code: 400, message: '只有进行中的任务可以退回' });
+
+  const result = await transitionPlan(Number(req.params.id), 'returned', req.userId!, { comment: reason || '被指派人退回' });
+  return res.json({ code: result.success ? 0 : 400, message: result.success ? '已退回，发起人将收到通知' : result.message });
+});
+
+// 删除草稿
+router.delete('/plans/:id', authMiddleware, (req: AuthRequest, res) => {
+  const db = getDb();
+  const plan = db.prepare('SELECT * FROM perf_plans WHERE id = ?').get(req.params.id) as any;
+  if (!plan) return res.status(404).json({ code: 404, message: '计划不存在' });
+  if (plan.creator_id !== req.userId) return res.status(403).json({ code: 403, message: '只有创建人可以删除' });
+  if (plan.status !== 'draft') return res.json({ code: 400, message: '只有草稿可以删除' });
+
+  db.prepare('DELETE FROM perf_logs WHERE plan_id = ?').run(req.params.id);
+  db.prepare('DELETE FROM perf_plans WHERE id = ?').run(req.params.id);
+  return res.json({ code: 0, message: '草稿已删除' });
+});
+
 // 提交审批
 router.post('/plans/:id/submit', authMiddleware, async (req: AuthRequest, res) => {
   const result = await transitionPlan(Number(req.params.id), 'pending_review', req.userId!);

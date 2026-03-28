@@ -17,6 +17,8 @@ interface PerfPlan {
   deadline: string;
   quarter: string;
   collaborators?: string;
+  creator_id: string;
+  assignee_id: string;
 }
 
 const statusMap: Record<string, { label: string, color: string, bg: string }> = {
@@ -26,6 +28,7 @@ const statusMap: Record<string, { label: string, color: string, bg: string }> = 
   completed: { label: '待考核', color: 'text-purple-600', bg: 'bg-purple-100' },
   approved: { label: '已归档', color: 'text-emerald-600', bg: 'bg-emerald-100' },
   rejected: { label: '被驳回', color: 'text-error', bg: 'bg-red-100' },
+  returned: { label: '已退回', color: 'text-orange-600', bg: 'bg-orange-100' },
 };
 
 
@@ -160,27 +163,43 @@ export default function PersonalGoals({ navigate }: { navigate: (view: string) =
     });
   };
 
-  // 重新提交被驳回的任务
+  // 重新提交被驳回/草稿的任务
   const handleResubmitSmart = async (data: SmartTaskData) => {
     if (!editingPlan) return;
     setResubmitting(true);
     try {
       const token = localStorage.getItem('token');
       const targetValue = `S: ${data.s}\nM: ${data.m}\nT: ${data.t}`;
-      await fetch(`/api/perf/plans/${editingPlan.id}/resubmit`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify({
-          title: data.summary || editingPlan.title,
-          description: encodeSmartDescription(data.a_smart, data.r_smart, {
-            plan: data.planTime, do: data.doTime, check: data.checkTime, act: data.actTime
-          }),
-          category: data.taskType || editingPlan.category,
-          target_value: targetValue,
-          deadline: data.t,
-          collaborators: data.c
+      const body = {
+        title: data.summary || editingPlan.title,
+        description: encodeSmartDescription(data.a_smart, data.r_smart, {
+          plan: data.planTime, do: data.doTime, check: data.checkTime, act: data.actTime
         }),
-      });
+        category: data.taskType || editingPlan.category,
+        target_value: targetValue,
+        deadline: data.t,
+        collaborators: data.c
+      };
+
+      if (editingPlan.status === 'draft') {
+        // 草稿：先更新内容，再提交审批
+        await fetch(`/api/perf/plans/${editingPlan.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+          body: JSON.stringify(body),
+        });
+        await fetch(`/api/perf/plans/${editingPlan.id}/submit`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+      } else {
+        // 被驳回：走 resubmit 接口
+        await fetch(`/api/perf/plans/${editingPlan.id}/resubmit`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+          body: JSON.stringify(body),
+        });
+      }
       setEditingPlan(null);
       fetchPlans();
     } catch (err) {
@@ -464,12 +483,12 @@ export default function PersonalGoals({ navigate }: { navigate: (view: string) =
         }}
       />
 
-      {/* 驳回后二次编辑弹窗 */}
+      {/* 驳回/草稿 二次编辑弹窗 */}
       <SmartTaskModal
         isOpen={!!editingPlan}
         onClose={() => setEditingPlan(null)}
         onSubmit={handleResubmitSmart}
-        title="修改并重新提交"
+        title={editingPlan?.status === 'draft' ? '编辑草稿并提交' : '修改并重新提交'}
         type="personal"
         users={users}
         submitting={resubmitting}
@@ -522,20 +541,77 @@ export default function PersonalGoals({ navigate }: { navigate: (view: string) =
             planTime: decoded.planTime,
             doTime: decoded.doTime,
             checkTime: decoded.checkTime,
-            actTime: decoded.actTime
+            actTime: decoded.actTime,
+            approver_id: (selectedPlan as any).approver_id,
+            creator_id: selectedPlan.creator_id,
+            assignee_id: selectedPlan.assignee_id
           };
         })()}
         customFooter={(() => {
           if (!selectedPlan) return null;
           const sp = selectedPlan;
           const pct = sp.progress || 0;
+          const isAssigned = sp.creator_id !== sp.assignee_id; // 上级下发的任务
           const accentColor = {
             in_progress: '#3b82f6', pending_review: '#f59e0b', completed: '#8b5cf6',
-            approved: '#10b981', rejected: '#ef4444', draft: '#94a3b8',
+            approved: '#10b981', rejected: '#ef4444', draft: '#94a3b8', returned: '#f97316',
           }[sp.status] || '#94a3b8';
+
+          // 退回操作
+          const handleReturn = async () => {
+            const reason = prompt('请输入退回原因（可选）：');
+            if (reason === null) return; // 用户取消
+            try {
+              const token = localStorage.getItem('token');
+              const res = await fetch(`/api/perf/plans/${sp.id}/return`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify({ reason: reason || '经线下沟通，退回调整' })
+              });
+              const data = await res.json();
+              if (data.code === 0) {
+                setSelectedPlan(null);
+                fetchPlans();
+              } else { alert(data.message || '退回失败'); }
+            } catch { alert('操作失败'); }
+          };
+
+          // 删除草稿
+          const handleDeleteDraft = async () => {
+            if (!confirm('确定删除这个草稿吗？此操作不可恢复。')) return;
+            try {
+              const token = localStorage.getItem('token');
+              const res = await fetch(`/api/perf/plans/${sp.id}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${token}` }
+              });
+              const data = await res.json();
+              if (data.code === 0) {
+                setSelectedPlan(null);
+                fetchPlans();
+              } else { alert(data.message || '删除失败'); }
+            } catch { alert('操作失败'); }
+          };
+
+          // 提交草稿
+          const handleSubmitDraft = async () => {
+            try {
+              const token = localStorage.getItem('token');
+              const res = await fetch(`/api/perf/plans/${sp.id}/submit`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}` }
+              });
+              const data = await res.json();
+              if (data.code === 0) {
+                setSelectedPlan(null);
+                fetchPlans();
+              } else { alert(data.message || '提交失败'); }
+            } catch { alert('操作失败'); }
+          };
           
           return (
             <div className="w-full flex items-end justify-between gap-4">
+              {/* 进度条区域 */}
               <div className="flex-1 max-w-md bg-slate-50 dark:bg-slate-800/40 rounded-xl px-4 py-3">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-xs font-bold text-slate-600 dark:text-slate-300 flex items-center gap-1.5">
@@ -567,12 +643,42 @@ export default function PersonalGoals({ navigate }: { navigate: (view: string) =
                   )}
                 </div>
               </div>
-              <div className="flex items-center gap-3 shrink-0">
+              {/* 操作按钮区域 */}
+              <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
+                {/* 草稿：编辑 + 提交 + 删除 */}
+                {sp.status === 'draft' && (
+                  <>
+                    <button onClick={handleDeleteDraft}
+                      className="flex items-center gap-1.5 px-4 py-2.5 text-red-500 bg-red-50 text-sm font-bold rounded-lg border border-red-200 hover:bg-red-100 transition-colors">
+                      <span className="material-symbols-outlined text-[16px]">delete</span>
+                      删除
+                    </button>
+                    <button onClick={() => { setSelectedPlan(null); handleOpenEdit(sp); }}
+                      className="flex items-center gap-1.5 px-4 py-2.5 bg-blue-50 text-blue-600 text-sm font-bold rounded-lg border border-blue-200 hover:bg-blue-100 transition-colors">
+                      <span className="material-symbols-outlined text-[16px]">edit</span>
+                      编辑
+                    </button>
+                    <button onClick={handleSubmitDraft}
+                      className="flex items-center gap-1.5 px-5 py-2.5 bg-[#005ea4] text-white text-sm font-bold rounded-lg hover:bg-[#004d87] transition-colors shadow-sm">
+                      <span className="material-symbols-outlined text-[16px]">send</span>
+                      提交审批
+                    </button>
+                  </>
+                )}
+                {/* 被驳回：修改后重新提交 */}
                 {sp.status === 'rejected' && (
                   <button onClick={() => { setSelectedPlan(null); handleOpenEdit(sp); }}
                     className="flex items-center gap-2 px-5 py-2.5 bg-amber-50 text-amber-600 text-sm font-bold rounded-lg border border-amber-200 hover:bg-amber-100 transition-colors">
                     <span className="material-symbols-outlined text-[16px]">edit_note</span>
                     修改后重新提交
+                  </button>
+                )}
+                {/* 进行中 + 上级下发：退回按钮 */}
+                {sp.status === 'in_progress' && isAssigned && (
+                  <button onClick={handleReturn}
+                    className="flex items-center gap-1.5 px-4 py-2.5 bg-orange-50 text-orange-600 text-sm font-bold rounded-lg border border-orange-200 hover:bg-orange-100 transition-colors">
+                    <span className="material-symbols-outlined text-[16px]">reply</span>
+                    退回
                   </button>
                 )}
                 <button onClick={() => setSelectedPlan(null)}
