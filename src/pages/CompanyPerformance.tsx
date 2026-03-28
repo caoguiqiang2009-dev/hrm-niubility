@@ -498,26 +498,74 @@ export default function CompanyPerformance({ navigate }: { navigate: (view: stri
               <span className="material-symbols-outlined animate-spin mr-2">progress_activity</span>加载中…
             </div>
           ) : activeTab === 'task' ? (
-            <div className={`grid gap-5 ${isMobile ? 'grid-cols-1' : 'grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5'}`}>
+            <div className={`grid ${isMobile ? 'grid-cols-1 gap-2.5' : 'grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-5'}`}>
               {displayed.map(task => {
                 const badge = getBadge(task);
                 const full = isFull(task);
                 const pct = task.max_participants > 0 ? Math.round((task.current_participants / task.max_participants) * 100) : 0;
                 const isScore = task.reward_type === 'score';
-                return (
+                return isMobile ? (
+                  /* ── 移动端紧凑卡片 ── */
                   <div key={task.id}
-                    className={`group bg-surface-container-low border border-outline-variant/10 hover:shadow-2xl hover:shadow-primary/5 transition-all duration-300 flex flex-col cursor-pointer ${isMobile ? 'rounded-xl p-3' : 'rounded-2xl p-5'}`}
+                    className="group bg-surface-container-low rounded-xl border border-outline-variant/10 active:scale-[0.98] transition-transform cursor-pointer overflow-hidden"
                     onClick={() => !full && openTaskDetail(task)}
                   >
-                    <div className={`flex justify-between items-start ${isMobile ? 'mb-2' : 'mb-3'}`}>
-                      <span className={`${badge.cls} text-[10px] font-bold px-2 py-0.5 rounded-full uppercase label-font`}>{badge.label}</span>
-                      <div className="flex items-center gap-1">
+                    <div className="flex items-stretch">
+                      {/* 左侧：奖金色带 */}
+                      <div className={`w-1 shrink-0 ${isScore ? 'bg-gradient-to-b from-amber-400 to-orange-500' : 'bg-gradient-to-b from-blue-400 to-blue-600'}`} />
+                      {/* 右侧：内容 */}
+                      <div className="flex-1 px-3 py-2.5">
+                        {/* 第一行：标题 + 奖金 */}
+                        <div className="flex items-start justify-between gap-2 mb-1.5">
+                          <h3 className="text-[13px] font-bold text-on-surface leading-tight line-clamp-1 flex-1">{task.title}</h3>
+                          {isScore ? (
+                            <span className="text-orange-500 font-black text-sm tracking-tight whitespace-nowrap">{task.bonus.toLocaleString()}分</span>
+                          ) : (
+                            <span className="text-primary font-black text-sm tracking-tight whitespace-nowrap">¥{task.bonus.toLocaleString()}</span>
+                          )}
+                        </div>
+                        {/* 第二行：标签 + 进度 + 按钮 */}
+                        <div className="flex items-center gap-1.5">
+                          <span className={`${badge.cls} text-[9px] font-bold px-1.5 py-px rounded-full shrink-0`}>{badge.label}</span>
+                          {task.department && <span className="text-[10px] text-on-surface-variant">{task.department}</span>}
+                          <span className={`text-[10px] px-1 rounded ${DIFFICULTY_COLOR[task.difficulty] || 'bg-slate-100 text-slate-600'}`}>
+                            {DIFFICULTY_MAP[task.difficulty] || task.difficulty}
+                          </span>
+                          {/* 进度条 (内联迷你) */}
+                          <div className="flex-1 flex items-center gap-1 ml-auto">
+                            <div className="flex-1 max-w-[60px] bg-surface-container-highest h-1 rounded-full overflow-hidden">
+                              <div className="bg-primary h-full rounded-full transition-all" style={{ width: `${pct}%` }}></div>
+                            </div>
+                            <span className="text-[10px] text-on-surface-variant whitespace-nowrap">{task.current_participants}/{task.max_participants}</span>
+                          </div>
+                          {/* 操作按钮 */}
+                          {full ? (
+                            <span className="text-[10px] text-on-surface-variant bg-surface-container-lowest px-2 py-0.5 rounded font-medium shrink-0">已满</span>
+                          ) : (
+                            <button onClick={(e) => { e.stopPropagation(); openTaskDetail(task); }}
+                              className="text-[10px] text-primary bg-primary/5 border border-primary/20 px-2.5 py-0.5 rounded-md font-bold shrink-0 hover:bg-primary hover:text-white transition-colors">
+                              加入
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  /* ── 桌面端原始卡片 ── */
+                  <div key={task.id}
+                    className="group bg-surface-container-low rounded-2xl p-5 border border-outline-variant/10 hover:shadow-2xl hover:shadow-primary/5 transition-all duration-300 flex flex-col cursor-pointer"
+                    onClick={() => !full && openTaskDetail(task)}
+                  >
+                    <div className="flex justify-between items-start mb-3">
+                      <span className={`${badge.cls} text-[10px] font-bold px-2.5 py-1 rounded-full uppercase label-font`}>{badge.label}</span>
+                      <div className="flex items-center gap-1.5">
                         {isScore ? (
-                          <span className={`text-orange-500 font-black tracking-tight ${isMobile ? 'text-base' : 'text-lg'}`}>{task.bonus.toLocaleString()}分</span>
+                          <span className="text-orange-500 font-black text-lg tracking-tight">{task.bonus.toLocaleString()}分</span>
                         ) : (
-                          <span className={`text-primary font-black tracking-tight ${isMobile ? 'text-base' : 'text-lg'}`}>¥{task.bonus.toLocaleString()}</span>
+                          <span className="text-primary font-black text-lg tracking-tight">¥{task.bonus.toLocaleString()}</span>
                         )}
-                        {canDeleteTask && !isMobile && (
+                        {canDeleteTask && (
                           <button onClick={(e) => { e.stopPropagation(); handleDelete(task); }}
                             title="移入回收站"
                             className="opacity-0 group-hover:opacity-100 flex items-center justify-center w-6 h-6 rounded-full text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-all">
@@ -526,19 +574,19 @@ export default function CompanyPerformance({ navigate }: { navigate: (view: stri
                         )}
                       </div>
                     </div>
-                    <h3 className={`font-bold text-on-surface line-clamp-2 leading-snug ${isMobile ? 'text-[13px] mb-2' : 'text-sm mb-3'}`}>{task.title}</h3>
-                    <div className={`flex flex-wrap gap-1 ${isMobile ? 'mb-2' : 'mb-4'}`}>
-                      {task.department && <span className="px-1.5 py-0.5 bg-surface-container-lowest text-on-surface-variant text-[10px] rounded border border-outline-variant/20">{task.department}</span>}
-                      <span className={`px-1.5 py-0.5 text-[10px] rounded border border-transparent ${DIFFICULTY_COLOR[task.difficulty] || 'bg-slate-100 text-slate-600'}`}>
-                        {DIFFICULTY_MAP[task.difficulty] || task.difficulty}
+                    <h3 className="text-sm font-bold text-on-surface mb-3 line-clamp-2 leading-snug">{task.title}</h3>
+                    <div className="flex flex-wrap gap-1.5 mb-4">
+                      {task.department && <span className="px-2 py-0.5 bg-surface-container-lowest text-on-surface-variant text-[10px] rounded border border-outline-variant/20">{task.department}</span>}
+                      <span className={`px-2 py-0.5 text-[10px] rounded border border-transparent ${DIFFICULTY_COLOR[task.difficulty] || 'bg-slate-100 text-slate-600'}`}>
+                        难度: {DIFFICULTY_MAP[task.difficulty] || task.difficulty}
                       </span>
                     </div>
                     <div className="mt-auto">
-                      <div className="flex justify-between items-center text-[10px] text-on-surface-variant mb-1">
-                        <span>{task.current_participants}/{task.max_participants} 人</span>
+                      <div className="flex justify-between items-center text-[10px] text-on-surface-variant mb-1.5">
+                        <span>{task.current_participants}/{task.max_participants} 人参与</span>
                         <span className="font-bold text-primary">{pct}%</span>
                       </div>
-                      <div className={`w-full bg-surface-container-highest rounded-full overflow-hidden ${isMobile ? 'h-1 mb-2.5' : 'h-1.5 mb-4'}`}>
+                      <div className="w-full bg-surface-container-highest h-1.5 rounded-full overflow-hidden mb-4">
                         <div className="bg-primary h-full rounded-full transition-all" style={{ width: `${pct}%` }}></div>
                       </div>
                       {full ? (
