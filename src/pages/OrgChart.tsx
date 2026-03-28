@@ -308,7 +308,7 @@ function MemberCard({
 // ──────────────────── 主组件 ────────────────────
 export default function OrgChart({ navigate }: { navigate: (view: string) => void }) {
   const { currentUser, hasPermission } = useAuth();
-  const canManage = hasPermission('manage_users');
+  const canManage = hasPermission('edit_org_info');
 
   const [tree, setTree] = useState<DeptNode[]>([]);
   const [selectedDeptId, setSelectedDeptId] = useState<number | null>(null);
