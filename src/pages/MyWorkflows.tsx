@@ -3,14 +3,16 @@ import Sidebar from '../components/Sidebar';
 import { useAuth } from '../context/AuthContext';
 import SmartTaskModal from '../components/SmartTaskModal';
 import { useIsMobile } from '../hooks/useIsMobile';
+import { PoolModule } from './AdminPanel';
 
 interface MyWorkflowsProps {
   navigate: (view: string) => void;
+  initialTab?: TabKey;
 }
 
-type TabKey = 'initiated' | 'pending' | 'reviewed' | 'cc';
+type TabKey = 'initiated' | 'pending' | 'reviewed' | 'cc' | 'pool_mgmt';
 
-const TABS: { key: TabKey; label: string; icon: string; emptyText: string }[] = [
+const BASE_TABS: { key: TabKey; label: string; icon: string; emptyText: string }[] = [
   { key: 'initiated', label: '我发起的', icon: 'send', emptyText: '暂无发起的流程' },
   { key: 'pending',   label: '待我审核', icon: 'pending_actions', emptyText: '暂无待审核流程' },
   { key: 'reviewed',  label: '我已审核', icon: 'task_alt', emptyText: '暂无已审核流程' },
@@ -24,8 +26,9 @@ const STATUS_MAP: Record<string, { label: string; color: string; bg: string }> =
   rejected:      { label: '已驳回',     color: 'text-red-500',   bg: 'bg-red-50' },
   assessed:      { label: '已评分',     color: 'text-purple-600', bg: 'bg-purple-50' },
   pending_review:{ label: '待审核',     color: 'text-amber-600',  bg: 'bg-amber-50' },
+  pending_dept_review:{ label: '待部门审批', color: 'text-orange-600',  bg: 'bg-orange-50' },
   pending_hr:    { label: '待人事审核', color: 'text-amber-600', bg: 'bg-amber-50' },
-  pending_admin: { label: '待总经理复核', color: 'text-orange-600', bg: 'bg-orange-50' },
+  pending_admin: { label: '待总经理审批', color: 'text-orange-600', bg: 'bg-orange-50' },
   open:          { label: '进行中',     color: 'text-blue-600',  bg: 'bg-blue-50' },
   completed:     { label: '已完成',     color: 'text-emerald-600', bg: 'bg-emerald-50' },
   in_progress:   { label: '进行中',     color: 'text-blue-600',   bg: 'bg-blue-50' },
@@ -41,6 +44,7 @@ function FlowTypeTag({ type }: { type: string }) {
   if (type === 'perf_plan') return <span className="text-[10px] font-bold px-2 py-0.5 rounded-full text-blue-600 bg-blue-50 border border-blue-100">绩效计划</span>;
   if (type === 'proposal') return <span className="text-[10px] font-bold px-2 py-0.5 rounded-full text-purple-600 bg-purple-50 border border-purple-100">绩效提案</span>;
   if (type === 'pool_join') return <span className="text-[10px] font-bold px-2 py-0.5 rounded-full text-emerald-600 bg-emerald-50 border border-emerald-100">加入申请</span>;
+  if (type === 'test_assignment') return <span className="text-[10px] font-bold px-2 py-0.5 rounded-full text-indigo-600 bg-indigo-50 border border-indigo-100">能力测评</span>;
   return <span className="text-[10px] font-bold px-2 py-0.5 rounded-full text-slate-500 bg-slate-100">{type}</span>;
 }
 
@@ -59,16 +63,21 @@ function formatDate(d: string) {
   return date.toLocaleDateString();
 }
 
-export default function MyWorkflows({ navigate }: MyWorkflowsProps) {
-  const [activeTab, setActiveTab] = useState<TabKey>('initiated');
+export default function MyWorkflows({ navigate, initialTab }: MyWorkflowsProps) {
+  const [activeTab, setActiveTab] = useState<TabKey>(initialTab || 'initiated');
   const [data, setData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [counts, setCounts] = useState<Record<TabKey, number>>({ initiated: 0, pending: 0, reviewed: 0, cc: 0 });
+  const [counts, setCounts] = useState<Record<TabKey, number>>({ initiated: 0, pending: 0, reviewed: 0, cc: 0, pool_mgmt: 0 });
   const [users, setUsers] = useState<any[]>([]);
   const [selectedTask, setSelectedTask] = useState<{ type: string, data: any, isPending: boolean, originalStatus?: string } | null>(null);
   const [submittingApprovals, setSubmittingApprovals] = useState(false);
   const { currentUser } = useAuth();
   const isMobile = useIsMobile();
+
+  const TABS = [
+    ...BASE_TABS,
+    ...( ['admin', 'hr', 'manager'].includes(currentUser?.role) ? [{ key: 'pool_mgmt' as TabKey, label: '绩效池管理', icon: 'pool', emptyText: '暂无绩效池任务' }] : [] )
+  ];
   
   const token = localStorage.getItem('token');
   const headers = { Authorization: `Bearer ${token}` };
@@ -77,7 +86,14 @@ export default function MyWorkflows({ navigate }: MyWorkflowsProps) {
     fetch('/api/org/users', { headers }).then(r => r.json()).then(j => setUsers(j.data || []));
   }, []);
 
+  useEffect(() => {
+    if (initialTab && ['initiated', 'pending', 'reviewed', 'cc'].includes(initialTab)) {
+      setActiveTab(initialTab as TabKey);
+    }
+  }, [initialTab]);
+
   const fetchTab = async (tab: TabKey) => {
+    if (tab === 'pool_mgmt') { setLoading(false); return; }
     setLoading(true);
     try {
       const token = localStorage.getItem('token');
@@ -111,7 +127,7 @@ export default function MyWorkflows({ navigate }: MyWorkflowsProps) {
 
   useEffect(() => { fetchTab(activeTab); }, [activeTab]);
 
-  const handleApproveReject = async (id: number, flowType: string, action: 'approve'|'reject', comment: string, updatedData?: { bonus?: string; rewardType?: string; maxParticipants?: string }) => {
+  const handleApproveReject = async (id: number, flowType: string, action: 'approve'|'reject', comment: string, updatedData?: any) => {
     setSubmittingApprovals(true);
     try {
       const isPerf = flowType === 'perf_plan';
@@ -132,7 +148,10 @@ export default function MyWorkflows({ navigate }: MyWorkflowsProps) {
             reason: comment,
             ...(updatedData?.bonus !== undefined ? { bonus: updatedData.bonus } : {}),
             ...(updatedData?.rewardType ? { reward_type: updatedData.rewardType } : {}),
-            ...(updatedData?.maxParticipants ? { max_participants: updatedData.maxParticipants } : {})
+            ...(updatedData?.maxParticipants ? { max_participants: updatedData.maxParticipants } : {}),
+            ...(updatedData?.taskType ? { department: updatedData.taskType } : {}),
+            ...(updatedData?.attachments ? { attachments: updatedData.attachments } : {}),
+            ...(updatedData?.s !== undefined ? { s: updatedData.s, m: updatedData.m, a_smart: updatedData.a_smart, r_smart: updatedData.r_smart, t: updatedData.t, summary: updatedData.summary } : {})
           };
 
       const res = await fetch(realEndpoint, {
@@ -207,7 +226,11 @@ export default function MyWorkflows({ navigate }: MyWorkflowsProps) {
         </div>
 
         {/* Content */}
-        {loading ? (
+        {activeTab === 'pool_mgmt' ? (
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/60 dark:border-slate-800 p-6">
+            <PoolModule />
+          </div>
+        ) : loading ? (
           <div className="flex items-center justify-center py-20">
             <div className="w-8 h-8 border-3 border-blue-500 border-t-transparent rounded-full animate-spin" />
           </div>
@@ -223,6 +246,10 @@ export default function MyWorkflows({ navigate }: MyWorkflowsProps) {
                 onClick={async () => {
                   const isPending = activeTab === 'pending';
                   const flowType = item.flow_type || 'unknown';
+                  if (flowType === 'test_assignment') {
+                    navigate('competency');
+                    return;
+                  }
                   try {
                     let fullData = item;
                     let mappedData = { ...fullData };
@@ -260,6 +287,15 @@ export default function MyWorkflows({ navigate }: MyWorkflowsProps) {
                         fullData = { ...j.data, logs: item.logs };
                         const tv = fullData.target_value || '';
                         const desc = fullData.description || '';
+                        // Safely parse attachments
+                        let parsedAttachments: any[] = [];
+                        try {
+                          if (Array.isArray(fullData.attachments)) {
+                            parsedAttachments = fullData.attachments;
+                          } else if (typeof fullData.attachments === 'string' && fullData.attachments) {
+                            parsedAttachments = JSON.parse(fullData.attachments);
+                          }
+                        } catch { parsedAttachments = []; }
                         mappedData = {
                           ...fullData,
                           summary: fullData.title,
@@ -272,20 +308,33 @@ export default function MyWorkflows({ navigate }: MyWorkflowsProps) {
                           doTime: desc.match(/\[PDCA-Do\]:\s*(.*?)(?=\n\[PDCA-Check\]:|$)/s)?.[1] || '',
                           checkTime: desc.match(/\[PDCA-Check\]:\s*(.*?)(?=\n\[PDCA-Act\]:|$)/s)?.[1] || '',
                           actTime: desc.match(/\[PDCA-Act\]:\s*(.*)/s)?.[1] || '',
+                          attachments: parsedAttachments,
                         };
                       }
                     } else if (flowType === 'proposal') {
                       const desc = fullData.description || fullData.content || '';
                       if (desc.includes('【目标 S】')) {
+                        // Safely parse attachments
+                        let parsedAttachments: any[] = [];
+                        try {
+                          if (Array.isArray(fullData.attachments)) {
+                            parsedAttachments = fullData.attachments;
+                          } else if (typeof fullData.attachments === 'string' && fullData.attachments) {
+                            parsedAttachments = JSON.parse(fullData.attachments);
+                          }
+                        } catch { parsedAttachments = []; }
                         mappedData = {
                           ...fullData,
                           status: fullData.proposal_status,
                           summary: fullData.title,
+                          rewardType: fullData.reward_type || 'money',
+                          maxParticipants: fullData.max_participants || 5,
                           s: desc.match(/【目标 S】(.*?)(\n【指标 M】|$)/s)?.[1] || '',
                           m: desc.match(/【指标 M】(.*?)(\n【方案 A】|$)/s)?.[1] || '',
                           a_smart: desc.match(/【方案 A】(.*?)(\n【相关 R】|$)/s)?.[1] || '',
                           r_smart: desc.match(/【相关 R】(.*?)(\n【时限 T】|$)/s)?.[1] || '',
                           t: desc.match(/【时限 T】(.*?)(\n【PDCA】|$)/s)?.[1] || '',
+                          attachments: parsedAttachments,
                         };
                         const pdca = desc.match(/【PDCA】\n(.*)/s)?.[1] || '';
                         if (pdca) {
@@ -299,6 +348,10 @@ export default function MyWorkflows({ navigate }: MyWorkflowsProps) {
                           ...fullData,
                           status: fullData.proposal_status,
                           summary: fullData.title,
+                          rewardType: fullData.reward_type || 'money',
+                          maxParticipants: fullData.max_participants || 5,
+                          taskType: fullData.department,
+                          attachments: fullData.attachments ? JSON.parse(fullData.attachments) : [],
                           s: desc
                         };
                       }
@@ -326,7 +379,9 @@ export default function MyWorkflows({ navigate }: MyWorkflowsProps) {
         const isEditableByCreator = activeTab === 'initiated' && ['draft', 'rejected'].includes(selectedTask.originalStatus);
         const canWithdraw = activeTab === 'initiated' && ['pending_review', 'pending_hr', 'pending_admin', 'submitted'].includes(selectedTask.originalStatus);
         
-        const handleWithdraw = async () => {
+        const handleWithdraw = async (e: React.MouseEvent) => {
+          e.preventDefault();
+          e.stopPropagation();
           if (!confirm('确定要撤回此申请吗？撤回后可重新编辑后再次提交。')) return;
           setSubmittingApprovals(true);
           try {
@@ -369,14 +424,16 @@ export default function MyWorkflows({ navigate }: MyWorkflowsProps) {
                 target_value: `S: ${formData.s}\nM: ${formData.m}\nT: ${formData.t}`,
                 description: `[Resource]: ${formData.a_smart}\n[Relevance]: ${formData.r_smart}\n[PDCA-Plan]: ${formData.planTime || ''}\n[PDCA-Do]: ${formData.doTime || ''}\n[PDCA-Check]: ${formData.checkTime || ''}\n[PDCA-Act]: ${formData.actTime || ''}`,
                 deadline: formData.t,
-                collaborators: formData.c
+                collaborators: formData.c,
+                attachments: formData.attachments || []
               };
             } else {
               payload = {
                 title: formData.summary,
                 reward_type: formData.rewardType,
                 bonus: formData.bonus,
-                description: `【目标 S】\n${formData.s}\n【指标 M】\n${formData.m}\n【方案 A】\n${formData.a_smart}\n【相关 R】\n${formData.r_smart}\n【时限 T】\n${formData.t}\n【PDCA】\nPlan: ${formData.planTime || ''} | Do: ${formData.doTime || ''} | Check: ${formData.checkTime || ''} | Act: ${formData.actTime || ''}`
+                description: `【目标 S】\n${formData.s}\n【指标 M】\n${formData.m}\n【方案 A】\n${formData.a_smart}\n【相关 R】\n${formData.r_smart}\n【时限 T】\n${formData.t}\n【PDCA】\nPlan: ${formData.planTime || ''} | Do: ${formData.doTime || ''} | Check: ${formData.checkTime || ''} | Act: ${formData.actTime || ''}`,
+                attachments: formData.attachments || []
               };
             }
 
@@ -399,10 +456,35 @@ export default function MyWorkflows({ navigate }: MyWorkflowsProps) {
           }
         };
 
+        const handleDelete = async () => {
+          const typePath = selectedTask.type === 'pool_propose' ? 'pool/tasks' : 'perf/plans';
+          try {
+            setSubmittingApprovals(true);
+            const token = localStorage.getItem('token');
+            const res = await fetch(`/api/${typePath}/${selectedTask.data.id}`, {
+              method: 'DELETE',
+              headers: { Authorization: `Bearer ${token}` }
+            });
+            const data = await res.json();
+            if (data.success || data.code === 0) {
+              setSelectedTask(null);
+              fetchTab(activeTab);
+            } else {
+              alert(data.message || '删除失败');
+            }
+          } catch (e) {
+            console.error(e);
+            alert('网络错误');
+          } finally {
+            setSubmittingApprovals(false);
+          }
+        };
+
         // Custom footer for withdraw-able items
         const withdrawFooter = canWithdraw ? (
           <div className="flex items-center gap-3">
             <button
+              type="button"
               onClick={handleWithdraw}
               disabled={submittingApprovals}
               className="px-5 py-2 text-sm font-bold text-amber-600 bg-white border border-amber-300 hover:bg-amber-50 rounded-xl transition-colors shadow-sm disabled:opacity-50 flex items-center gap-1.5"
@@ -410,7 +492,7 @@ export default function MyWorkflows({ navigate }: MyWorkflowsProps) {
               <span className="material-symbols-outlined text-[16px]">undo</span>
               撤回申请
             </button>
-            <button onClick={() => setSelectedTask(null)} className="px-6 py-2 text-sm font-bold text-white bg-[#005ea4] hover:bg-[#0077ce] rounded-xl transition-colors shadow-sm focus:outline-none">
+            <button type="button" onClick={() => setSelectedTask(null)} className="px-6 py-2 text-sm font-bold text-white bg-[#005ea4] hover:bg-[#0077ce] rounded-xl transition-colors shadow-sm focus:outline-none">
               关闭
             </button>
           </div>
@@ -427,6 +509,7 @@ export default function MyWorkflows({ navigate }: MyWorkflowsProps) {
             customFooter={withdrawFooter}
             onApprove={(comment, updatedData) => handleApproveReject(selectedTask.data.id, selectedTask.data.flow_type || (selectedTask.type === 'pool_propose' ? 'proposal' : 'perf_plan'), 'approve', comment, updatedData)}
             onReject={(comment) => handleApproveReject(selectedTask.data.id, selectedTask.data.flow_type || (selectedTask.type === 'pool_propose' ? 'proposal' : 'perf_plan'), 'reject', comment)}
+            onDelete={isEditableByCreator ? handleDelete : undefined}
             submitting={submittingApprovals}
             users={users}
             onClose={() => setSelectedTask(null)}
@@ -468,20 +551,23 @@ function WorkflowCard({ item, tab, onClick }: { item: any; tab: TabKey; onClick:
 
   const flowType = item.flow_type || 'unknown';
   const status = flowType === 'proposal' ? item.proposal_status : flowType === 'pool_join' ? item.status : item.status;
-  const title = item.title;
+  const title = flowType === 'test_assignment' ? item.test_bank_title : item.title;
   const creator = item.creator_name || item.created_by || item.user_id;
   const approver = item.approver_name || item.hr_reviewer_name || item.admin_reviewer_name;
 
   const iconBg = flowType === 'perf_plan' ? 'bg-blue-50 dark:bg-blue-900/30' 
     : flowType === 'pool_join' ? 'bg-emerald-50 dark:bg-emerald-900/30' 
+    : flowType === 'test_assignment' ? 'bg-indigo-50 dark:bg-indigo-900/30'
     : 'bg-purple-50 dark:bg-purple-900/30';
   const iconColor = flowType === 'perf_plan' ? 'text-blue-500' 
     : flowType === 'pool_join' ? 'text-emerald-500' 
+    : flowType === 'test_assignment' ? 'text-indigo-500'
     : 'text-purple-500';
   const iconName = flowType === 'perf_plan' ? 'trending_up' 
     : flowType === 'pool_join' ? 'person_add'
+    : flowType === 'test_assignment' ? 'assignment'
     : 'lightbulb';
-  const codePrefix = flowType === 'proposal' ? 'PL' : flowType === 'pool_join' ? 'JR' : 'PF';
+  const codePrefix = flowType === 'proposal' ? 'PL' : flowType === 'pool_join' ? 'JR' : flowType === 'test_assignment' ? 'TST' : 'PF';
 
   return (
     <div 

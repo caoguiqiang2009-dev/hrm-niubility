@@ -42,6 +42,7 @@ export default function TeamPerformance({ navigate }: { navigate: (view: string)
   const { currentUser } = useAuth();
   const [subordinates, setSubordinates] = useState<Subordinate[]>([]);
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
+  const [isApplyModalOpen, setIsApplyModalOpen] = useState(false);
   const [selectedTask, setSelectedTask] = useState<any>(null);
   const [newPlan, setNewPlan] = useState<SmartData & { assignee_id: string }>({ title: '', target_value: '', resource: '', relevance: '', deadline: '', category: '业务', collaborators: '', assignee_id: '' });
   const [submitting, setSubmitting] = useState(false);
@@ -140,6 +141,63 @@ export default function TeamPerformance({ navigate }: { navigate: (view: string)
     }
   };
 
+  const handleApplyTask = async (data: SmartTaskData) => {
+    setSubmitting(true);
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        alert('登录已过期，请重新登录');
+        window.location.reload();
+        return;
+      }
+      const approverId = currentUser?.role === 'employee' ? 'zhangwei' : 'lifang';
+      const targetValue = `S: ${data.s}\nM: ${data.m}\nT: ${data.t}`;
+      
+      const createRes = await fetch('/api/perf/plans', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ 
+          title: data.summary || '新任务',
+          description: encodeSmartDescription(data.a_smart, data.r_smart, {
+            plan: data.planTime, do: data.doTime, check: data.checkTime, act: data.actTime
+          }),
+          category: data.taskType || '常规任务',
+          target_value: targetValue,
+          deadline: data.t,
+          collaborators: data.c,
+          assignee_id: currentUser?.id,
+          quarter: '2024 Q2', 
+          creator_id: currentUser?.id,
+          approver_id: approverId
+        })
+      });
+
+      if (createRes.status === 401) {
+        alert('登录已过期，请重新登录后再试');
+        localStorage.removeItem('token');
+        window.location.reload();
+        return;
+      }
+
+      const createData = await createRes.json();
+      
+      if (createData.code === 0 && createData.data?.id) {
+        const planId = createData.data.id;
+        await fetch(`/api/perf/plans/${planId}/submit`, { method: 'POST', headers: { 'Authorization': `Bearer ${token}` } });
+        
+        setIsApplyModalOpen(false);
+        fetchTeamStatus();
+      } else {
+        alert(createData.message || '申请失败，请重试');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('网络异常，请检查网络连接后重试');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   return (
     <div className="flex h-screen overflow-hidden bg-background text-on-surface font-body selection:bg-primary-fixed">
       <Sidebar currentView="team" navigate={navigate} />
@@ -158,15 +216,27 @@ export default function TeamPerformance({ navigate }: { navigate: (view: string)
         {/* Quick Action Cards Section */}
         <section className="mb-8 grid grid-cols-1 md:grid-cols-2 gap-6">
           {currentUser?.role !== 'employee' && (
-            <div onClick={() => { setIsAssignModalOpen(true); setNewPlan(p => ({ ...p, assignee_id: subordinates[0]?.id || '' })); }} className="bg-white border border-surface-container rounded-2xl p-5 shadow-sm hover:shadow-md transition-all cursor-pointer group flex items-center space-x-4">
-              <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center group-hover:bg-primary transition-colors">
-                <span className="material-symbols-outlined text-primary group-hover:text-white">add_task</span>
+            <>
+              <div onClick={() => { setIsAssignModalOpen(true); setNewPlan(p => ({ ...p, assignee_id: subordinates[0]?.id || '' })); }} className="bg-white border border-surface-container rounded-2xl p-5 shadow-sm hover:shadow-md transition-all cursor-pointer group flex items-center space-x-4">
+                <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center group-hover:bg-primary transition-colors">
+                  <span className="material-symbols-outlined text-primary group-hover:text-white">add_task</span>
+                </div>
+                <div>
+                  <h4 className="font-bold text-on-surface tracking-tight">团队内发起任务</h4>
+                  <p className="text-xs text-on-surface-variant mt-0.5">为团队成员分配绩效目标与关键任务</p>
+                </div>
               </div>
-              <div>
-                <h4 className="font-bold text-on-surface tracking-tight">团队内发起任务</h4>
-                <p className="text-xs text-on-surface-variant mt-0.5">为团队成员分配绩效目标与关键任务</p>
+              
+              <div onClick={() => setIsApplyModalOpen(true)} className="bg-white border border-surface-container rounded-2xl p-5 shadow-sm hover:shadow-md transition-all cursor-pointer group flex items-center space-x-4">
+                <div className="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center group-hover:bg-emerald-500 group-hover:text-white transition-colors">
+                  <span className="material-symbols-outlined group-hover:text-white">post_add</span>
+                </div>
+                <div>
+                  <h4 className="font-bold text-on-surface tracking-tight text-slate-800">申请新任务</h4>
+                  <p className="text-xs text-on-surface-variant mt-0.5">使用完整的 SMART 原则向上级提报</p>
+                </div>
               </div>
-            </div>
+            </>
           )}
         </section>
 
@@ -336,12 +406,12 @@ export default function TeamPerformance({ navigate }: { navigate: (view: string)
         initialData={{
           a: subordinates[0]?.id || '',
           r: currentUser?.id,
-          summary: '团队季度核心目标下达',
-          s: '完成分配的核心业务指标或技术重构任务',
-          m: '达成率 100%，无重大事故',
-          a_smart: '基于团队现有资源及工时排期执行',
-          r_smart: '支撑部门季度 OKR',
-          t: '2024-06-30',
+          summary: '',
+          s: '',
+          m: '',
+          a_smart: '',
+          r_smart: '',
+          t: '',
           taskType: '重点项目'
         }}
       />
@@ -382,6 +452,59 @@ export default function TeamPerformance({ navigate }: { navigate: (view: string)
         })()}
       />
 
+      {/* Apply for New Task Modal (Same as Personal Goals) */}
+      <SmartTaskModal
+        isOpen={isApplyModalOpen}
+        onClose={() => setIsApplyModalOpen(false)}
+        onSubmit={handleApplyTask}
+        submitting={submitting}
+        title="申请新任务"
+        type="personal"
+        users={subordinates.map(s => ({ id: s.id, name: s.name }))}
+        onDraft={async (data) => {
+          setSubmitting(true);
+          try {
+            const token = localStorage.getItem('token');
+            const targetValue = `S: ${data.s}\nM: ${data.m}\nT: ${data.t}`;
+            const approverId = currentUser?.role === 'employee' ? 'zhangwei' : 'lifang';
+            const res = await fetch('/api/perf/plans', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+              body: JSON.stringify({
+                title: data.summary || '草稿目标',
+                description: encodeSmartDescription(data.a_smart, data.r_smart, {
+                  plan: data.planTime, do: data.doTime, check: data.checkTime, act: data.actTime
+                }),
+                category: data.taskType || '常规任务',
+                target_value: targetValue,
+                deadline: data.t,
+                collaborators: data.c,
+                assignee_id: currentUser?.id,
+                quarter: '2024 Q2',
+                creator_id: currentUser?.id,
+                approver_id: approverId
+              })
+            });
+            if (res.status === 401) { alert('登录已过期'); window.location.reload(); return; }
+            const json = await res.json();
+            if (json.code === 0) {
+              alert('草稿已保存');
+              setIsApplyModalOpen(false);
+              fetchTeamStatus();
+            } else { alert(json.message || '保存失败'); }
+          } catch { alert('网络异常'); } finally { setSubmitting(false); }
+        }}
+        initialData={{
+          summary: '',
+          s: '',
+          m: '',
+          a_smart: '',
+          r_smart: '',
+          t: '',
+          taskType: '重点项目',
+          r: currentUser?.id
+        }}
+      />
     </div>
   );
 }

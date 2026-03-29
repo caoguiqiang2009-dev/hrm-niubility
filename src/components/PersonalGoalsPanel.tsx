@@ -237,17 +237,21 @@ export default function PersonalGoalsPanel() {
               { label: '专项任务', pct: calcPct(special), count: special.length, icon: 'star', gradient: 'from-[#d97706] to-[#fbbf24]' },
             ];
             return (
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-10">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-6">
                 {bars.map(b => (
-                  <div key={b.label} className={`bg-gradient-to-br ${b.gradient} p-5 rounded-xl text-white relative overflow-hidden shadow-lg`}>
-                    <div className="flex items-center gap-2 mb-2">
-                      <span className="material-symbols-outlined text-white/60 text-[18px]">{b.icon}</span>
-                      <span className="text-white/80 text-xs font-bold">{b.label}</span>
-                      <span className="text-white/50 text-[10px]">{b.count} 项</span>
+                  <div key={b.label} className={`bg-gradient-to-br ${b.gradient} px-4 py-3 rounded-xl text-white relative overflow-hidden shadow-md h-[100px] flex flex-col justify-between`}>
+                    <div className="flex items-center gap-2">
+                      <span className="material-symbols-outlined text-white/60 text-[16px]">{b.icon}</span>
+                      <span className="text-white/90 text-[11px] font-bold">{b.label}</span>
+                      <span className="text-white/60 text-[10px] ml-auto">{b.count} 项</span>
                     </div>
-                    <h3 className="text-3xl font-black tracking-tighter mb-2">{b.pct}%</h3>
-                    <div className="w-full h-2 bg-white/20 rounded-full overflow-hidden">
-                      <div className="h-full bg-white/80 rounded-full transition-all duration-500" style={{ width: `${b.pct}%` }} />
+                    <div>
+                      <div className="flex items-baseline mb-1">
+                        <h3 className="text-2xl font-black tracking-tighter leading-none">{b.pct}%</h3>
+                      </div>
+                      <div className="w-full h-1.5 bg-white/20 rounded-full overflow-hidden mt-1">
+                        <div className="h-full bg-white/90 rounded-full transition-all duration-500" style={{ width: `${b.pct}%` }} />
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -256,15 +260,10 @@ export default function PersonalGoalsPanel() {
           })()}
 
           {/* ── Kanban Board ─────────────────────────────────────────── */}
-          <div className="mb-4 flex items-center justify-between">
-            <div className="flex items-center gap-2.5">
-              <span className="material-symbols-outlined text-primary text-[18px]">view_kanban</span>
-              <h3 className="font-bold text-base text-on-surface">我参与的绩效目标</h3>
-              <span className="text-[11px] px-2 py-0.5 bg-primary-container text-on-primary-container rounded-full font-bold">{plans.length}</span>
-            </div>
+          <div className="mb-3 flex justify-end">
             <button onClick={() => setIsModalOpen(true)}
               className="flex items-center gap-1.5 text-xs font-bold text-primary hover:bg-primary-container/20 px-3 py-1.5 rounded-xl transition-colors border border-primary/20">
-              <span className="material-symbols-outlined text-[14px]">add</span>申请新目标
+              <span className="material-symbols-outlined text-[14px]">add</span>申请新任务
             </button>
           </div>
 
@@ -293,8 +292,7 @@ export default function PersonalGoalsPanel() {
                     </div>
                   </div>
 
-                  {/* Cards */}
-                  <div className="flex-1 overflow-y-auto p-3 space-y-3 max-h-[600px]">
+                  <div className="flex-1 overflow-y-auto p-3 space-y-3 h-[350px]">
                     {colPlans.length === 0 && (
                       <div className="py-8 text-center text-slate-300 dark:text-slate-600 text-xs">暂无</div>
                     )}
@@ -417,7 +415,7 @@ export default function PersonalGoalsPanel() {
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         onSubmit={handleCreatePlanSmart}
-        title="申请新目标"
+        title="申请新任务"
         type="personal"
         users={users}
         submitting={submitting}
@@ -452,12 +450,12 @@ export default function PersonalGoalsPanel() {
           } catch { alert('保存失败'); } finally { setSubmitting(false); }
         }}
         initialData={{
-          summary: '完成人事管理系统（HRM）性能优化与看板重构',
-          s: '核心页面加载速度提升 50%（<1.5s）',
-          m: '重构看板组件且达到 0 P0 Bug',
-          a_smart: '需要前端团队提供 2 周专项开发工时，UI 设计配合打磨看板交互细节',
-          r_smart: '直接关联公司年度数字化转型战略，极大提升内网工具的操作效率',
-          t: '2024-09-30',
+          summary: '',
+          s: '',
+          m: '',
+          a_smart: '',
+          r_smart: '',
+          t: '',
           taskType: '重点项目',
           r: currentUser?.id
         }}
@@ -472,9 +470,44 @@ export default function PersonalGoalsPanel() {
         type="personal"
         users={users}
         submitting={resubmitting}
+        onDraft={async (data) => {
+          try {
+            const token = localStorage.getItem('token');
+            const res = await fetch(`/api/perf/plans/${editingPlan?.id}`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+              body: JSON.stringify({
+                title: data.summary || editingPlan?.title,
+                description: encodeSmartDescription(data.a_smart, data.r_smart, {
+                  plan: data.planTime, do: data.doTime, check: data.checkTime, act: data.actTime
+                }),
+                category: data.taskType || editingPlan?.category,
+                target_value: `S: ${data.s}\nM: ${data.m}\nT: ${data.t}`,
+                deadline: data.t,
+                collaborators: data.c,
+                attachments: data.attachments || [],
+              })
+            });
+            const json = await res.json();
+            if (json.code === 0) {
+              alert('草稿已保存');
+              setEditingPlan(null);
+              fetchPlans();
+            } else { alert(json.message || '保存失败'); }
+          } catch { alert('保存失败'); }
+        }}
         initialData={(() => {
           if (!editingPlan) return {};
           const decoded = decodeSmartDescription(editingPlan.description || '');
+          // Safely parse attachments
+          let parsedAttachments: any[] = [];
+          try {
+            if (Array.isArray((editingPlan as any).attachments)) {
+              parsedAttachments = (editingPlan as any).attachments;
+            } else if (typeof (editingPlan as any).attachments === 'string' && (editingPlan as any).attachments) {
+              parsedAttachments = JSON.parse((editingPlan as any).attachments);
+            }
+          } catch { parsedAttachments = []; }
           return {
             summary: editingPlan.title,
             s: editingPlan.target_value ? editingPlan.target_value.split('\n')[0]?.replace('S: ', '') : '',
@@ -487,7 +520,8 @@ export default function PersonalGoalsPanel() {
             planTime: decoded.planTime,
             doTime: decoded.doTime,
             checkTime: decoded.checkTime,
-            actTime: decoded.actTime
+            actTime: decoded.actTime,
+            attachments: parsedAttachments
           };
         })()}
       />
@@ -504,6 +538,15 @@ export default function PersonalGoalsPanel() {
         initialData={(() => {
           if (!selectedPlan) return {};
           const decoded = decodeSmartDescription(selectedPlan.description || '');
+          // Safely parse attachments
+          let parsedAttachments: any[] = [];
+          try {
+            if (Array.isArray((selectedPlan as any).attachments)) {
+              parsedAttachments = (selectedPlan as any).attachments;
+            } else if (typeof (selectedPlan as any).attachments === 'string' && (selectedPlan as any).attachments) {
+              parsedAttachments = JSON.parse((selectedPlan as any).attachments);
+            }
+          } catch { parsedAttachments = []; }
           return {
             id: selectedPlan.id,
             status: selectedPlan.status,
@@ -524,7 +567,8 @@ export default function PersonalGoalsPanel() {
             actTime: decoded.actTime,
             approver_id: selectedPlan.approver_id,
             creator_id: selectedPlan.creator_id,
-            assignee_id: selectedPlan.assignee_id
+            assignee_id: selectedPlan.assignee_id,
+            attachments: parsedAttachments
           };
         })()}
         customFooter={(() => {

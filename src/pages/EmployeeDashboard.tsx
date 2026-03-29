@@ -5,7 +5,7 @@ import PersonalGoalsPanel from '../components/PersonalGoalsPanel';
 import { useIsMobile } from '../hooks/useIsMobile';
 
 /* ─── Types ─────────────────────────────────────────────────── */
-interface Task { id: number; title: string; description: string; due_date: string; priority: string; status: string; }
+interface Task { id: number; title: string; description: string; due_date: string; priority: string; status: string; type?: string; }
 interface ModuleProps { navigate: (v: string) => void; data: DashData; actions: DashActions; }
 
 interface DashData {
@@ -125,7 +125,7 @@ function WorkflowsModule({ navigate }: ModuleProps) {
   return (
     <>
       <ModHeader icon="assignment" color="text-blue-500" title="我的流程" badge={counts.pending || 0}
-        action={<button onClick={() => navigate('workflows')} className="text-[10px] font-bold text-blue-500 hover:text-blue-700">查看全部 →</button>} />
+        action={<button onClick={() => navigate(`workflows?tab=${tab}`)} className="text-[10px] font-bold text-blue-500 hover:text-blue-700">查看全部 →</button>} />
       <div className="flex gap-1 mb-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl p-1">
         {TABS.map(t => (
           <button key={t.key} onClick={() => setTab(t.key)}
@@ -145,7 +145,7 @@ function WorkflowsModule({ navigate }: ModuleProps) {
           items.map((w: any) => {
             const s = STATUS_MAP[w.status] || STATUS_MAP[w.proposal_status] || { label: w.status, color: 'text-slate-500', bg: 'bg-slate-100' };
             return (
-              <div key={`${w.type}-${w.id}`} onClick={() => navigate('workflows')}
+              <div key={`${w.type}-${w.id}`} onClick={() => navigate(`workflows?tab=${tab}`)}
                 className="flex items-center gap-3 p-2.5 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer transition-all">
                 <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${w.type === 'proposal' ? 'bg-purple-50' : 'bg-blue-50'}`}>
                   <span className={`material-symbols-outlined text-[14px] ${w.type === 'proposal' ? 'text-purple-500' : 'text-blue-500'}`}>
@@ -168,7 +168,7 @@ function WorkflowsModule({ navigate }: ModuleProps) {
 }
 
 /* ─── 模块: 待办事项 ──────────────────────────────────────── */
-function TodoModule({ data, actions }: ModuleProps) {
+function TodoModule({ navigate, data, actions }: ModuleProps) {
   const { tasks, pendingTasks } = data;
   return (
     <>
@@ -179,12 +179,24 @@ function TodoModule({ data, actions }: ModuleProps) {
         {tasks.length === 0 ? <div className="text-center py-6 text-slate-400 text-xs">暂无待办事项 🎉</div> :
           tasks.map(t => {
             const done = t.status === 'completed';
+            const isTest = t.type === 'test_assignment';
+            const isEval = t.type === 'monthly_eval';
+            const isSystemTask = isTest || isEval;
             return (
-              <div key={t.id} className={`flex items-start gap-3 p-3 rounded-xl transition-all ${done ? 'opacity-50' : 'hover:bg-slate-50 dark:hover:bg-slate-800/50'}`}>
-                <input type="checkbox" checked={done} onChange={() => actions.toggleTask(t)} className="mt-0.5 w-4 h-4 rounded border-slate-300 text-blue-500 cursor-pointer" />
+              <div key={t.id} onClick={() => { 
+                if (isTest) navigate(`competency?testId=${t.id}`); 
+                else if (isEval) navigate('monthly-eval');
+              }} className={`flex items-start gap-3 p-3 rounded-xl transition-all ${done ? 'opacity-50' : 'hover:bg-slate-50 dark:hover:bg-slate-800/50'} ${isSystemTask ? 'cursor-pointer' : ''}`}>
+                {isSystemTask ? (
+                  <div className={`mt-0.5 w-4 h-4 flex items-center justify-center ${isEval ? 'text-rose-500' : 'text-indigo-500'}`}>
+                    <span className="material-symbols-outlined text-[16px]">{isEval ? 'rate_review' : 'assignment'}</span>
+                  </div>
+                ) : (
+                  <input type="checkbox" checked={done} onChange={() => actions.toggleTask(t)} className="mt-0.5 w-4 h-4 rounded border-slate-300 text-blue-500 cursor-pointer" />
+                )}
                 <div className="flex-1 min-w-0">
-                  <p className={`text-sm font-bold ${done ? 'line-through text-slate-400' : 'text-slate-800 dark:text-white'}`}>{t.title}</p>
-                  {t.due_date && <p className="text-[10px] text-slate-400 mt-0.5 flex items-center gap-1"><span className="material-symbols-outlined text-[11px]">schedule</span>{t.due_date}</p>}
+                  <p className={`text-sm font-bold ${done ? 'line-through text-slate-400' : isEval ? 'text-rose-600 dark:text-rose-400' : isTest ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-800 dark:text-white'}`}>{t.title}</p>
+                  {t.due_date && <p className="text-[10px] text-slate-400 mt-0.5 flex items-center gap-1"><span className="material-symbols-outlined text-[11px]">schedule</span>{new Date(t.due_date).toLocaleDateString()}</p>}
                 </div>
                 {!done && t.priority === 'high' && <span className="text-[9px] px-1.5 py-0.5 bg-red-100 text-red-600 rounded-full font-bold">紧急</span>}
               </div>
@@ -241,11 +253,14 @@ function NotificationsModule({ navigate, data }: ModuleProps) {
         <div className="space-y-2">
           {recentNotifs.map((n: any) => (
             <div key={n.id} className={`p-3 rounded-xl transition-all cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50 ${!n.is_read ? 'bg-blue-50/50 dark:bg-blue-900/10' : ''}`}
-              onClick={() => navigate('dashboard')}>
+              onClick={() => {
+                if (n.title.includes('评测')) navigate('competency');
+                else navigate('dashboard');
+              }}>
               <div className="flex items-start gap-3">
                 <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${!n.is_read ? 'bg-blue-100' : 'bg-slate-100'}`}>
                   <span className={`material-symbols-outlined text-[14px] ${!n.is_read ? 'text-blue-600' : 'text-slate-400'}`}>
-                    {n.type === 'proposal' ? 'description' : n.type === 'perf' ? 'trending_up' : 'notifications'}
+                    {n.type === 'proposal' ? 'description' : n.type === 'perf' ? 'trending_up' : n.title.includes('评测') ? 'assignment' : 'notifications'}
                   </span>
                 </div>
                 <div className="flex-1 min-w-0">
@@ -372,8 +387,8 @@ function DetailModal({ type, onClose, data, actions, navigate }: {
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-6">
           {type === 'perf' && <PerfDetail data={data} navigate={navigate} />}
-          {type === 'tasks' && <TasksDetail data={data} actions={actions} />}
-          {type === 'notifications' && <NotificationsDetail data={data} />}
+          {type === 'tasks' && <TasksDetail data={data} actions={actions} navigate={navigate} onClose={onClose} />}
+          {type === 'notifications' && <NotificationsDetail data={data} navigate={navigate} onClose={onClose} />}
         </div>
       </div>
     </div>
@@ -412,12 +427,12 @@ function PerfDetail({ data, navigate }: { data: DashData; navigate: (v: string) 
 }
 
 /* ─── 弹窗内容: 待办事项 ─── */
-function TasksDetail({ data, actions }: { data: DashData; actions: DashActions }) {
+function TasksDetail({ data, actions, navigate, onClose }: { data: DashData; actions: DashActions; navigate: (v: string) => void; onClose: () => void; }) {
   return (
     <>
       <div className="flex items-center justify-between mb-4">
         <p className="text-sm text-slate-500">{data.pendingTasks.length} 项待办 · {data.completedTasks.length} 项已完成</p>
-        <button onClick={actions.openTaskModal} className="flex items-center gap-1 px-3 py-1.5 bg-blue-500 text-white rounded-lg text-xs font-bold hover:bg-blue-600 transition-all">
+        <button onClick={() => { onClose(); actions.openTaskModal(); }} className="flex items-center gap-1 px-3 py-1.5 bg-blue-500 text-white rounded-lg text-xs font-bold hover:bg-blue-600 transition-all">
           <span className="material-symbols-outlined text-[14px]">add</span>新建待办
         </button>
       </div>
@@ -425,13 +440,25 @@ function TasksDetail({ data, actions }: { data: DashData; actions: DashActions }
         {data.tasks.length === 0 ? <div className="text-center py-10 text-slate-400 text-sm">暂无待办事项 🎉</div> :
           data.tasks.map(t => {
             const done = t.status === 'completed';
+            const isTest = t.type === 'test_assignment';
+            const isEval = t.type === 'monthly_eval';
+            const isSystemTask = isTest || isEval;
             return (
-              <div key={t.id} className={`flex items-start gap-3 p-3 rounded-xl transition-all border border-slate-100 dark:border-slate-800 ${done ? 'opacity-50 bg-slate-50/50' : 'hover:bg-slate-50 dark:hover:bg-slate-800/50'}`}>
-                <input type="checkbox" checked={done} onChange={() => actions.toggleTask(t)} className="mt-0.5 w-4 h-4 rounded border-slate-300 text-blue-500 cursor-pointer" />
+              <div key={t.id} onClick={() => { 
+                if (isTest) { onClose(); navigate(`competency?testId=${t.id}`); } 
+                else if (isEval) { onClose(); navigate('monthly-eval'); }
+              }} className={`flex items-start gap-3 p-3 rounded-xl transition-all border border-slate-100 dark:border-slate-800 ${done ? 'opacity-50 bg-slate-50/50' : 'hover:bg-slate-50 dark:hover:bg-slate-800/50'} ${isSystemTask ? 'cursor-pointer' : ''}`}>
+                {isSystemTask ? (
+                  <div className={`mt-0.5 w-4 h-4 flex items-center justify-center ${isEval ? 'text-rose-500' : 'text-indigo-500'}`}>
+                    <span className="material-symbols-outlined text-[16px]">{isEval ? 'rate_review' : 'assignment'}</span>
+                  </div>
+                ) : (
+                  <input type="checkbox" checked={done} onChange={() => actions.toggleTask(t)} className="mt-0.5 w-4 h-4 rounded border-slate-300 text-blue-500 cursor-pointer" />
+                )}
                 <div className="flex-1 min-w-0">
-                  <p className={`text-sm font-bold ${done ? 'line-through text-slate-400' : 'text-slate-800 dark:text-white'}`}>{t.title}</p>
+                  <p className={`text-sm font-bold ${done ? 'line-through text-slate-400' : isEval ? 'text-rose-600 dark:text-rose-400' : isTest ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-800 dark:text-white'}`}>{t.title}</p>
                   {t.description && <p className="text-xs text-slate-400 mt-0.5 line-clamp-2">{t.description}</p>}
-                  {t.due_date && <p className="text-[10px] text-slate-400 mt-1 flex items-center gap-1"><span className="material-symbols-outlined text-[11px]">schedule</span>{t.due_date}</p>}
+                  {t.due_date && <p className="text-[10px] text-slate-400 mt-1 flex items-center gap-1"><span className="material-symbols-outlined text-[11px]">schedule</span>{new Date(t.due_date).toLocaleDateString()}</p>}
                 </div>
                 {!done && t.priority === 'high' && <span className="text-[9px] px-2 py-0.5 bg-red-100 text-red-600 rounded-full font-bold">紧急</span>}
               </div>
@@ -443,7 +470,7 @@ function TasksDetail({ data, actions }: { data: DashData; actions: DashActions }
 }
 
 /* ─── 弹窗内容: 消息中心 ─── */
-function NotificationsDetail({ data }: { data: DashData }) {
+function NotificationsDetail({ data, navigate, onClose }: { data: DashData; navigate: (v: string) => void; onClose: () => void; }) {
   const [allNotifs, setAllNotifs] = useState<any[]>([]);
   const token = localStorage.getItem('token');
 
@@ -463,12 +490,15 @@ function NotificationsDetail({ data }: { data: DashData }) {
     <div className="space-y-2">
       {allNotifs.length === 0 ? <div className="text-center py-10 text-slate-400 text-sm">暂无消息</div> :
         allNotifs.map((n: any) => (
-          <div key={n.id} onClick={() => !n.is_read && markRead(n.id)}
-            className={`p-4 rounded-xl transition-all border border-slate-100 dark:border-slate-800 ${!n.is_read ? 'bg-blue-50/50 dark:bg-blue-900/10 cursor-pointer hover:bg-blue-50' : ''}`}>
+          <div key={n.id} onClick={() => {
+              if (!n.is_read) markRead(n.id);
+              if (n.title.includes('评测')) { onClose(); navigate('competency?tab=my_tests'); }
+            }}
+            className={`p-4 rounded-xl transition-all border border-slate-100 dark:border-slate-800 ${!n.is_read ? 'bg-blue-50/50 dark:bg-blue-900/10 cursor-pointer hover:bg-blue-50' : 'cursor-pointer hover:bg-slate-50'}`}>
             <div className="flex items-start gap-3">
               <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${!n.is_read ? 'bg-blue-100' : 'bg-slate-100'}`}>
                 <span className={`material-symbols-outlined text-[18px] ${!n.is_read ? 'text-blue-600' : 'text-slate-400'}`}>
-                  {n.type === 'proposal' ? 'description' : n.type === 'perf' ? 'trending_up' : 'notifications'}
+                  {n.type === 'proposal' ? 'description' : n.type === 'perf' ? 'trending_up' : n.title.includes('评测') ? 'assignment' : 'notifications'}
                 </span>
               </div>
               <div className="flex-1 min-w-0">
@@ -711,19 +741,7 @@ export default function EmployeeDashboard({ navigate }: { navigate: (view: strin
               <p className={`text-on-surface-variant ${isMobile ? 'text-xs' : 'text-sm'}`}>{dateStr}</p>
             </div>
             
-            {!isMobile && (
-            <div className="flex flex-col items-end gap-2">
-              <button onClick={() => { setIsEditing(!isEditing); setShowAddPanel(false); }}
-                className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
-                  isEditing
-                    ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/25 hover:bg-blue-600'
-                    : 'bg-white dark:bg-slate-800 text-slate-500 hover:text-slate-700 border border-slate-200 dark:border-slate-700 hover:shadow-md'
-                }`}>
-                <span className="material-symbols-outlined text-[16px]">{isEditing ? 'check' : 'dashboard_customize'}</span>
-                {isEditing ? '完成编辑' : '自定义'}
-              </button>
-            </div>
-            )}
+
           </div>
 
           {/* Stat Cards */}
@@ -736,7 +754,7 @@ export default function EmployeeDashboard({ navigate }: { navigate: (view: strin
             ].map(c => (
               <button key={c.label} 
                 onClick={() => {
-                  if (c.modal === 'workflows') navigate('workflows');
+                  if (c.modal === 'workflows') navigate('workflows?tab=pending');
                   else if (c.modal === 'perf') {
                     document.getElementById('personal-goals-section')?.scrollIntoView({ behavior: 'smooth' });
                   }
@@ -755,6 +773,8 @@ export default function EmployeeDashboard({ navigate }: { navigate: (view: strin
             ))}
           </div>
 
+
+
           {/* ── 嵌入: 个人目标管理 ── */}
           <div id="personal-goals-section" className={`border-t border-slate-200/60 dark:border-slate-800 scroll-mt-20 ${isMobile ? 'mt-6 pt-5' : 'mt-10 pt-8'}`}>
             <h3 className={`font-bold text-slate-800 dark:text-slate-100 mb-5 flex items-center gap-2 ${isMobile ? 'text-base' : 'text-lg'}`}>
@@ -772,12 +792,25 @@ export default function EmployeeDashboard({ navigate }: { navigate: (view: strin
                 管理专属
               </h3>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+              {/* 绩效核算 (原月度考评) 放在第一位以保持一致性 */}
+              <div onClick={() => navigate('monthly-eval')} className="bg-white dark:bg-slate-900 rounded-3xl p-6 border border-slate-100 dark:border-slate-800 shadow-sm hover:shadow-xl transition-all cursor-pointer group flex flex-col hover:-translate-y-1 hover:border-blue-200 dark:hover:border-blue-800/50">
+                <div className="w-12 h-12 rounded-2xl bg-blue-50 dark:bg-blue-900/30 flex items-center justify-center mb-5 group-hover:bg-blue-100 transition-colors">
+                  <span className="material-symbols-outlined text-[24px] text-blue-600 font-bold" style={{ fontVariationSettings: "'wght' 600" }}>rule</span>
+                </div>
+                <h4 className="text-xl font-black text-slate-800 dark:text-slate-100 mb-3 tracking-tight">月度考评系统</h4>
+                <p className="text-sm text-slate-500 dark:text-slate-400 mb-6 font-medium">所有员工必须参与的月底绩效四大维度打分</p>
+                <div className="flex gap-3 text-[12px] font-bold text-slate-400 mt-auto">
+                  <span className="flex items-center gap-1.5"><div className="w-1.5 h-1.5 rounded-full bg-slate-200 dark:bg-slate-700 group-hover:bg-blue-300"></div>待审阅打分</span>
+                  <span className="flex items-center gap-1.5"><div className="w-1.5 h-1.5 rounded-full bg-slate-200 dark:bg-slate-700 group-hover:bg-blue-300"></div>百分制测评</span>
+                </div>
+              </div>
+
               {/* 绩效管理 */}
               <div onClick={() => navigate('perf-analytics')} className="bg-white dark:bg-slate-900 rounded-3xl p-6 border border-slate-100 dark:border-slate-800 shadow-sm hover:shadow-xl transition-all cursor-pointer group flex flex-col h-full hover:-translate-y-1 hover:border-emerald-200 dark:hover:border-emerald-800/50">
                 <div className="w-12 h-12 rounded-2xl bg-emerald-50 dark:bg-emerald-900/30 flex items-center justify-center mb-5 group-hover:bg-emerald-100 transition-colors">
                   <span className="material-symbols-outlined text-[24px] text-emerald-600 font-bold" style={{ fontVariationSettings: "'wght' 600" }}>trending_up</span>
                 </div>
-                <h4 className="text-xl font-black text-slate-800 dark:text-slate-100 mb-3 tracking-tight">绩效管理</h4>
+                <h4 className="text-xl font-black text-slate-800 dark:text-slate-100 mb-3 tracking-tight">任务管理</h4>
                 <p className="text-sm text-slate-500 dark:text-slate-400 mb-8 font-medium">绩效计划审批、考核评分与奖金发放</p>
                 <div className="flex gap-3 text-[12px] font-bold text-slate-400 mt-auto">
                   <span className="flex items-center gap-1.5"><div className="w-1.5 h-1.5 rounded-full bg-slate-200 dark:bg-slate-700 group-hover:bg-emerald-300"></div>审批流程</span>
@@ -785,17 +818,42 @@ export default function EmployeeDashboard({ navigate }: { navigate: (view: strin
                 </div>
               </div>
 
-              {/* 工资表管理 */}
-              <div onClick={() => navigate('salary')} className="bg-[#fffdf8] dark:bg-slate-900/80 rounded-3xl p-6 border border-amber-100 dark:border-slate-800 shadow-sm hover:shadow-xl transition-all cursor-pointer group flex flex-col h-full hover:-translate-y-1 hover:border-amber-200 dark:hover:border-amber-800/50 relative overflow-hidden">
-                <div className="absolute top-0 right-0 w-32 h-32 bg-amber-50 rounded-bl-full -z-0 opacity-50 dark:hidden"></div>
-                <div className="w-12 h-12 rounded-2xl bg-amber-50 dark:bg-amber-900/30 flex items-center justify-center mb-5 group-hover:bg-amber-100 transition-colors relative z-10">
-                  <span className="material-symbols-outlined text-[24px] text-amber-600 font-bold" style={{ fontVariationSettings: "'wght' 600" }}>payments</span>
+              {/* 能力管理 */}
+              <div onClick={() => navigate('competency')} className="bg-white dark:bg-slate-900 rounded-3xl p-6 border border-slate-100 dark:border-slate-800 shadow-sm hover:shadow-xl transition-all cursor-pointer group flex flex-col h-full hover:-translate-y-1 hover:border-indigo-200 dark:hover:border-indigo-800/50">
+                <div className="w-12 h-12 rounded-2xl bg-indigo-50 dark:bg-indigo-900/30 flex items-center justify-center mb-5 group-hover:bg-indigo-100 transition-colors">
+                  <span className="material-symbols-outlined text-[24px] text-indigo-600 font-bold" style={{ fontVariationSettings: "'wght' 600" }}>psychology</span>
                 </div>
-                <h4 className="text-xl font-black text-[#1e293b] dark:text-slate-100 mb-3 tracking-tight relative z-10">工资表管理</h4>
-                <p className="text-sm text-slate-500 dark:text-slate-400 mb-8 font-medium relative z-10 leading-relaxed">制作月度工资表、审批发放、推送工资条</p>
+                <h4 className="text-xl font-black text-slate-800 dark:text-slate-100 mb-3 tracking-tight">能力大盘</h4>
+                <p className="text-sm text-slate-500 dark:text-slate-400 mb-8 font-medium">配置模型、进行能力打分与雷达图跟踪</p>
+                <div className="flex gap-3 text-[12px] font-bold text-slate-400 mt-auto">
+                  <span className="flex items-center gap-1.5"><div className="w-1.5 h-1.5 rounded-full bg-slate-200 dark:bg-slate-700 group-hover:bg-indigo-300"></div>自定义模型</span>
+                  <span className="flex items-center gap-1.5"><div className="w-1.5 h-1.5 rounded-full bg-slate-200 dark:bg-slate-700 group-hover:bg-indigo-300"></div>综合评估</span>
+                </div>
+              </div>
+
+              {/* 绩效核算 */}
+              <div onClick={() => navigate('perf-accounting')} className="bg-white dark:bg-slate-900 rounded-3xl p-6 border border-slate-100 dark:border-slate-800 shadow-sm hover:shadow-xl transition-all cursor-pointer group flex flex-col h-full hover:-translate-y-1 hover:border-amber-200 dark:hover:border-amber-800/50 relative overflow-hidden">
+                <div className="w-12 h-12 rounded-2xl bg-amber-50 dark:bg-amber-900/30 flex items-center justify-center mb-5 group-hover:bg-amber-100 transition-colors relative z-10">
+                  <span className="material-symbols-outlined text-[24px] text-amber-600 font-bold" style={{ fontVariationSettings: "'wght' 600" }}>account_balance_wallet</span>
+                </div>
+                <h4 className="text-xl font-black text-slate-800 dark:text-slate-100 mb-3 tracking-tight relative z-10">绩效核算</h4>
+                <p className="text-sm text-slate-500 dark:text-slate-400 mb-8 font-medium relative z-10 leading-relaxed">一览全员累积的绩效考评分与奖金，支持任务溯源提取对账单</p>
                 <div className="flex gap-3 text-[12px] font-bold text-slate-400 mt-auto relative z-10">
-                  <span className="flex items-center gap-1.5 rounded-full px-2 py-1 bg-amber-50 text-amber-600 dark:bg-slate-800 dark:text-slate-300"><div className="w-1.5 h-1.5 rounded-full bg-amber-300"></div>薪资模板</span>
-                  <span className="flex items-center gap-1.5 rounded-full px-2 py-1 bg-amber-50 text-amber-600 dark:bg-slate-800 dark:text-slate-300"><div className="w-1.5 h-1.5 rounded-full bg-amber-300"></div>自动计算</span>
+                  <span className="flex items-center gap-1.5"><div className="w-1.5 h-1.5 rounded-full bg-slate-200 dark:bg-slate-700 group-hover:bg-amber-300"></div>汇总计算</span>
+                  <span className="flex items-center gap-1.5"><div className="w-1.5 h-1.5 rounded-full bg-slate-200 dark:bg-slate-700 group-hover:bg-amber-300"></div>穿透溯源</span>
+                </div>
+              </div>
+
+              {/* 提案审议 */}
+              <div onClick={() => navigate('admin?module=proposals')} className="bg-white dark:bg-slate-900 rounded-3xl p-6 border border-slate-100 dark:border-slate-800 shadow-sm hover:shadow-xl transition-all cursor-pointer group flex flex-col h-full hover:-translate-y-1 hover:border-indigo-200 dark:hover:border-indigo-800/50">
+                <div className="w-12 h-12 rounded-2xl bg-indigo-50 dark:bg-indigo-900/30 flex items-center justify-center mb-5 group-hover:bg-indigo-100 transition-colors">
+                  <span className="material-symbols-outlined text-[24px] text-indigo-600 font-bold" style={{ fontVariationSettings: "'wght' 600" }}>how_to_reg</span>
+                </div>
+                <h4 className="text-xl font-black text-slate-800 dark:text-slate-100 mb-3 tracking-tight">提案审议</h4>
+                <p className="text-sm text-slate-500 dark:text-slate-400 mb-8 font-medium">处理各部门提交的任务发起草案，复核定级发放到任务池</p>
+                <div className="flex gap-3 text-[12px] font-bold text-slate-400 mt-auto">
+                  <span className="flex items-center gap-1.5"><div className="w-1.5 h-1.5 rounded-full bg-slate-200 dark:bg-slate-700 group-hover:bg-indigo-300"></div>提案审批</span>
+                  <span className="flex items-center gap-1.5"><div className="w-1.5 h-1.5 rounded-full bg-slate-200 dark:bg-slate-700 group-hover:bg-indigo-300"></div>奖金池</span>
                 </div>
               </div>
             </div>
@@ -805,10 +863,21 @@ export default function EmployeeDashboard({ navigate }: { navigate: (view: strin
           {/* ── 自由拖拽布局区 (desktop only) ── */}
           {!isMobile && (
           <div className="mt-10 border-t border-slate-200/60 dark:border-slate-800 pt-8">
-            <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100 mb-5 flex items-center gap-2">
-              <span className="material-symbols-outlined text-purple-500">dashboard_customize</span>
-              自定义仪表盘
-            </h3>
+            <div className="flex items-center justify-between mb-5">
+              <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+                <span className="material-symbols-outlined text-purple-500">dashboard_customize</span>
+                自定义仪表盘
+              </h3>
+              <button onClick={() => { setIsEditing(!isEditing); setShowAddPanel(false); }}
+                className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+                  isEditing
+                    ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/25 hover:bg-blue-600'
+                    : 'bg-white dark:bg-slate-800 text-slate-500 hover:text-slate-700 border border-slate-200 dark:border-slate-700 hover:shadow-md'
+                }`}>
+                <span className="material-symbols-outlined text-[16px]">{isEditing ? 'check' : 'dashboard_customize'}</span>
+                {isEditing ? '完成编辑' : '自定义'}
+              </button>
+            </div>
           {/* Editing Toolbar */}
           {isEditing && (
             <div className="flex items-center gap-3 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-2xl border border-blue-200/60 dark:border-blue-800/30">

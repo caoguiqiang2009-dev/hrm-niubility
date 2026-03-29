@@ -8,7 +8,7 @@ import { useIsMobile } from '../hooks/useIsMobile';
 
 interface PoolTask {
   id: number;
-  status: 'open' | 'in_progress' | 'closed';
+  status: 'proposing' | 'published' | 'claiming' | 'in_progress' | 'rewarded';
   title: string;
   department: string;
   difficulty: string;
@@ -21,9 +21,12 @@ interface PoolTask {
   created_at?: string;
   creator_name?: string;
   participant_names?: string[];
+  proposal_status?: string;
+  roles_config?: { name: string; reward: number; required: number }[];
+  role_claims?: { id: number; role_name: string; user_id: string; user_name: string; status: string; reward: number }[];
 }
 
-type StatusFilter = 'all' | 'open' | 'in_progress';
+type StatusFilter = 'all' | 'published' | 'claiming' | 'in_progress' | 'rewarded';
 type BonusFilter = 'all' | 'low' | 'mid' | 'high';
 const DEPTS = ['全部部门', '研发部', '市场部', '产品部', '人事部'];
 
@@ -63,7 +66,7 @@ export default function CompanyPerformance({ navigate }: { navigate: (view: stri
   const [selectedTask, setSelectedTask] = useState<PoolTask | null>(null);
   const [modalStep, setModalStep] = useState<ModalStep>('detail');
   const [applyReason, setApplyReason] = useState('');
-  const [applyRole, setApplyRole] = useState<'R' | 'A'>('A');
+  const [applyRole, setApplyRole] = useState<'R' | 'A' | 'C' | 'I'>('R');
   const [applying, setApplying] = useState(false);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [bonusFilter, setBonusFilter] = useState<BonusFilter>('all');
@@ -79,6 +82,10 @@ export default function CompanyPerformance({ navigate }: { navigate: (view: stri
   const [myProposals, setMyProposals] = useState<any[]>([]);
   const [showMyProposals, setShowMyProposals] = useState(false);
   const [viewingProposal, setViewingProposal] = useState<any>(null);
+
+  // My Claims state
+  const [myClaims, setMyClaims] = useState<any[]>([]);
+  const [showMyClaims, setShowMyClaims] = useState(false);
 
   // New features state
   const [activeTab, setActiveTab] = useState<'task' | 'personnel'>('task');
@@ -115,6 +122,15 @@ export default function CompanyPerformance({ navigate }: { navigate: (view: stri
     } catch {}
   };
 
+  const fetchMyClaims = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch('/api/pool/my-claims', { headers: { Authorization: `Bearer ${token}` } });
+      const json = await res.json();
+      if (json.code === 0) setMyClaims(json.data);
+    } catch {}
+  };
+
   const fetchLeaderboard = async () => {
     try {
       const token = localStorage.getItem('token');
@@ -133,7 +149,7 @@ export default function CompanyPerformance({ navigate }: { navigate: (view: stri
     } catch {}
   };
 
-  useEffect(() => { fetchTasks(); fetchMyProposals(); fetchLeaderboard(); fetchUsers(); fetchTrash(); }, []);
+  useEffect(() => { fetchTasks(); fetchMyProposals(); fetchMyClaims(); fetchLeaderboard(); fetchUsers(); fetchTrash(); }, []);
 
   const handleProposeSmart = async (data: SmartTaskData) => {
     if (!data.summary.trim()) return;
@@ -159,7 +175,8 @@ export default function CompanyPerformance({ navigate }: { navigate: (view: stri
           difficulty: '中',
           reward_type: data.rewardType,
           bonus: Number(data.bonus) || 0,
-          max_participants: 5
+          max_participants: Number(data.maxParticipants) || 5,
+          attachments: data.attachments || []
         }),
       });
       const json = await res.json();
@@ -199,7 +216,8 @@ export default function CompanyPerformance({ navigate }: { navigate: (view: stri
           difficulty: '中',
           reward_type: data.rewardType,
           bonus: Number(data.bonus) || 0,
-          max_participants: 5
+          max_participants: Number(data.maxParticipants) || 5,
+          attachments: data.attachments || []
         }),
       });
       const json = await res.json();
@@ -224,6 +242,8 @@ export default function CompanyPerformance({ navigate }: { navigate: (view: stri
 
   // ── Filtering ──────────────────────────────────────────────────────────────
   let displayed = tasks.filter(t => {
+    // 提案中的任务不在赏金榜展示
+    if (t.status === 'proposing') return false;
     if (searchKey) {
       const kw = searchKey.toLowerCase();
       if (!t.title.toLowerCase().includes(kw) && !(t.description && t.description.toLowerCase().includes(kw))) return false;
@@ -233,7 +253,7 @@ export default function CompanyPerformance({ navigate }: { navigate: (view: stri
     if (bonusFilter === 'low' && t.bonus > 5000) return false;
     if (bonusFilter === 'mid' && (t.bonus <= 5000 || t.bonus > 20000)) return false;
     if (bonusFilter === 'high' && t.bonus <= 20000) return false;
-    return t.status !== 'closed';
+    return true;
   });
   if (sortByBonus) displayed = [...displayed].sort((a, b) => b.bonus - a.bonus);
 
@@ -346,15 +366,16 @@ export default function CompanyPerformance({ navigate }: { navigate: (view: stri
     setApplying(true);
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch(`/api/pool/tasks/${selectedTask.id}/join`, {
+      const res = await fetch(`/api/pool/tasks/${selectedTask.id}/claim-role`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ reason: applyReason, role: applyRole }),
+        body: JSON.stringify({ role_name: applyRole, reason: applyReason }),
       });
       const json = await res.json();
       if (json.code === 0) {
         setModalStep('success');
         fetchTasks(); // Refresh participant count
+        fetchMyClaims(); // Refresh my claims list
       } else {
         alert(json.message || '申请失败，请稍后重试');
       }
@@ -365,7 +386,11 @@ export default function CompanyPerformance({ navigate }: { navigate: (view: stri
   };
 
   const statusBtns: { key: StatusFilter; label: string }[] = [
-    { key: 'all', label: '全部' }, { key: 'open', label: '开放中' }, { key: 'in_progress', label: '进行中' },
+    { key: 'all', label: '全部' },
+    ...(canManagePool ? [{ key: 'published' as StatusFilter, label: '发布' }] : []),
+    { key: 'claiming', label: '认领中' },
+    { key: 'in_progress', label: '进行中' },
+    { key: 'rewarded', label: '已发赏' },
   ];
   const bonusBtns: { key: BonusFilter; label: string }[] = [
     { key: 'all', label: '全部奖金' }, { key: 'low', label: '¥0–5k' }, { key: 'mid', label: '¥5k–20k' }, { key: 'high', label: '¥20k+' },
@@ -374,9 +399,13 @@ export default function CompanyPerformance({ navigate }: { navigate: (view: stri
   const isFull = (t: PoolTask) => t.current_participants >= t.max_participants;
   const isJoined = false; // TODO: track per user
 
-  const getBadge = (t: PoolTask) => t.status === 'in_progress'
-    ? { label: '进行中', cls: 'bg-primary-container text-on-primary-container' }
-    : { label: '开放中', cls: 'bg-secondary-container text-on-secondary-container' };
+  const STATUS_BADGE: Record<string, { label: string; cls: string }> = {
+    published: { label: '发布', cls: 'bg-sky-100 text-sky-700' },
+    claiming: { label: '认领中', cls: 'bg-blue-100 text-blue-700' },
+    in_progress: { label: '进行中', cls: 'bg-emerald-100 text-emerald-700' },
+    rewarded: { label: '已发赏', cls: 'bg-purple-100 text-purple-700' },
+  };
+  const getBadge = (t: PoolTask) => STATUS_BADGE[t.status] || { label: t.status, cls: 'bg-slate-100 text-slate-500' };
 
   const detail = selectedTask ? (MOCK_DETAILS[selectedTask.id] || MOCK_DETAILS.default) : MOCK_DETAILS.default;
 
@@ -390,6 +419,13 @@ export default function CompanyPerformance({ navigate }: { navigate: (view: stri
           {/* Title Row (Action Buttons) */}
           <div className={`flex justify-end mb-3 ${isMobile ? '' : ''}`}>
             <div className={`flex items-center ${isMobile ? 'gap-1.5 w-full' : 'gap-2'}`}>
+              {canManagePool && (
+                <button onClick={() => navigate('workflows?tab=pending')}
+                  className={`flex items-center gap-1 bg-white dark:bg-slate-800 rounded-lg text-primary hover:bg-primary/5 shadow-sm transition-all border border-primary/20 ${isMobile ? 'p-2' : 'px-4 py-2 text-xs font-bold'}`}>
+                  <span className={`material-symbols-outlined ${isMobile ? 'text-[18px]' : 'text-[16px]'}`}>rule</span>
+                  {!isMobile && '审批'}
+                </button>
+              )}
               {canDeleteTask && (
                 <button onClick={() => setShowTrash(true)}
                   className={`relative flex items-center gap-1 rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-all border border-outline-variant/10 bg-surface-container-low ${isMobile ? 'p-2' : 'px-3 py-2 text-xs font-medium'}`}>
@@ -419,6 +455,14 @@ export default function CompanyPerformance({ navigate }: { navigate: (view: stri
                 {!isMobile && '我的提案'}
                 {myProposals.length > 0 && (
                   <span className="absolute -top-1 -right-1 min-w-[14px] h-3.5 bg-violet-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center px-0.5 pointer-events-none">{myProposals.length}</span>
+                )}
+              </button>
+              <button onClick={() => setShowMyClaims(!showMyClaims)}
+                className={`relative flex items-center gap-1 rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-all border border-outline-variant/10 bg-surface-container-low ${isMobile ? 'p-2' : 'px-3 py-2 text-xs font-medium'}`}>
+                <span className={`material-symbols-outlined ${isMobile ? 'text-[18px]' : 'text-[16px]'}`}>assignment_ind</span>
+                {!isMobile && '我的认领'}
+                {myClaims.length > 0 && (
+                  <span className="absolute -top-1 -right-1 min-w-[14px] h-3.5 bg-blue-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center px-0.5 pointer-events-none">{myClaims.length}</span>
                 )}
               </button>
             </div>
@@ -617,7 +661,7 @@ export default function CompanyPerformance({ navigate }: { navigate: (view: stri
                   {leaderboard.filter(u => !personnelSearchKey || u.name.toLowerCase().includes(personnelSearchKey.toLowerCase()) || (u.department_name && u.department_name.toLowerCase().includes(personnelSearchKey.toLowerCase()))).map((user, idx) => {
                      const userTasks = tasks.filter(t => t.participant_names?.includes(user.name));
                      const ongoingCount = userTasks.filter(t => t.status === 'in_progress').length;
-                     const closedCount = userTasks.filter(t => t.status === 'closed').length;
+                     const closedCount = userTasks.filter(t => t.status === 'rewarded').length;
                      const isSelected = expandedUserId === user.id;
 
                      return (
@@ -653,9 +697,9 @@ export default function CompanyPerformance({ navigate }: { navigate: (view: stri
                     if (!selectedUser) return null;
                     const userTasks = tasks.filter(t => t.participant_names?.includes(selectedUser.name));
                     
-                    const openT = userTasks.filter(t => t.status === 'open');
+                    const openT = userTasks.filter(t => t.status === 'claiming');
                     const inProgressT = userTasks.filter(t => t.status === 'in_progress');
-                    const closedT = userTasks.filter(t => t.status === 'closed');
+                    const closedT = userTasks.filter(t => t.status === 'rewarded');
                     
                     const renderGroup = (title: string, icon: string, color: string, list: PoolTask[]) => {
                       if (list.length === 0) return null;
@@ -706,9 +750,9 @@ export default function CompanyPerformance({ navigate }: { navigate: (view: stri
                           </div>
                         ) : (
                           <>
-                            {renderGroup('开放中', 'lock_open', 'text-slate-600 dark:text-slate-300', openT)}
+                            {renderGroup('认领中', 'person_add', 'text-blue-600', openT)}
                             {renderGroup('进行中', 'directions_run', 'text-amber-600', inProgressT)}
-                            {renderGroup('已完结', 'task_alt', 'text-emerald-600', closedT)}
+                            {renderGroup('已发赏', 'task_alt', 'text-emerald-600', closedT)}
                           </>
                         )}
                       </div>
@@ -750,19 +794,111 @@ export default function CompanyPerformance({ navigate }: { navigate: (view: stri
             actTime: decoded.actTime,
             taskType: selectedTask.department,
             bonus: String(selectedTask.bonus),
-            rewardType: selectedTask.reward_type
+            rewardType: selectedTask.reward_type,
+            maxParticipants: String(selectedTask.max_participants),
+            attachments: (selectedTask as any).attachments ? JSON.parse((selectedTask as any).attachments) : []
           };
         })()}
         customFooter={
-          <div className="flex gap-3 w-full">
-            <button onClick={() => setSelectedTask(null)}
-              className="flex-1 py-3 rounded-xl text-sm font-medium text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">
-              暂不参与
-            </button>
-            <button onClick={() => setModalStep('apply')}
-              className="flex-1 py-3 rounded-xl text-sm font-bold text-white primary-gradient shadow-md hover:opacity-90 transition-opacity">
-              发起加入申请
-            </button>
+          <div className="w-full">
+            {/* ── 已认领成员展示 ── */}
+            {(() => {
+              const approvedClaims = (selectedTask?.role_claims || []).filter((c: any) => c.status === 'approved');
+              if (approvedClaims.length === 0 || !['claiming', 'in_progress', 'rewarded'].includes(selectedTask?.status || '')) return null;
+              
+              const ROLE_LABELS: Record<string, string> = { R: '执行者', A: '责任验收者', C: '被咨询者', I: '被告知者' };
+              const ROLE_COLORS: Record<string, { bg: string; text: string; border: string; dot: string }> = {
+                A: { bg: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-200', dot: 'bg-amber-400' },
+                R: { bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-200', dot: 'bg-blue-400' },
+                C: { bg: 'bg-purple-50', text: 'text-purple-700', border: 'border-purple-200', dot: 'bg-purple-400' },
+                I: { bg: 'bg-slate-50', text: 'text-slate-600', border: 'border-slate-200', dot: 'bg-slate-400' },
+              };
+              // Group by role
+              const grouped: Record<string, typeof approvedClaims> = {};
+              approvedClaims.forEach((c: any) => {
+                if (!grouped[c.role_name]) grouped[c.role_name] = [];
+                grouped[c.role_name].push(c);
+              });
+              const roleOrder = ['A', 'R', 'C', 'I'];
+
+              return (
+                <div className="mb-3 p-3 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700">
+                  <div className="flex items-center gap-2 mb-2.5">
+                    <span className="material-symbols-outlined text-[16px] text-emerald-500">group</span>
+                    <span className="text-xs font-bold text-slate-700 dark:text-slate-200">项目成员</span>
+                    <span className="text-[10px] text-slate-400 ml-auto">{approvedClaims.length}人已加入</span>
+                  </div>
+                  <div className="space-y-1.5">
+                    {roleOrder.filter(r => grouped[r]).map(role => {
+                      const colors = ROLE_COLORS[role] || ROLE_COLORS.I;
+                      return (
+                        <div key={role} className="flex items-center gap-2">
+                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold ${colors.bg} ${colors.text} border ${colors.border}`}>
+                            <span className={`w-1.5 h-1.5 rounded-full ${colors.dot}`}></span>
+                            {role} {ROLE_LABELS[role]}
+                          </span>
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            {grouped[role].map((c: any) => (
+                              <span key={c.id} className="inline-flex items-center gap-1 text-xs text-slate-600 dark:text-slate-300">
+                                <span className="w-5 h-5 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 text-white text-[9px] font-bold flex items-center justify-center shadow-sm">
+                                  {(c.user_name || '?')[0]}
+                                </span>
+                                {c.user_name}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* ── 操作按钮 ── */}
+            <div className="flex gap-3 w-full">
+            {selectedTask?.status === 'claiming' ? (
+              <>
+                <button onClick={() => setSelectedTask(null)}
+                  className="flex-1 py-3 rounded-xl text-sm font-medium text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">
+                  暂不参与
+                </button>
+                <button onClick={() => setModalStep('apply')}
+                  className="flex-1 py-3 rounded-xl text-sm font-bold text-white primary-gradient shadow-md hover:opacity-90 transition-opacity">
+                  认领角色
+                </button>
+              </>
+            ) : selectedTask?.status === 'published' && canManagePool ? (
+              <button onClick={async () => {
+                if (!confirm('确认发布认领？发布后所有员工可认领角色')) return;
+                const token = localStorage.getItem('token');
+                const res = await fetch(`/api/pool/tasks/${selectedTask.id}/start-claiming`, {
+                  method: 'POST', headers: { Authorization: `Bearer ${token}` }
+                });
+                const json = await res.json();
+                if (json.code === 0) {
+                  fetchTasks();
+                  setSelectedTask(null);
+                } else {
+                  alert(json.message);
+                }
+              }}
+                className="flex-1 py-3 rounded-xl text-sm font-bold text-white bg-sky-600 shadow-md hover:opacity-90 transition-opacity flex items-center justify-center gap-2">
+                <span className="material-symbols-outlined text-[18px]">rocket_launch</span>
+                发布认领
+              </button>
+            ) : selectedTask?.status === 'proposing' && canManagePool ? (
+              <button onClick={() => { setSelectedTask(null); navigate('workflows'); }}
+                className="flex-1 py-3 rounded-xl text-sm font-bold text-white bg-amber-500 shadow-md hover:opacity-90 transition-opacity">
+                前往审核
+              </button>
+            ) : (
+              <button onClick={() => setSelectedTask(null)}
+                className="flex-1 py-3 rounded-xl text-sm font-medium text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">
+                关闭
+              </button>
+            )}
+            </div>
           </div>
         }
       />
@@ -808,10 +944,12 @@ export default function CompanyPerformance({ navigate }: { navigate: (view: stri
                     <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-2.5">
                       选择参与角色
                     </label>
-                    <div className="flex gap-3">
+                    <div className="grid grid-cols-2 gap-2">
                       {[
-                        { key: 'R' as const, icon: 'person', label: '负责人', desc: '主导任务交付，对结果负最终责任', color: 'blue' },
-                        { key: 'A' as const, icon: 'engineering', label: '执行人', desc: '实际执行任务，参与具体工作', color: 'emerald' },
+                        { key: 'R' as const, icon: 'engineering', label: '执行者', desc: '实际执行任务，参与具体工作（可多人）', color: 'blue' },
+                        { key: 'A' as const, icon: 'verified', label: '责任验收者', desc: '对结果负最终责任，验收交付物（仅一人）', color: 'emerald' },
+                        { key: 'C' as const, icon: 'forum', label: '被咨询者', desc: '提供专业意见和建议支持（顾问角色）', color: 'amber' },
+                        { key: 'I' as const, icon: 'notifications', label: '被告知者', desc: '接收进度通知，不参与具体工作', color: 'slate' },
                       ].map(r => (
                         <button key={r.key} onClick={() => setApplyRole(r.key)}
                           className={`flex-1 p-3.5 rounded-xl border-2 transition-all text-left ${
@@ -830,6 +968,19 @@ export default function CompanyPerformance({ navigate }: { navigate: (view: stri
                         </button>
                       ))}
                     </div>
+
+                  {/* RACI 原则说明 */}
+                  <div className="mt-3 p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200/60 dark:border-slate-700">
+                    <p className="text-[11px] font-bold text-slate-600 dark:text-slate-300 mb-2 flex items-center gap-1">
+                      <span className="material-symbols-outlined text-[14px]">info</span>RACI 责任矩阵原则
+                    </p>
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[10px] text-slate-500 dark:text-slate-400">
+                      <div><strong className="text-blue-600">R</strong> Responsible — 执行者，负责完成具体工作</div>
+                      <div><strong className="text-emerald-600">A</strong> Accountable — 责任人，对结果负最终责任</div>
+                      <div><strong className="text-amber-600">C</strong> Consulted — 咨询者，提供专业意见</div>
+                      <div><strong className="text-slate-600">I</strong> Informed — 知情者，接收进展通知</div>
+                    </div>
+                  </div>
                   </div>
 
                   {/* Reason */}
@@ -974,7 +1125,8 @@ export default function CompanyPerformance({ navigate }: { navigate: (view: stri
                 difficulty: '中',
                 reward_type: data.rewardType,
                 bonus: Number(data.bonus) || 0,
-                max_participants: 5,
+                max_participants: Number(data.maxParticipants) || 5,
+                attachments: data.attachments || [],
                 is_draft: true,
               }),
             });
@@ -987,12 +1139,12 @@ export default function CompanyPerformance({ navigate }: { navigate: (view: stri
           } catch { alert('保存失败'); }
         }}
         initialData={{
-          summary: '提出公司级或跨部门的新项目提案，经审批后入池',
-          s: '预期达成什么样的关键结果？',
-          m: '如何衡量成果的好坏（交付标准）？',
-          a_smart: '初步的执行思路和需要的资源支持有哪些？',
-          r_smart: '该提案能为公司带来什么价值或解决什么痛点？',
-          t: '期望完成的合适时间周期是？',
+          summary: '',
+          s: '',
+          m: '',
+          a_smart: '',
+          r_smart: '',
+          t: '',
           taskType: '重点项目',
           bonus: '0',
           rewardType: 'money',
@@ -1010,12 +1162,12 @@ export default function CompanyPerformance({ navigate }: { navigate: (view: stri
         users={users}
         submitting={publishing}
         initialData={{
-          summary: '发布直接生效的公司级核心任务',
-          s: '预期达成什么样的关键结果？',
-          m: '如何衡量成果的好坏（交付标准）？',
-          a_smart: '初步的执行思路和需要的资源支持有哪些？',
-          r_smart: '该任务能为公司带来什么核心价值？',
-          t: '期望完成的合适时间周期是？',
+          summary: '',
+          s: '',
+          m: '',
+          a_smart: '',
+          r_smart: '',
+          t: '',
           taskType: '重点项目',
           bonus: '0',
           rewardType: 'money',
@@ -1064,6 +1216,96 @@ export default function CompanyPerformance({ navigate }: { navigate: (view: stri
         </div>
       )}
 
+      {/* ── My Claims Panel ── */}
+      {showMyClaims && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm" onClick={() => setShowMyClaims(false)} />
+          <div className="relative bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden">
+            <div className="bg-gradient-to-br from-[#0060a9] to-[#4da3e8] px-6 py-4 text-white flex items-center justify-between">
+              <h3 className="font-bold text-lg flex items-center gap-2">
+                <span className="material-symbols-outlined text-[20px]">assignment_ind</span>
+                我的认领
+              </h3>
+              <button onClick={() => setShowMyClaims(false)} className="text-white/60 hover:text-white">
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+            <div className="p-4 max-h-96 overflow-y-auto space-y-3">
+              {myClaims.length === 0 ? (
+                <div className="text-center py-8">
+                  <span className="material-symbols-outlined text-[40px] text-slate-300 mb-2 block">assignment</span>
+                  <p className="text-slate-400 text-sm">暂未认领任何任务</p>
+                  <p className="text-slate-300 text-xs mt-1">可在赏金榜中选择感兴趣的任务认领角色</p>
+                </div>
+              ) : myClaims.map((c: any) => {
+                const ROLE_LABELS: Record<string, string> = { R: '执行者', A: '责任验收者', C: '被咨询者', I: '被告知者' };
+                const ROLE_COLORS: Record<string, string> = {
+                  A: 'bg-amber-100 text-amber-700 border-amber-200',
+                  R: 'bg-blue-100 text-blue-700 border-blue-200',
+                  C: 'bg-purple-100 text-purple-700 border-purple-200',
+                  I: 'bg-slate-100 text-slate-600 border-slate-200',
+                };
+                const CLAIM_STATUS: Record<string, [string, string]> = {
+                  pending: ['审核中', 'bg-yellow-100 text-yellow-700'],
+                  approved: ['已通过', 'bg-emerald-100 text-emerald-700'],
+                  rejected: ['已拒绝', 'bg-red-100 text-red-700'],
+                };
+                const TASK_STATUS: Record<string, [string, string]> = {
+                  claiming: ['认领中', 'bg-blue-100 text-blue-700'],
+                  in_progress: ['进行中', 'bg-emerald-100 text-emerald-700'],
+                  rewarded: ['已发赏', 'bg-amber-100 text-amber-700'],
+                  published: ['已发布', 'bg-indigo-100 text-indigo-700'],
+                };
+                const [claimLabel, claimCls] = CLAIM_STATUS[c.status] || [c.status, 'bg-slate-100 text-slate-500'];
+                const [taskLabel, taskCls] = TASK_STATUS[c.task_status] || [c.task_status || '', 'bg-slate-100 text-slate-500'];
+                const isScore = c.task_reward_type === 'score';
+
+                return (
+                  <div key={c.id} 
+                    onClick={() => {
+                      const t = tasks.find((t: any) => t.id === c.pool_task_id);
+                      if (t) { setShowMyClaims(false); openTaskDetail(t); }
+                    }}
+                    className="bg-slate-50 dark:bg-slate-800 rounded-xl p-4 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors border border-slate-100 dark:border-slate-700">
+                    {/* Header: task title + claim status */}
+                    <div className="flex items-start justify-between gap-2 mb-2">
+                      <span className="font-bold text-sm text-slate-800 dark:text-slate-200 truncate flex-1">{c.task_title}</span>
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 ${claimCls}`}>{claimLabel}</span>
+                    </div>
+                    {/* Role badge + task status */}
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold border ${ROLE_COLORS[c.role_name] || ROLE_COLORS.I}`}>
+                        {c.role_name} {ROLE_LABELS[c.role_name] || c.role_name}
+                      </span>
+                      {taskLabel && (
+                        <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${taskCls}`}>{taskLabel}</span>
+                      )}
+                    </div>
+                    {/* Meta info */}
+                    <div className="flex items-center gap-3 text-[10px] text-slate-400">
+                      {c.task_bonus > 0 && (
+                        <span className="font-medium">{isScore ? `${c.task_bonus}分` : `¥${c.task_bonus.toLocaleString()}`}</span>
+                      )}
+                      {c.reward > 0 && (
+                        <span className="text-emerald-500 font-bold">个人奖: {isScore ? `${c.reward}分` : `¥${c.reward}`}</span>
+                      )}
+                      {c.task_department && <span>{c.task_department}</span>}
+                      <span>{new Date(c.created_at).toLocaleDateString()}</span>
+                    </div>
+                    {/* Reason if exists */}
+                    {c.reason && (
+                      <div className="mt-2 bg-blue-50 dark:bg-blue-900/20 rounded-lg px-3 py-1.5 text-xs text-blue-600 dark:text-blue-400">
+                        <span className="font-bold">认领理由：</span>{c.reason}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── Viewing/Editing a Proposal ─────────────────────────────── */}
       {viewingProposal && (
         <SmartTaskModal
@@ -1084,7 +1326,9 @@ export default function CompanyPerformance({ navigate }: { navigate: (view: stri
                   difficulty: viewingProposal.difficulty || '中',
                   reward_type: data.rewardType || viewingProposal.reward_type,
                   bonus: Number(data.bonus) || viewingProposal.bonus || 0,
+                  max_participants: Number(data.maxParticipants) || viewingProposal.max_participants || 5,
                   proposal_status: 'pending_hr',
+                  attachments: data.attachments || viewingProposal.attachments || []
                 }),
               });
               setViewingProposal(null);
@@ -1103,6 +1347,15 @@ export default function CompanyPerformance({ navigate }: { navigate: (view: stri
               const m = desc.match(new RegExp(`【${label}】([\\s\\S]*?)(?=【|$)`));
               return m ? m[1].trim() : '';
             };
+            // Safely parse attachments: handle string, array, null
+            let parsedAttachments: any[] = [];
+            try {
+              if (Array.isArray(p.attachments)) {
+                parsedAttachments = p.attachments;
+              } else if (typeof p.attachments === 'string' && p.attachments) {
+                parsedAttachments = JSON.parse(p.attachments);
+              }
+            } catch { parsedAttachments = []; }
             return {
               id: p.id,
               status: p.proposal_status,
@@ -1116,13 +1369,60 @@ export default function CompanyPerformance({ navigate }: { navigate: (view: stri
               taskType: p.department || '',
               bonus: String(p.bonus || 0),
               rewardType: p.reward_type || 'money',
+              maxParticipants: p.max_participants || 5,
               hr_reviewer_name: p.hr_reviewer_name,
               hr_reviewer_id: p.hr_reviewer_id,
               admin_reviewer_name: p.admin_reviewer_name,
               admin_reviewer_id: p.admin_reviewer_id,
               creator_name: p.creator_name || currentUser?.name,
+              attachments: parsedAttachments
             };
           })()}
+          onDraft={async (data) => {
+            try {
+              const token = localStorage.getItem('token');
+              const smartDescription = `【目标 S】${data.s}\n【指标 M】${data.m}\n【方案 A】${data.a_smart}\n【相关 R】${data.r_smart}\n【时限 T】${data.t}`;
+              const res = await fetch(`/api/pool/tasks/${viewingProposal.id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                body: JSON.stringify({
+                  title: data.summary || viewingProposal.title,
+                  description: smartDescription,
+                  department: data.taskType || viewingProposal.department,
+                  difficulty: viewingProposal.difficulty || '中',
+                  reward_type: data.rewardType || viewingProposal.reward_type,
+                  bonus: Number(data.bonus) || viewingProposal.bonus || 0,
+                  max_participants: Number(data.maxParticipants) || viewingProposal.max_participants || 5,
+                  attachments: data.attachments || [],
+                }),
+              });
+              const json = await res.json();
+              if (json.code === 0) {
+                alert('草稿已保存');
+                setViewingProposal(null);
+                fetchMyProposals();
+              } else { alert(json.message || '保存失败'); }
+            } catch { alert('保存失败'); }
+          }}
+          onDelete={async () => {
+            if (viewingProposal.proposal_status !== 'draft') return;
+            try {
+              const token = localStorage.getItem('token');
+              const res = await fetch(`/api/pool/tasks/${viewingProposal.id}`, {
+                method: 'DELETE',
+                headers: { Authorization: `Bearer ${token}` }
+              });
+              const data = await res.json();
+              if (data.code === 0 || data.success) {
+                setViewingProposal(null);
+                fetchMyProposals();
+              } else {
+                alert(data.message || '删除失败');
+              }
+            } catch {
+              alert('网络错误');
+            }
+          }}
         />
       )}
 

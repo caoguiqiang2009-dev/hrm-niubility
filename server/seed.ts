@@ -63,12 +63,12 @@ export function seedData(): void {
   db.prepare(`INSERT INTO team_feeds (type, title, content, user_id) VALUES (?, ?, ?, ?)`).run('update', 'Azure Horizon 3.0 开发里程碑已达成', '项目核心功能开发完成，进入测试阶段', 'wangming');
 
   // 薪资模板
-  db.prepare(`INSERT INTO salary_templates (name, type, default_amount, sort_order) VALUES (?, ?, ?, ?)`).run('基本工资', 'income', 15000, 1);
-  db.prepare(`INSERT INTO salary_templates (name, type, default_amount, sort_order) VALUES (?, ?, ?, ?)`).run('绩效奖金', 'income', 0, 2);
-  db.prepare(`INSERT INTO salary_templates (name, type, default_amount, sort_order) VALUES (?, ?, ?, ?)`).run('全勤奖', 'income', 500, 3);
-  db.prepare(`INSERT INTO salary_templates (name, type, default_amount, calc_formula, sort_order) VALUES (?, ?, ?, ?, ?)`).run('社保代扣', 'deduction', 0, 'base * 0.105', 4);
-  db.prepare(`INSERT INTO salary_templates (name, type, default_amount, calc_formula, sort_order) VALUES (?, ?, ?, ?, ?)`).run('公积金代扣', 'deduction', 0, 'base * 0.12', 5);
-  db.prepare(`INSERT INTO salary_templates (name, type, default_amount, calc_formula, sort_order) VALUES (?, ?, ?, ?, ?)`).run('个人所得税', 'deduction', 0, 'auto_tax', 6);
+  db.prepare(`INSERT INTO salary_templates (name, key, type, default_amount, sort_order) VALUES (?, ?, ?, ?, ?)`).run('基本工资', 'base_salary', 'income', 15000, 1);
+  db.prepare(`INSERT INTO salary_templates (name, key, type, default_amount, sort_order) VALUES (?, ?, ?, ?, ?)`).run('绩效奖金', 'perf_bonus', 'income', 0, 2);
+  db.prepare(`INSERT INTO salary_templates (name, key, type, default_amount, sort_order) VALUES (?, ?, ?, ?, ?)`).run('全勤奖', 'attendance_bonus', 'income', 500, 3);
+  db.prepare(`INSERT INTO salary_templates (name, key, type, default_amount, calc_formula, sort_order) VALUES (?, ?, ?, ?, ?, ?)`).run('社保代扣', 'social_insurance', 'deduction', 0, 'base * 0.105', 4);
+  db.prepare(`INSERT INTO salary_templates (name, key, type, default_amount, calc_formula, sort_order) VALUES (?, ?, ?, ?, ?, ?)`).run('公积金代扣', 'housing_fund', 'deduction', 0, 'base * 0.12', 5);
+  db.prepare(`INSERT INTO salary_templates (name, key, type, default_amount, calc_formula, sort_order) VALUES (?, ?, ?, ?, ?, ?)`).run('个人所得税', 'income_tax', 'deduction', 0, 'auto_tax', 6);
 
   // 日常待办任务
   const dailyTasks = [

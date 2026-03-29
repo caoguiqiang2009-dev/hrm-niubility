@@ -17,7 +17,7 @@ import authRoutes from './routes/auth';
 import orgRoutes from './routes/org';
 import perfRoutes from './routes/perf';
 import teamRoutes from './routes/team';
-import salaryRoutes from './routes/salary';
+import perfStatsRoutes from './routes/perf-stats';
 import notifyRoutes from './routes/notify';
 import dashboardRoutes from './routes/dashboard';
 import poolRoutes from './routes/pool';
@@ -32,7 +32,12 @@ import perfAnalyticsRoutes from './routes/perf-analytics';
 import perfSupervisionRoutes from './routes/perf-supervision';
 import perfFinanceRoutes from './routes/perf-finance';
 import perfPDCARoutes from './routes/perf-pdca';
-
+import competencyRoutes from './routes/competency';
+import uploadRoutes from './routes/upload';
+import workflowFixRoutes from './routes/workflow-fix';
+import testsRoutes from './routes/tests';
+import monthlyEvalRoutes from './routes/monthly-eval';
+import payrollExportRoutes from './routes/payroll-export';
 const app = express();
 const PORT = process.env.SERVER_PORT || 3001;
 
@@ -46,7 +51,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/org', orgRoutes);
 app.use('/api/perf', perfRoutes);
 app.use('/api/team', teamRoutes);
-app.use('/api/salary', salaryRoutes);
+app.use('/api/perf/stats', perfStatsRoutes);
 app.use('/api/notify', notifyRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/pool', poolRoutes);
@@ -61,7 +66,12 @@ app.use('/api/perf/analytics', perfAnalyticsRoutes);
 app.use('/api/perf/supervision', perfSupervisionRoutes);
 app.use('/api/perf/finance', perfFinanceRoutes);
 app.use('/api/perf/pdca', perfPDCARoutes);
-
+app.use('/api/competency', competencyRoutes);
+app.use('/api/uploads', uploadRoutes);
+app.use('/api/workflow-fix', workflowFixRoutes);
+app.use('/api/tests', testsRoutes);
+app.use('/api/monthly-eval', monthlyEvalRoutes);
+app.use('/api/payroll-export', payrollExportRoutes);
 // 健康检查
 app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });

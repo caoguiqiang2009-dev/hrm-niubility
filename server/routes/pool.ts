@@ -12,24 +12,45 @@ try {
   db0.exec("ALTER TABLE pool_tasks ADD COLUMN deleted_at DATETIME");
 } catch(e) { /* column already exists */ }
 
-// 绩效池任务列表 (只显示 proposal_status = 'approved' 且未删除的任务)
-router.get('/tasks', authMiddleware, (req, res) => {
+// 绩效池任务列表 (新状态: proposing/claiming/in_progress/rewarded)
+// proposing 状态仅 HR/Admin 可见
+router.get('/tasks', authMiddleware, (req: AuthRequest, res) => {
   const db = getDb();
   const { status, department } = req.query;
-  let sql = "SELECT pt.*, u.name as creator_name FROM pool_tasks pt LEFT JOIN users u ON pt.created_by = u.id WHERE pt.proposal_status = 'approved' AND pt.deleted_at IS NULL";
+  const user = db.prepare('SELECT role FROM users WHERE id = ?').get(req.userId) as any;
+  const isHrAdmin = user && ['hr', 'admin'].includes(user.role);
+
+  let sql = `SELECT pt.*, u.name as creator_name FROM pool_tasks pt LEFT JOIN users u ON pt.created_by = u.id WHERE pt.deleted_at IS NULL AND pt.proposal_status != 'rejected'`;
   const params: any[] = [];
-  if (status) { sql += ' AND pt.status = ?'; params.push(status); }
+
+  // 非HR/Admin用户看不到 proposing 状态的任务
+  if (!isHrAdmin) {
+    sql += " AND pt.status != 'proposing'";
+  }
+  if (status && status !== 'all') { sql += ' AND pt.status = ?'; params.push(status); }
   if (department) { sql += ' AND pt.department = ?'; params.push(department); }
   sql += ' ORDER BY pt.created_at DESC';
 
   const tasks = db.prepare(sql).all(...params);
 
-  // 附加参与者信息（含姓名）
+  // 附加参与者信息 + 角色认领信息
   const result = tasks.map((t: any) => {
     const participants = db.prepare(
       'SELECT pp.user_id, u2.name as user_name FROM pool_participants pp LEFT JOIN users u2 ON pp.user_id = u2.id WHERE pp.pool_task_id = ?'
     ).all(t.id) as any[];
-    return { ...t, participants, current_participants: participants.length, participant_names: participants.map((p: any) => p.user_name).filter(Boolean) };
+    const roleClaims = db.prepare(
+      `SELECT rc.*, u3.name as user_name FROM pool_role_claims rc LEFT JOIN users u3 ON rc.user_id = u3.id WHERE rc.pool_task_id = ? ORDER BY rc.created_at`
+    ).all(t.id) as any[];
+    let rolesConfig = [];
+    try { rolesConfig = JSON.parse(t.roles_config || '[]'); } catch {}
+    return {
+      ...t,
+      participants,
+      current_participants: participants.length,
+      participant_names: participants.map((p: any) => p.user_name).filter(Boolean),
+      role_claims: roleClaims,
+      roles_config: rolesConfig,
+    };
   });
 
   return res.json({ code: 0, data: result });
@@ -62,6 +83,12 @@ router.get('/tasks/:id', authMiddleware, (req, res) => {
   ).all(task.id) as any[];
   task.pending_join_requests = pendingJoins;
 
+  // [BUG-4 FIX] 附加角色认领数据
+  const roleClaims = db.prepare(
+    `SELECT rc.*, u.name as user_name FROM pool_role_claims rc LEFT JOIN users u ON rc.user_id = u.id WHERE rc.pool_task_id = ? ORDER BY rc.created_at DESC`
+  ).all(task.id) as any[];
+  task.role_claims = roleClaims;
+
   return res.json({ code: 0, data: task });
 });
 
@@ -88,7 +115,7 @@ router.get('/leaderboard', authMiddleware, (req, res) => {
 
 // 员工提议新任务 (任何人都可以提)
 router.post('/tasks/propose', authMiddleware, async (req: AuthRequest, res) => {
-  const { title, description, department, difficulty, reward_type, bonus, max_participants, is_draft } = req.body;
+  const { title, description, department, difficulty, reward_type, bonus, max_participants, is_draft, attachments } = req.body;
   if (!title) return res.status(400).json({ code: 400, message: '任务标题不能为空' });
   const db = getDb();
 
@@ -97,15 +124,15 @@ router.post('/tasks/propose', authMiddleware, async (req: AuthRequest, res) => {
   try { db.exec("ALTER TABLE pool_tasks ADD COLUMN proposal_status TEXT DEFAULT 'approved'"); } catch(e) {}
   try { db.exec("ALTER TABLE pool_tasks ADD COLUMN hr_reviewer_id TEXT"); } catch(e) {}
   try { db.exec("ALTER TABLE pool_tasks ADD COLUMN admin_reviewer_id TEXT"); } catch(e) {}
-  try { db.exec("ALTER TABLE pool_tasks ADD COLUMN reject_reason TEXT"); } catch(e) {}
-  try { db.exec("ALTER TABLE pool_tasks ADD COLUMN reward_type TEXT DEFAULT 'money'"); } catch(e) {}
-
+  try { db.exec("ALTER TABLE pool_tasks ADD COLUMN attachments TEXT DEFAULT '[]'"); } catch(e) {}
   const proposalStatus = is_draft ? 'draft' : 'pending_hr';
+  
+  const attachmentsStr = attachments ? (typeof attachments === 'string' ? attachments : JSON.stringify(attachments)) : '[]';
 
   const result = db.prepare(
-    `INSERT INTO pool_tasks (title, description, department, difficulty, reward_type, bonus, max_participants, created_by, status, proposal_status) 
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?)`
-  ).run(title, description || null, department || null, difficulty || 'normal', reward_type || 'money', bonus || 0, max_participants || 5, req.userId, proposalStatus);
+    `INSERT INTO pool_tasks (title, description, department, difficulty, reward_type, bonus, max_participants, created_by, status, proposal_status, attachments) 
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'proposing', ?, ?)`
+  ).run(title, description || null, department || null, difficulty || 'normal', reward_type || 'money', bonus || 0, max_participants || 5, req.userId, proposalStatus, attachmentsStr);
 
   // 只在正式提交（非草稿）时通知 HR + Admin
   if (!is_draft) {
@@ -135,7 +162,7 @@ router.put('/tasks/:id', authMiddleware, (req: AuthRequest, res) => {
   if (!task) return res.status(404).json({ code: 404, message: '提案不存在' });
   if (task.created_by !== req.userId) return res.status(403).json({ code: 403, message: '无权编辑' });
   
-  const { title, description, department, difficulty, reward_type, bonus, proposal_status } = req.body;
+  const { title, description, department, difficulty, reward_type, bonus, proposal_status, attachments } = req.body;
   const sets: string[] = [];
   const vals: any[] = [];
   if (title !== undefined) { sets.push('title = ?'); vals.push(title); }
@@ -145,6 +172,7 @@ router.put('/tasks/:id', authMiddleware, (req: AuthRequest, res) => {
   if (reward_type !== undefined) { sets.push('reward_type = ?'); vals.push(reward_type); }
   if (bonus !== undefined) { sets.push('bonus = ?'); vals.push(bonus); }
   if (proposal_status !== undefined) { sets.push('proposal_status = ?'); vals.push(proposal_status); }
+  if (attachments !== undefined) { sets.push('attachments = ?'); vals.push(typeof attachments === 'string' ? attachments : JSON.stringify(attachments)); }
   
   if (sets.length === 0) return res.json({ code: 0, message: '无更新' });
   vals.push(id);
@@ -154,7 +182,7 @@ router.put('/tasks/:id', authMiddleware, (req: AuthRequest, res) => {
 
 // 授权用户直接发布任务
 router.post('/tasks/publish', authMiddleware, (req: AuthRequest, res) => {
-  const { title, description, department, difficulty, reward_type, bonus, max_participants } = req.body;
+  const { title, description, department, difficulty, reward_type, bonus, max_participants, attachments } = req.body;
   if (!title) return res.status(400).json({ code: 400, message: '任务标题不能为空' });
   const db = getDb();
 
@@ -171,11 +199,14 @@ router.post('/tasks/publish', authMiddleware, (req: AuthRequest, res) => {
   try { db.exec("ALTER TABLE pool_tasks ADD COLUMN admin_reviewer_id TEXT"); } catch(e) {}
   try { db.exec("ALTER TABLE pool_tasks ADD COLUMN reject_reason TEXT"); } catch(e) {}
   try { db.exec("ALTER TABLE pool_tasks ADD COLUMN reward_type TEXT DEFAULT 'money'"); } catch(e) {}
+  try { db.exec("ALTER TABLE pool_tasks ADD COLUMN attachments TEXT DEFAULT '[]'"); } catch(e) {}
+  
+  const attachmentsStr = attachments ? (typeof attachments === 'string' ? attachments : JSON.stringify(attachments)) : '[]';
 
   const result = db.prepare(
-    `INSERT INTO pool_tasks (title, description, department, difficulty, reward_type, bonus, max_participants, created_by, status, proposal_status) 
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'open', 'approved')`
-  ).run(title, description || null, department || null, difficulty || 'normal', reward_type || 'money', bonus || 0, max_participants || 5, req.userId);
+    `INSERT INTO pool_tasks (title, description, department, difficulty, reward_type, bonus, max_participants, created_by, status, proposal_status, attachments) 
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'open', 'approved', ?)`
+  ).run(title, description || null, department || null, difficulty || 'normal', reward_type || 'money', bonus || 0, max_participants || 5, req.userId, attachmentsStr);
 
   // 全员通知新任务
   const allUserIds = (db.prepare("SELECT id FROM users").all() as any[]).map(u => u.id);
@@ -221,7 +252,7 @@ router.post('/proposals/:id/withdraw', authMiddleware, (req: AuthRequest, res) =
 
 // 修改提案 (草稿 or 被驳回均可编辑)
 router.post('/proposals/:id/resubmit', authMiddleware, (req: AuthRequest, res) => {
-  const { title, description, reward_type, bonus } = req.body;
+  const { title, description, reward_type, bonus, attachments } = req.body;
   const db = getDb();
 
   const proposal = db.prepare('SELECT * FROM pool_tasks WHERE id = ? AND created_by = ?').get(req.params.id, req.userId) as any;
@@ -231,9 +262,17 @@ router.post('/proposals/:id/resubmit', authMiddleware, (req: AuthRequest, res) =
   }
 
   // Edit and set status back to pending_hr
-  db.prepare(
-    `UPDATE pool_tasks SET title=?, description=?, reward_type=?, bonus=?, proposal_status='pending_hr', reject_reason=NULL WHERE id = ?`
-  ).run(title || proposal.title, description || proposal.description, reward_type || proposal.reward_type, bonus || proposal.bonus, proposal.id);
+  const attachmentsStr = attachments !== undefined ? (typeof attachments === 'string' ? attachments : JSON.stringify(attachments)) : undefined;
+  
+  if (attachmentsStr !== undefined) {
+    db.prepare(
+      `UPDATE pool_tasks SET title=?, description=?, reward_type=?, bonus=?, attachments=?, proposal_status='pending_hr', reject_reason=NULL WHERE id = ?`
+    ).run(title || proposal.title, description || proposal.description, reward_type || proposal.reward_type, bonus || proposal.bonus, attachmentsStr, proposal.id);
+  } else {
+    db.prepare(
+      `UPDATE pool_tasks SET title=?, description=?, reward_type=?, bonus=?, proposal_status='pending_hr', reject_reason=NULL WHERE id = ?`
+    ).run(title || proposal.title, description || proposal.description, reward_type || proposal.reward_type, bonus || proposal.bonus, proposal.id);
+  }
 
   // Notify HR
   const hrAdmins = db.prepare("SELECT id FROM users WHERE role IN ('hr', 'admin')").all() as any[];
@@ -266,7 +305,7 @@ router.put('/proposals/:id', authMiddleware, (req: AuthRequest, res) => {
 
 // 审批提案 (两级: HR审核 → Admin复核)
 router.post('/proposals/:id/review', authMiddleware, (req: AuthRequest, res) => {
-  const { action, reason, bonus, reward_type, max_participants } = req.body;
+  const { action, reason, bonus, reward_type, max_participants, department, attachments } = req.body;
   const db = getDb();
   const proposal = db.prepare('SELECT * FROM pool_tasks WHERE id = ?').get(req.params.id) as any;
   if (!proposal) return res.status(404).json({ code: 404, message: '提案不存在' });
@@ -285,6 +324,17 @@ router.post('/proposals/:id/review', authMiddleware, (req: AuthRequest, res) => 
       if (bonus !== undefined) { updateSql += ', bonus = ?'; params.push(Number(bonus) || 0); }
       if (reward_type) { updateSql += ', reward_type = ?'; params.push(reward_type); }
       if (max_participants) { updateSql += ', max_participants = ?'; params.push(Number(max_participants) || 5); }
+      if (department) { updateSql += ', department = ?'; params.push(department); }
+      if (attachments !== undefined) { updateSql += ', attachments = ?'; params.push(typeof attachments === 'string' ? attachments : JSON.stringify(attachments)); }
+      if (req.body.s) { 
+        const pdca = proposal.description?.match(/【PDCA】\n(.*)/s)?.[1] || 'Plan:  | Do:  | Check:  | Act: ';
+        updateSql += ', title = ?, description = ?'; 
+        params.push(
+          req.body.summary || proposal.title,
+          `【目标 S】\n${req.body.s}\n【指标 M】\n${req.body.m}\n【方案 A】\n${req.body.a_smart}\n【相关 R】\n${req.body.r_smart}\n【时限 T】\n${req.body.t}\n【PDCA】\n${pdca}`
+        ); 
+      }
+      if (reason && reason !== '同意') { updateSql += ', reject_reason = ?'; params.push(reason); }
       updateSql += ' WHERE id = ?';
       params.push(proposal.id);
       db.prepare(updateSql).run(...params);
@@ -304,18 +354,32 @@ router.post('/proposals/:id/review', authMiddleware, (req: AuthRequest, res) => 
       if (reviewer.role !== 'admin') {
         return res.status(403).json({ code: 403, message: '仅管理员可复核' });
       }
-      let updateSql = "UPDATE pool_tasks SET proposal_status = 'approved', status = 'open', admin_reviewer_id = ?";
+      let updateSql = "UPDATE pool_tasks SET proposal_status = 'approved', status = 'published', admin_reviewer_id = ?";
       const params: any[] = [req.userId];
       if (bonus !== undefined) { updateSql += ', bonus = ?'; params.push(Number(bonus) || 0); }
       if (reward_type) { updateSql += ', reward_type = ?'; params.push(reward_type); }
       if (max_participants) { updateSql += ', max_participants = ?'; params.push(Number(max_participants) || 5); }
+      if (req.body.s) { 
+        const pdca = proposal.description?.match(/【PDCA】\n(.*)/s)?.[1] || 'Plan:  | Do:  | Check:  | Act: ';
+        updateSql += ', title = ?, description = ?'; 
+        params.push(
+          req.body.summary || proposal.title,
+          `【目标 S】\n${req.body.s}\n【指标 M】\n${req.body.m}\n【方案 A】\n${req.body.a_smart}\n【相关 R】\n${req.body.r_smart}\n【时限 T】\n${req.body.t}\n【PDCA】\n${pdca}`
+        ); 
+      }
       updateSql += ' WHERE id = ?';
       params.push(proposal.id);
       db.prepare(updateSql).run(...params);
       // 通知提案人已通过
-      createNotification([proposal.created_by], 'proposal', '🎉 提案已通过', `您的提案「${proposal.title}」已通过总经理复核，任务已发布到绩效池！`, '/company');
-      try { sendCardMessage([proposal.created_by], '🎉 提案已通过', `您的提案「${proposal.title}」已通过总经理复核\n任务已发布到绩效池！`, `${process.env.APP_URL || 'http://localhost:3000'}/company`); } catch(e) {}
-      return res.json({ code: 0, message: '总经理复核通过，任务已发布到绩效池' });
+      createNotification([proposal.created_by], 'proposal', '🎉 提案已通过', `您的提案「${proposal.title}」已通过总经理复核，等待HR发布认领`, '/company');
+      try { sendCardMessage([proposal.created_by], '🎉 提案已通过', `您的提案「${proposal.title}」已通过总经理复核\n等待HR发布认领`, `${process.env.APP_URL || 'http://localhost:3000'}/company`); } catch(e) {}
+      // 通知HR可以发布认领
+      const hrList = db.prepare("SELECT id FROM users WHERE role IN ('hr', 'admin')").all() as any[];
+      const hrListIds = hrList.map((u: any) => u.id);
+      if (hrListIds.length) {
+        createNotification(hrListIds, 'proposal', '✅ 提案已通过复核', `「${proposal.title}」已通过总经理复核，请配置角色奖励并发布认领`, '/admin');
+      }
+      return res.json({ code: 0, message: '总经理复核通过，等待HR发布认领' });
     }
     return res.status(400).json({ code: 400, message: `当前状态 ${proposal.proposal_status} 不可审批` });
   }
@@ -430,6 +494,27 @@ router.post('/join-requests/:id/review', authMiddleware, (req: AuthRequest, res)
       .run(req.userId, comment || '同意', joinReq.id);
     db.prepare('INSERT OR IGNORE INTO pool_participants (pool_task_id, user_id) VALUES (?, ?)').run(joinReq.pool_task_id, joinReq.user_id);
 
+    // 自动为该用户创建绩效计划，让任务出现在其"我参与的绩效目标"中
+    if (task) {
+      const existing = db.prepare('SELECT id FROM perf_plans WHERE creator_id = ? AND title = ? AND category = ?').get(joinReq.user_id, task.title, task.department || '专项任务') as any;
+      if (!existing) {
+        db.prepare(
+          `INSERT INTO perf_plans (title, description, category, creator_id, assignee_id, status, bonus, difficulty, target_value, attachments)
+           VALUES (?, ?, ?, ?, ?, 'in_progress', ?, ?, ?, ?)`
+        ).run(
+          task.title,
+          task.description || '',
+          task.department || '专项任务',
+          joinReq.user_id,
+          joinReq.user_id,
+          task.bonus || 0,
+          task.difficulty || 'normal',
+          task.description || '',
+          task.attachments || '[]'
+        );
+      }
+    }
+
     // 如果人数满了，更新任务状态
     const newCount = (db.prepare('SELECT COUNT(*) as c FROM pool_participants WHERE pool_task_id = ?').get(joinReq.pool_task_id) as any)?.c || 0;
     if (task && newCount >= task.max_participants) {
@@ -437,8 +522,8 @@ router.post('/join-requests/:id/review', authMiddleware, (req: AuthRequest, res)
     }
 
     // 通知申请人
-    createNotification([joinReq.user_id], 'pool_join', '✅ 加入申请已通过', `您申请加入任务「${task?.title || ''}」已被批准`, '/company');
-    try { sendCardMessage([joinReq.user_id], '✅ 加入申请已通过', `您申请加入任务「${task?.title || ''}」已被批准`, `${process.env.APP_URL || 'http://localhost:3000'}/company`); } catch(e) {}
+    createNotification([joinReq.user_id], 'pool_join', '✅ 加入申请已通过', `您申请加入任务「${task?.title || ''}」已被批准`, '/goals');
+    try { sendCardMessage([joinReq.user_id], '✅ 加入申请已通过', `您申请加入任务「${task?.title || ''}」已被批准`, `${process.env.APP_URL || 'http://localhost:3000'}/goals`); } catch(e) {}
 
     return res.json({ code: 0, message: '已批准加入' });
   }
@@ -527,6 +612,264 @@ router.delete('/tasks/:id/purge', authMiddleware, (req: AuthRequest, res) => {
   db.prepare('DELETE FROM pool_participants WHERE pool_task_id = ?').run(task.id);
   db.prepare('DELETE FROM pool_tasks WHERE id = ?').run(task.id);
   return res.json({ code: 0, message: `任务「${task.title}」已永久删除` });
+});
+
+
+
+// ── 设置任务角色配置并发布认领 (HR/Admin) ──
+router.post('/tasks/:id/roles', authMiddleware, (req: AuthRequest, res) => {
+  const db = getDb();
+  const user = db.prepare('SELECT role FROM users WHERE id = ?').get(req.userId) as any;
+  if (!user || !['admin', 'hr'].includes(user.role)) {
+    return res.status(403).json({ code: 403, message: '仅HR或管理员可配置角色' });
+  }
+  // [BUG-1 FIX] 兼容两种传参方式: {roles: [...]} 或直接传数组 [...]
+  const roles = Array.isArray(req.body) ? req.body : req.body.roles;
+  if (!Array.isArray(roles)) return res.json({ code: 400, message: 'roles 必须是数组，支持 {roles:[...]} 或直接传 [...]' });
+  // 校验每个角色必须有 name
+  for (const r of roles) {
+    if (!r.name || !['R', 'A', 'C', 'I'].includes(r.name)) {
+      return res.json({ code: 400, message: `无效的角色名: ${r.name}，仅支持 R/A/C/I` });
+    }
+  }
+  db.prepare('UPDATE pool_tasks SET roles_config = ? WHERE id = ?').run(JSON.stringify(roles), req.params.id);
+  return res.json({ code: 0, message: '角色配置已保存' });
+});
+
+// ── HR发布认领 (published → claiming) ──
+router.post('/tasks/:id/start-claiming', authMiddleware, (req: AuthRequest, res) => {
+  const db = getDb();
+  const user = db.prepare('SELECT role FROM users WHERE id = ?').get(req.userId) as any;
+  if (!user || !['admin', 'hr'].includes(user.role)) {
+    return res.status(403).json({ code: 403, message: '仅HR或管理员可发布认领' });
+  }
+  const task = db.prepare('SELECT * FROM pool_tasks WHERE id = ?').get(req.params.id) as any;
+  if (!task) return res.status(404).json({ code: 404, message: '任务不存在' });
+  if (task.status !== 'published') return res.json({ code: 400, message: '仅“发布”状态可开启认领' });
+
+  // 新流程：无需预先配置RACI，直接发布认领，员工自选角色，HR审批后再配置
+  db.prepare("UPDATE pool_tasks SET status = 'claiming' WHERE id = ?").run(task.id);
+  // 通知所有用户有新任务可认领
+  const allUsers = db.prepare("SELECT id FROM users WHERE status != 'inactive'").all() as any[];
+  const allUserIds = allUsers.map((u: any) => u.id);
+  createNotification(allUserIds, 'pool_task', '📢 新任务可认领', `「${task.title}」已开放角色认领（R·A·C·I），快来选择角色吧！`, '/company');
+  return res.json({ code: 0, message: '任务已发布认领' });
+});
+
+// ── 用户认领角色 ──
+router.post('/tasks/:id/claim-role', authMiddleware, (req: AuthRequest, res) => {
+  const db = getDb();
+  const taskId = Number(req.params.id);
+  const { role_name, reason } = req.body;
+  if (!role_name) return res.json({ code: 400, message: '请选择要认领的角色' });
+
+  const task = db.prepare('SELECT * FROM pool_tasks WHERE id = ?').get(taskId) as any;
+  if (!task) return res.status(404).json({ code: 404, message: '任务不存在' });
+  if (task.status !== 'claiming') return res.json({ code: 400, message: '当前状态不可认领' });
+
+  // [BUG-2 FIX] 检查是否已在此任务中认领了任何角色 (pending 或 approved)
+  const existingAny = db.prepare("SELECT id, role_name, status FROM pool_role_claims WHERE pool_task_id = ? AND user_id = ? AND status IN ('pending', 'approved')").get(taskId, req.userId) as any;
+  if (existingAny) {
+    const ROLE_LABELS: Record<string, string> = { R: '执行者', A: '责任验收者', C: '被咨询者', I: '被告知者' };
+    return res.json({ code: 400, message: `您已认领了「${ROLE_LABELS[existingAny.role_name] || existingAny.role_name}」角色（${existingAny.status === 'pending' ? '审核中' : '已通过'}），每人仅可认领一个角色` });
+  }
+
+  // 检查角色名是否合法
+  if (!['R', 'A', 'C', 'I'].includes(role_name)) {
+    return res.json({ code: 400, message: `无效的角色：${role_name}，仅支持 R/A/C/I` });
+  }
+
+  // 如果已配置RACI，检查容量限制；否则允许自由认领
+  let rolesConfig: any[] = [];
+  try { rolesConfig = JSON.parse(task.roles_config || '[]'); } catch {}
+  const roleConf = rolesConfig.find((r: any) => r.name === role_name);
+
+  if (roleConf) {
+    // 检查角色是否已满员（已批准数 >= required）
+    const approvedCount = (db.prepare("SELECT COUNT(*) as c FROM pool_role_claims WHERE pool_task_id = ? AND role_name = ? AND status = 'approved'").get(taskId, role_name) as any)?.c || 0;
+    if (approvedCount >= (roleConf.required || 1)) {
+      return res.json({ code: 400, message: '该角色已满员' });
+    }
+  }
+
+  const reward = roleConf?.reward || 0;
+  db.prepare('INSERT INTO pool_role_claims (pool_task_id, role_name, user_id, reward, reason, status) VALUES (?, ?, ?, ?, ?, ?)')
+    .run(taskId, role_name, req.userId, reward, reason || '', 'pending');
+
+  // 通知 HR（含申请理由）
+  const hrAdmins = db.prepare("SELECT id FROM users WHERE role IN ('hr', 'admin')").all() as any[];
+  const hrIds = hrAdmins.map((u: any) => u.id);
+  const userName = (db.prepare('SELECT name FROM users WHERE id = ?').get(req.userId) as any)?.name || req.userId;
+  const ROLE_LABELS: Record<string, string> = { R: '执行者', A: '责任验收者', C: '被咨询者', I: '被告知者' };
+  const roleLabel = ROLE_LABELS[role_name] || role_name;
+  const reasonText = reason ? `，理由: ${reason}` : '';
+  if (hrIds.length) {
+    createNotification(hrIds, 'role_claim', '📋 角色认领待审批', `${userName} 申请认领「${task.title}」的「${roleLabel}」角色${reasonText}，请前往审批`, '/company');
+  }
+
+  return res.json({ code: 0, message: '认领申请已提交，等待人事确认' });
+});
+
+// ── HR审批角色认领 ──
+router.post('/role-claims/:id/review', authMiddleware, (req: AuthRequest, res) => {
+  const db = getDb();
+  const user = db.prepare('SELECT role FROM users WHERE id = ?').get(req.userId) as any;
+  if (!user || !['admin', 'hr'].includes(user.role)) {
+    return res.status(403).json({ code: 403, message: '仅HR或管理员可审批' });
+  }
+
+  const { action, comment } = req.body;
+  const claim = db.prepare('SELECT * FROM pool_role_claims WHERE id = ?').get(req.params.id) as any;
+  if (!claim) return res.status(404).json({ code: 404, message: '认领申请不存在' });
+  if (claim.status !== 'pending') return res.json({ code: 400, message: '该申请已处理' });
+
+  if (action === 'approve') {
+    // [BUG-3 FIX] 审批前检查该角色已批准人数是否已达上限
+    const task = db.prepare('SELECT * FROM pool_tasks WHERE id = ?').get(claim.pool_task_id) as any;
+    let rolesConfig: any[] = [];
+    try { rolesConfig = JSON.parse(task?.roles_config || '[]'); } catch {}
+    const roleConf = rolesConfig.find((r: any) => r.name === claim.role_name);
+    if (roleConf) {
+      const approvedCount = (db.prepare("SELECT COUNT(*) as c FROM pool_role_claims WHERE pool_task_id = ? AND role_name = ? AND status = 'approved'").get(claim.pool_task_id, claim.role_name) as any)?.c || 0;
+      if (approvedCount >= (roleConf.required || 1)) {
+        return res.json({ code: 400, message: `「${claim.role_name}」角色已满员（${approvedCount}/${roleConf.required}），无法继续批准` });
+      }
+    }
+
+    db.prepare("UPDATE pool_role_claims SET status = 'approved', reviewer_id = ?, review_comment = ?, reviewed_at = datetime('now') WHERE id = ?")
+      .run(req.userId, comment || '同意', claim.id);
+
+    // 同时加入参与者表
+    db.prepare('INSERT OR IGNORE INTO pool_participants (pool_task_id, user_id) VALUES (?, ?)')
+      .run(claim.pool_task_id, claim.user_id);
+
+    // 通知用户（含角色标签）
+    const ROLE_LABELS: Record<string, string> = { R: '执行者', A: '责任验收者', C: '被咨询者', I: '被告知者' };
+    const roleLabel = ROLE_LABELS[claim.role_name] || claim.role_name;
+    createNotification([claim.user_id], 'role_claim', '✅ 角色认领通过', `您在「${task?.title || ''}」中认领的「${roleLabel}」角色已通过审批`, '/company');
+
+    return res.json({ code: 0, message: '已批准角色认领' });
+  }
+
+  if (action === 'reject') {
+    db.prepare("UPDATE pool_role_claims SET status = 'rejected', reviewer_id = ?, review_comment = ?, reviewed_at = datetime('now') WHERE id = ?")
+      .run(req.userId, comment || '不符合条件', claim.id);
+    const task = db.prepare('SELECT title FROM pool_tasks WHERE id = ?').get(claim.pool_task_id) as any;
+    createNotification([claim.user_id], 'role_claim', '❌ 角色认领被拒', `您在「${task?.title || ''}」中认领的「${claim.role_name}」被拒绝：${comment || '不符合条件'}`, '/company');
+    return res.json({ code: 0, message: '已拒绝角色认领' });
+  }
+
+  return res.json({ code: 400, message: `未知操作: ${action}` });
+});
+
+// ── 获取待审批的角色认领列表 (HR/Admin) ──
+router.get('/role-claims', authMiddleware, (req: AuthRequest, res) => {
+  const db = getDb();
+  const user = db.prepare('SELECT role FROM users WHERE id = ?').get(req.userId) as any;
+  if (!user || !['admin', 'hr'].includes(user.role)) {
+    return res.status(403).json({ code: 403, message: '仅HR或管理员可查看' });
+  }
+  const { status: claimStatus } = req.query;
+  let sql = `SELECT rc.*, u.name as user_name, pt.title as task_title 
+    FROM pool_role_claims rc 
+    LEFT JOIN users u ON rc.user_id = u.id 
+    LEFT JOIN pool_tasks pt ON rc.pool_task_id = pt.id
+    WHERE 1=1`;
+  const params: any[] = [];
+  if (claimStatus) { sql += ' AND rc.status = ?'; params.push(claimStatus); }
+  sql += ' ORDER BY rc.created_at DESC';
+  const claims = db.prepare(sql).all(...params);
+  return res.json({ code: 0, data: claims });
+});
+
+// ── 我的认领 (当前用户) ──
+router.get('/my-claims', authMiddleware, (req: AuthRequest, res) => {
+  const db = getDb();
+  const claims = db.prepare(`
+    SELECT rc.*, pt.title as task_title, pt.status as task_status, pt.bonus as task_bonus, 
+           pt.department as task_department, pt.difficulty as task_difficulty, pt.reward_type as task_reward_type,
+           pt.roles_config as task_roles_config
+    FROM pool_role_claims rc
+    LEFT JOIN pool_tasks pt ON rc.pool_task_id = pt.id
+    WHERE rc.user_id = ?
+    ORDER BY rc.created_at DESC
+  `).all(req.userId) as any[];
+  return res.json({ code: 0, data: claims });
+});
+
+// ── 奖励分配 (HR/Admin) ──
+router.post('/tasks/:id/distribute-rewards', authMiddleware, (req: AuthRequest, res) => {
+  const db = getDb();
+  const user = db.prepare('SELECT role FROM users WHERE id = ?').get(req.userId) as any;
+  if (!user || !['admin', 'hr'].includes(user.role)) {
+    return res.status(403).json({ code: 403, message: '仅HR或管理员可分配奖励' });
+  }
+  const taskId = Number(req.params.id);
+  const task = db.prepare('SELECT * FROM pool_tasks WHERE id = ?').get(taskId) as any;
+  if (!task) return res.status(404).json({ code: 404, message: '任务不存在' });
+  if (task.status !== 'in_progress') return res.json({ code: 400, message: '任务尚未完成或已发赏' });
+
+  const { rewards } = req.body; // [{claim_id, reward}] 或空(直接标记已发赏)
+  if (Array.isArray(rewards)) {
+    rewards.forEach((r: any) => {
+      db.prepare('UPDATE pool_role_claims SET reward = ? WHERE id = ? AND pool_task_id = ?').run(r.reward, r.claim_id, taskId);
+    });
+  }
+
+  db.prepare("UPDATE pool_tasks SET status = 'rewarded' WHERE id = ?").run(taskId);
+
+  // 通知所有参与者已发赏
+  const allClaimed = db.prepare("SELECT DISTINCT user_id FROM pool_role_claims WHERE pool_task_id = ? AND status = 'approved'").all(taskId) as any[];
+  const allUserIds = allClaimed.map((u: any) => u.user_id);
+  if (allUserIds.length > 0) {
+    createNotification(allUserIds, 'pool_task', '🏆 奖励已发放', `「${task.title}」项目奖励已发放，请查收！`, '/company');
+  }
+
+  return res.json({ code: 0, message: '奖励已分配，任务状态已更新为"已发赏"' });
+});
+
+// ── 责任验收者(A) 启动项目 (claiming → in_progress) ──
+router.post('/tasks/:id/start-project', authMiddleware, (req: AuthRequest, res) => {
+  const db = getDb();
+  const taskId = Number(req.params.id);
+  const task = db.prepare('SELECT * FROM pool_tasks WHERE id = ?').get(taskId) as any;
+  if (!task) return res.status(404).json({ code: 404, message: '任务不存在' });
+  if (task.status !== 'claiming') return res.json({ code: 400, message: '仅认领中的任务可启动' });
+
+  // 验证：当前用户必须是该任务的 A 角色且已通过审批
+  const isA = db.prepare("SELECT id FROM pool_role_claims WHERE pool_task_id = ? AND user_id = ? AND role_name = 'A' AND status = 'approved'").get(taskId, req.userId) as any;
+  const user = db.prepare('SELECT role FROM users WHERE id = ?').get(req.userId) as any;
+  if (!isA && (!user || !['admin', 'hr'].includes(user.role))) {
+    return res.status(403).json({ code: 403, message: '仅责任验收者(A)或HR可启动项目' });
+  }
+
+  // [ENH-2] 启动前检查 R 和 A 角色是否已有人认领通过
+  let rolesConfig: any[] = [];
+  try { rolesConfig = JSON.parse(task.roles_config || '[]'); } catch {}
+  const missingRoles: string[] = [];
+  const ROLE_LABELS: Record<string, string> = { R: '执行者', A: '责任验收者', C: '被咨询者', I: '被告知者' };
+  for (const rc of rolesConfig) {
+    if (['R', 'A'].includes(rc.name)) {
+      const approvedCount = (db.prepare("SELECT COUNT(*) as c FROM pool_role_claims WHERE pool_task_id = ? AND role_name = ? AND status = 'approved'").get(taskId, rc.name) as any)?.c || 0;
+      if (approvedCount < (rc.required || 1)) {
+        missingRoles.push(`${ROLE_LABELS[rc.name] || rc.name}(需${rc.required || 1}人, 已${approvedCount}人)`);
+      }
+    }
+  }
+  if (missingRoles.length > 0) {
+    return res.json({ code: 400, message: `以下必填角色未满员: ${missingRoles.join('、')}` });
+  }
+
+  db.prepare("UPDATE pool_tasks SET status = 'in_progress' WHERE id = ?").run(taskId);
+
+  // 通知所有已认领的参与者
+  const allClaimed = db.prepare("SELECT DISTINCT user_id FROM pool_role_claims WHERE pool_task_id = ? AND status = 'approved'").all(taskId) as any[];
+  const allUserIds = allClaimed.map((u: any) => u.user_id);
+  if (allUserIds.length) {
+    createNotification(allUserIds, 'pool_task', '🚀 项目启动', `「${task.title}」项目已正式开始！`, '/company');
+  }
+
+  return res.json({ code: 0, message: '项目已启动' });
 });
 
 export default router;

@@ -77,9 +77,10 @@ router.get('/pending', authMiddleware, (req: AuthRequest, res) => {
      FROM perf_plans pp
      LEFT JOIN users u ON pp.creator_id = u.id
      LEFT JOIN users au ON pp.approver_id = au.id
-     WHERE pp.approver_id = ? AND pp.status = 'pending_review'
+     WHERE (pp.approver_id = ? AND pp.status = 'pending_review')
+        OR (pp.dept_head_id = ? AND pp.status = 'pending_dept_review')
      ORDER BY pp.created_at DESC`
-  ).all(userId);
+  ).all(userId, userId);
   perfPending = attachLogs(perfPending, 'perf_plan');
   items.push(...perfPending);
 
@@ -157,9 +158,10 @@ router.get('/reviewed', authMiddleware, (req: AuthRequest, res) => {
     `SELECT pp.*, u.name as creator_name, 'perf_plan' as flow_type
      FROM perf_plans pp
      LEFT JOIN users u ON pp.creator_id = u.id
-     WHERE pp.approver_id = ? AND pp.status IN ('approved', 'rejected', 'assessed', 'in_progress', 'completed', 'pending_reward', 'pending_assessment')
+     WHERE (pp.approver_id = ? AND pp.status IN ('pending_dept_review', 'approved', 'rejected', 'assessed', 'in_progress', 'completed', 'pending_reward', 'pending_assessment'))
+        OR (pp.dept_head_id = ? AND pp.status IN ('approved', 'rejected', 'assessed', 'in_progress', 'completed', 'pending_reward', 'pending_assessment'))
      ORDER BY pp.updated_at DESC`
-  ).all(userId);
+  ).all(userId, userId);
   perfReviewed = attachLogs(perfReviewed, 'perf_plan');
 
   // 2. 我审核过的提案

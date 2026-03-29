@@ -112,6 +112,8 @@ export default function Sidebar({ currentView, navigate }: SidebarProps) {
     perf: 'trending_up',
     salary: 'payments',
     system: 'settings',
+    role_claim: 'assignment_ind',
+    pool_task: 'local_fire_department',
   };
 
   const handleNotifClick = () => {
@@ -298,6 +300,13 @@ export default function Sidebar({ currentView, navigate }: SidebarProps) {
                   <span className="material-symbols-outlined text-[16px] text-blue-500">manage_accounts</span>
                   个人设置
                 </button>
+                {(currentUser?.role === 'admin' || currentUser?.role === 'hr') && (
+                  <button onClick={() => { setIsAvatarMenuOpen(false); navigate('competency'); }}
+                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+                    <span className="material-symbols-outlined text-[16px] text-indigo-500">psychology</span>
+                    能力大盘
+                  </button>
+                )}
                 {hasPermission('view_admin') && (
                   <button onClick={() => { setIsAvatarMenuOpen(false); navigate('admin'); }}
                     className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
@@ -349,20 +358,36 @@ export default function Sidebar({ currentView, navigate }: SidebarProps) {
                   <p className="text-xs text-emerald-600 font-medium mt-0.5">实发工资</p>
                 </div>
                 <div className="bg-slate-50 dark:bg-slate-800 rounded-xl p-4 space-y-2 text-sm">
-                  {[
-                    { label: '基本工资', value: payslipData.base_salary, neg: false },
-                    { label: '绩效奖金', value: payslipData.perf_bonus, neg: false },
-                    { label: '社保扣除', value: payslipData.social_insurance, neg: true },
-                    { label: '个税扣除', value: payslipData.income_tax, neg: true },
-                  ].map(row => (
-                    <div key={row.label} className="flex justify-between">
-                      <span className="text-slate-500">{row.label}</span>
-                      <span className={`font-semibold ${row.neg ? 'text-red-500' : 'text-slate-700 dark:text-slate-200'}`}>
-                        {row.neg ? '-' : '+'}¥{Number(row.value).toFixed(2)}
-                      </span>
-                    </div>
-                  ))}
-                  <div className="border-t border-slate-200 dark:border-slate-700 pt-2 flex justify-between font-bold text-slate-800 dark:text-slate-100">
+                  {payslipData.items_json ? (
+                    (() => {
+                      try {
+                        const parsed = JSON.parse(payslipData.items_json);
+                        return parsed.items.map((row: any) => (
+                          <div key={row.key} className="flex justify-between">
+                            <span className="text-slate-500">{row.name}</span>
+                            <span className={`font-semibold ${row.type === 'deduction' ? 'text-red-500' : 'text-slate-700 dark:text-slate-200'}`}>
+                              {row.type === 'deduction' ? '-' : row.amount > 0 ? '+' : ''}¥{Number(row.amount).toFixed(2)}
+                            </span>
+                          </div>
+                        ));
+                      } catch (e) { return null; }
+                    })()
+                  ) : (
+                    [
+                      { label: '基本工资', value: payslipData.base_salary, neg: false },
+                      { label: '绩效奖金', value: payslipData.perf_bonus, neg: false },
+                      { label: '社保公积金', value: (payslipData.social_insurance || 0) + (payslipData.housing_fund || 0), neg: true },
+                      { label: '个税', value: payslipData.tax, neg: true },
+                    ].map(row => (
+                      <div key={row.label} className="flex justify-between">
+                        <span className="text-slate-500">{row.label}</span>
+                        <span className={`font-semibold ${row.neg ? 'text-red-500' : 'text-slate-700 dark:text-slate-200'}`}>
+                          {row.neg ? '-' : '+'}¥{Number(row.value).toFixed(2)}
+                        </span>
+                      </div>
+                    ))
+                  )}
+                  <div className="border-t border-slate-200 dark:border-slate-700 pt-2 flex justify-between font-bold text-slate-800 dark:text-slate-100 mt-2">
                     <span>实发合计</span>
                     <span>¥{Number(payslipData.net_pay).toFixed(2)}</span>
                   </div>
@@ -561,6 +586,7 @@ export default function Sidebar({ currentView, navigate }: SidebarProps) {
               { icon: 'map', label: '人力地图', color: 'text-teal-500', view: 'hrmap' },
               { icon: 'view_quilt', label: '全景仪表盘', color: 'text-purple-500', view: 'panorama' },
               { icon: 'account_tree', label: '组织关系', color: 'text-cyan-500', view: 'org' },
+              { icon: 'account_balance_wallet', label: '数字薪酬', color: 'text-amber-500', view: 'perf-accounting' },
             ].filter(item => {
               const permMap: Record<string, string> = { team: 'view_team_perf', hrmap: 'view_hr_map', panorama: 'view_panorama', org: 'view_org_chart' };
               return !permMap[item.view] || hasPermission(permMap[item.view]);

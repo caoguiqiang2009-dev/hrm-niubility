@@ -329,10 +329,16 @@ const TaskTypeDropdown = ({ value, onChange, readonly }: { value: string; onChan
     </>
   );
 };
-
 type SectionId = 's' | 'm' | 'a_smart' | 'r_smart' | 't' | 'attachments' | null;
 
 export interface SmartTaskData {
+  id?: number;
+  title?: string;
+  category?: string;
+  assignee_id?: string;
+  approver_id?: string;
+  dept_head_id?: string;
+  department_id?: number | string;
   r: string;
   a: string;
   c: string;
@@ -351,9 +357,8 @@ export interface SmartTaskData {
   doTime?: string;
   checkTime?: string;
   actTime?: string;
-  attachments: { name: string; size: string }[];
+  attachments: { name: string; size: string; url?: string }[];
   reject_reason?: string;
-  id?: number;
   flow_type?: string;
   logs?: any[];
   status?: string;
@@ -366,23 +371,29 @@ export interface SmartTaskModalProps {
   onSubmit: (data: SmartTaskData) => void;
   title: string;
   type: 'personal' | 'team' | 'pool_propose' | 'pool_publish';
-  users: { id: string, name: string }[];
+  users: { id: string, name: string, role?: string, position?: string }[];
   initialData?: Partial<SmartTaskData>;
   submitting?: boolean;
   readonly?: boolean;
   customFooter?: React.ReactNode;
   approverMode?: boolean;
-  onApprove?: (comment: string, updatedData?: { bonus?: string; rewardType?: string; maxParticipants?: string }) => void;
+  onApprove?: (comment: string, updatedData?: any) => void;
   onReject?: (comment: string) => void;
   onDraft?: (data: SmartTaskData) => void;
+  onDelete?: () => void;
 }
 
-export default function SmartTaskModal({ isOpen, onClose, onSubmit, title, type, users, initialData, submitting, readonly, customFooter, approverMode, onApprove, onReject, onDraft }: SmartTaskModalProps) {
+export default function SmartTaskModal({ isOpen, onClose, onSubmit, title, type, users, initialData, submitting, readonly: propReadonly, customFooter, approverMode, onApprove, onReject, onDraft, onDelete }: SmartTaskModalProps) {
   const isMobile = useIsMobile();
   const [activeSection, setActiveSection] = useState<SectionId>(null);
   const [aiActivating, setAiActivating] = useState<'full' | null>(null);
   const [tempVoice, setTempVoice] = useState('');
+  const [draftSaving, setDraftSaving] = useState(false);
   
+  // New state for approver modifying
+  const [isEditingMode, setIsEditingMode] = useState(false);
+  const readonly = propReadonly && !isEditingMode;
+
   // Dynamically fetched logs for universal approval path display
   const [fetchedLogs, setFetchedLogs] = useState<any[]>([]);
 
@@ -410,30 +421,26 @@ export default function SmartTaskModal({ isOpen, onClose, onSubmit, title, type,
         const st = d.status || d.proposal_status;
         
         // Node 1: creator submitted
-        syntheticLogs.push({ user_name: creator, user_id: creator, action: 'submit', new_value: 'pending_review' });
+        syntheticLogs.push({ user_name: creator, user_id: d.created_by, role: '发起人', action: 'submit', new_value: 'pending_review' });
         
         // Node 2: HR reviewer
         if (['pending_admin', 'approved', 'open', 'in_progress', 'closed', 'completed'].includes(st)) {
-          // HR已通过
-          syntheticLogs.push({ user_name: hrReviewer, user_id: hrReviewer, action: 'approve', new_value: 'approved' });
+          syntheticLogs.push({ user_name: hrReviewer, user_id: d.hr_reviewer_id, role: '人事专员', action: 'approve', new_value: 'approved' });
         } else if (st === 'rejected' && d.hr_reviewer_id && !d.admin_reviewer_id) {
-          // HR驳回
-          syntheticLogs.push({ user_name: hrReviewer, user_id: hrReviewer, action: 'reject', new_value: 'rejected' });
+          syntheticLogs.push({ user_name: hrReviewer, user_id: d.hr_reviewer_id, role: '人事专员', action: 'reject', new_value: 'rejected' });
         } else if (st === 'pending_hr') {
-          // 等待HR审核
-          syntheticLogs.push({ user_name: hrReviewer, user_id: hrReviewer, action: 'pending', new_value: 'pending' });
+          syntheticLogs.push({ user_name: hrReviewer, user_id: d.hr_reviewer_id, role: '人事专员', action: 'pending', new_value: '人事初审' });
         }
         
-        // Node 3: Admin reviewer (only if past HR stage)
+        // Node 3: Admin reviewer (only if past HR stage OR if currently pending_hr to show future steps)
         if (['approved', 'open', 'in_progress', 'closed', 'completed'].includes(st)) {
-          // Admin已通过
-          syntheticLogs.push({ user_name: adminReviewer, user_id: adminReviewer, action: 'approve', new_value: 'approved' });
+          syntheticLogs.push({ user_name: adminReviewer, user_id: d.admin_reviewer_id, role: '总经理', action: 'approve', new_value: 'approved' });
         } else if (st === 'rejected' && d.admin_reviewer_id) {
-          // Admin驳回
-          syntheticLogs.push({ user_name: adminReviewer, user_id: adminReviewer, action: 'reject', new_value: 'rejected' });
+          syntheticLogs.push({ user_name: adminReviewer, user_id: d.admin_reviewer_id, role: '总经理', action: 'reject', new_value: 'rejected' });
         } else if (st === 'pending_admin') {
-          // 等待Admin复核
-          syntheticLogs.push({ user_name: adminReviewer, user_id: adminReviewer, action: 'pending', new_value: 'pending' });
+          syntheticLogs.push({ user_name: adminReviewer, user_id: d.admin_reviewer_id, role: '总经理', action: 'pending', new_value: '总经理复核' });
+        } else if (st === 'pending_hr') {
+          syntheticLogs.push({ user_name: adminReviewer, user_id: d.admin_reviewer_id, role: '总经理', action: 'future', new_value: '总经理复核' });
         }
         
         setFetchedLogs(syntheticLogs);
@@ -490,6 +497,44 @@ export default function SmartTaskModal({ isOpen, onClose, onSubmit, title, type,
     maxParticipants: initialData?.maxParticipants || '5'
   });
 
+  // Safely parse attachments: handles JSON string, array, null, undefined
+  const safeParseAttachments = (val: any): { name: string; size: string; url?: string }[] => {
+    if (Array.isArray(val)) return val;
+    if (typeof val === 'string' && val) {
+      try { const parsed = JSON.parse(val); return Array.isArray(parsed) ? parsed : []; } catch { return []; }
+    }
+    return [];
+  };
+
+  const [uploading, setUploading] = useState(false);
+
+  // Upload files to server and return metadata with URLs
+  const uploadFiles = async (files: File[]) => {
+    if (files.length === 0) return;
+    setUploading(true);
+    try {
+      const uploadBody = new FormData();
+      files.forEach(f => uploadBody.append('files', f));
+      const token = localStorage.getItem('token');
+      const res = await fetch('/api/uploads/files', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: uploadBody
+      });
+      const data = await res.json();
+      if (data.code === 0 && data.data) {
+        setFormData(prev => ({ ...prev, attachments: [...prev.attachments, ...data.data] }));
+      } else {
+        alert(data.message || '上传失败');
+      }
+    } catch (e) {
+      console.error('Upload failed:', e);
+      alert('文件上传失败，请重试');
+    } finally {
+      setUploading(false);
+    }
+  };
+
   const [formData, setFormData] = useState({
     summary: initialData?.summary || '',
     s: initialData?.s || '',
@@ -501,7 +546,7 @@ export default function SmartTaskModal({ isOpen, onClose, onSubmit, title, type,
     doTime: initialData?.doTime || '',
     checkTime: initialData?.checkTime || '',
     actTime: initialData?.actTime || '',
-    attachments: initialData?.attachments || [] as { name: string; size: string }[]
+    attachments: safeParseAttachments(initialData?.attachments)
   });
 
   useEffect(() => {
@@ -527,10 +572,10 @@ export default function SmartTaskModal({ isOpen, onClose, onSubmit, title, type,
         doTime: initialData?.doTime || '',
         checkTime: initialData?.checkTime || '',
         actTime: initialData?.actTime || '',
-        attachments: initialData?.attachments || []
+        attachments: safeParseAttachments(initialData?.attachments)
       });
       setComments(parseComments(initialData?.reject_reason));
-      setActiveSection(null);
+      setActiveSection('s');
     }
   }, [isOpen, initialData]);
 
@@ -568,6 +613,7 @@ export default function SmartTaskModal({ isOpen, onClose, onSubmit, title, type,
       subtitle: 'ACHIEVABLE',
       color: 'text-orange-600',
       bg: 'bg-orange-50',
+      placeholder: '初步的执行思路和需要的资源支持有哪些？',
       border: 'border-orange-200 ring-orange-200'
     },
     {
@@ -1122,18 +1168,14 @@ export default function SmartTaskModal({ isOpen, onClose, onSubmit, title, type,
                               e.preventDefault();
                               e.currentTarget.classList.remove('border-blue-400', 'bg-blue-50/50');
                               const files = Array.from(e.dataTransfer.files);
-                              const newAttachments = files.map(f => ({
-                                name: f.name,
-                                size: f.size > 1024 * 1024 ? `${(f.size / 1024 / 1024).toFixed(1)} MB` : `${(f.size / 1024).toFixed(0)} KB`
-                              }));
-                              handleUpdate('attachments', [...formData.attachments, ...newAttachments]);
+                              uploadFiles(files);
                             }}
                           >
                             <div className="w-10 h-10 bg-blue-50 text-[#005ea4] rounded-full flex items-center justify-center mb-2 group-hover:scale-105 transition-transform">
                               <Upload size={18} />
                             </div>
-                            <p className="text-sm font-bold text-gray-900 mb-0.5">点击或拖拽文件到此处</p>
-                            <p className="text-xs text-gray-500">支持 PDF, DOCX, XLSX 等，单文件最大 50MB</p>
+                            <p className="text-sm font-bold text-gray-900 mb-0.5">{uploading ? '正在上传...' : '点击或拖拽文件到此处'}</p>
+                            <p className="text-xs text-gray-500">{uploading ? '请稍候，文件上传中' : '支持 PDF, DOCX, XLSX 等，单文件最大 50MB'}</p>
                           </div>
                         )}
                         <input
@@ -1144,11 +1186,7 @@ export default function SmartTaskModal({ isOpen, onClose, onSubmit, title, type,
                           className="hidden"
                           onChange={(e) => {
                             const files = Array.from(e.target.files || []);
-                            const newAttachments = files.map(f => ({
-                              name: f.name,
-                              size: f.size > 1024 * 1024 ? `${(f.size / 1024 / 1024).toFixed(1)} MB` : `${(f.size / 1024).toFixed(0)} KB`
-                            }));
-                            handleUpdate('attachments', [...formData.attachments, ...newAttachments]);
+                            uploadFiles(files);
                             e.target.value = '';
                           }}
                         />
@@ -1156,16 +1194,22 @@ export default function SmartTaskModal({ isOpen, onClose, onSubmit, title, type,
                         {formData.attachments.length > 0 && (
                           <div className="mt-3 space-y-2">
                             {formData.attachments.map((file, idx) => (
-                              <div key={idx} className="flex items-center justify-between p-2.5 bg-white border border-gray-200 rounded-md shadow-sm">
-                                <div className="flex items-center gap-2.5">
-                                  <div className="p-1.5 bg-gray-100 rounded text-gray-600">
+                              <div key={idx} className="flex items-center justify-between p-2.5 bg-white border border-gray-200 rounded-md shadow-sm hover:border-blue-300 transition-colors">
+                                <a 
+                                  href={file.url || '#'}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  onClick={(e) => { if (!file.url) { e.preventDefault(); alert('此附件为历史记录，暂无可下载文件'); } }}
+                                  className="flex items-center gap-2.5 flex-1 min-w-0 cursor-pointer"
+                                >
+                                  <div className={`p-1.5 rounded ${file.url ? 'bg-blue-50 text-blue-600' : 'bg-gray-100 text-gray-600'}`}>
                                     <Paperclip size={14} />
                                   </div>
-                                  <div>
-                                    <p className="text-xs font-bold text-gray-900">{file.name}</p>
-                                    <p className="text-[10px] text-gray-500">{file.size}</p>
+                                  <div className="min-w-0">
+                                    <p className={`text-xs font-bold truncate ${file.url ? 'text-blue-700 hover:underline' : 'text-gray-900'}`}>{file.name}</p>
+                                    <p className="text-[10px] text-gray-500">{file.size}{file.url ? ' · 点击下载' : ''}</p>
                                   </div>
-                                </div>
+                                </a>
                                 {!readonly && (
                                   <button 
                                     onClick={() => {
@@ -1173,7 +1217,7 @@ export default function SmartTaskModal({ isOpen, onClose, onSubmit, title, type,
                                       newAttachments.splice(idx, 1);
                                       handleUpdate('attachments', newAttachments);
                                     }}
-                                    className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                                    className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors flex-shrink-0"
                                   >
                                     <Trash2 size={14} />
                                   </button>
@@ -1212,6 +1256,7 @@ export default function SmartTaskModal({ isOpen, onClose, onSubmit, title, type,
                       const isApprove = log.new_value === 'approved' || log.action === 'approve';
                       const isWithdraw = log.action === 'withdraw';
                       const isReturn = log.new_value === 'returned' || log.action === 'return';
+                      if (log.action === 'pending' || log.action === 'future') return log.new_value;
                       if (log.action === 'submit') return '发起申请';
                       if (log.action === 'resubmit') return '重新提交';
                       if (isWithdraw) return '已撤回';
@@ -1236,6 +1281,8 @@ export default function SmartTaskModal({ isOpen, onClose, onSubmit, title, type,
                       const isApprove = log.new_value === 'approved' || log.action === 'approve' || log.new_value === 'in_progress';
                       const isWithdraw = log.action === 'withdraw';
                       const isReturn = log.new_value === 'returned' || log.action === 'return';
+                      if (log.action === 'future') return 'bg-amber-50 border-amber-300 border-dashed text-amber-600';
+                      if (log.action === 'pending') return 'bg-blue-50 border-blue-300 text-blue-600 shadow-sm shadow-blue-100 animate-pulse';
                       if (isReject) return 'bg-red-50 border-red-100 text-red-700';
                       if (isReturn) return 'bg-orange-50 border-orange-100 text-orange-700';
                       if (isApprove) return 'bg-emerald-50 border-emerald-100 text-emerald-700';
@@ -1255,13 +1302,28 @@ export default function SmartTaskModal({ isOpen, onClose, onSubmit, title, type,
 
                     // 构建完整流程节点
                     const currentStatus = initialData.status || 'draft';
-                    const flowSteps: { name: string; label: string; style: string; future?: boolean }[] = [];
+                    const flowSteps: { role?: string; name: string; label: string; style: string; future?: boolean }[] = [];
 
                     if (statusLogs.length > 0) {
                       // 已有日志 → 显示历史节点
                       statusLogs.forEach((log: any) => {
+                        let stepRole = log.role;
+                        if (!stepRole && log.user_id) {
+                          const uInfo = users.find(u => u.id === log.user_id);
+                          if (uInfo) {
+                             if (log.action === 'submit') stepRole = '发起人';
+                             else if (uInfo.role === 'admin') stepRole = '总经理';
+                             else if (uInfo.role === 'hr') stepRole = '人事专员';
+                             else if (uInfo.role === 'supervisor') stepRole = '部门负责人';
+                             else stepRole = uInfo.position || '员工';
+                          }
+                        }
+                        if (!stepRole && log.action === 'submit') stepRole = '发起人';
+                        if (!stepRole) stepRole = '节点处理人';
+
                         flowSteps.push({
-                          name: log.user_name || log.user_id,
+                          role: stepRole,
+                          name: log.user_name || (log.user_id ? (users.find(u => u.id === log.user_id)?.name || log.user_id) : ''),
                           label: actionLabel(log),
                           style: actionStyle(log)
                         });
@@ -1269,6 +1331,7 @@ export default function SmartTaskModal({ isOpen, onClose, onSubmit, title, type,
                       // 进度汇总
                       if (latestProgress) {
                         flowSteps.push({
+                          role: '更新人',
                           name: latestProgress.user_name || latestProgress.user_id,
                           label: `进度${latestProgress.new_value}% (${progressLogs.length}次更新)`,
                           style: 'bg-blue-50 border-blue-100 text-blue-700'
@@ -1277,6 +1340,7 @@ export default function SmartTaskModal({ isOpen, onClose, onSubmit, title, type,
                     } else {
                       // 无日志（草稿）→ 显示创建人节点
                       flowSteps.push({
+                        role: '发起人',
                         name: creatorName || '创建人',
                         label: currentStatus === 'draft' ? '草稿' : '已创建',
                         style: 'bg-slate-100 border-slate-200 text-slate-500'
@@ -1284,28 +1348,53 @@ export default function SmartTaskModal({ isOpen, onClose, onSubmit, title, type,
                     }
 
                     // 根据当前状态添加未来节点
-                    const futureSteps: { name: string; label: string }[] = [];
-                    if (currentStatus === 'draft') {
-                      futureSteps.push({ name: approverName || '审批人', label: '待审核' });
-                      futureSteps.push({ name: assigneeName || creatorName || '执行人', label: '待执行' });
-                    } else if (currentStatus === 'pending_review') {
-                      futureSteps.push({ name: approverName || '审批人', label: '待审核' });
-                      futureSteps.push({ name: assigneeName || creatorName || '执行人', label: '待执行' });
-                    } else if (currentStatus === 'in_progress') {
-                      futureSteps.push({ name: approverName || '审批人', label: '待考核' });
-                    } else if (currentStatus === 'pending_assessment') {
-                      futureSteps.push({ name: approverName || '审批人', label: '待评分' });
-                    } else if (currentStatus === 'assessed') {
-                      futureSteps.push({ name: 'HR', label: '待发放奖励' });
+                    const futureSteps: { role: string; name: string; label: string; isError?: boolean }[] = [];
+                    if (type === 'personal' || type === 'team') {
+                      const finalNodeName = assigneeName || creatorName || '';
+                      if (currentStatus === 'draft') {
+                        futureSteps.push({ role: '直属上级', name: approverName || '', label: '待一审', isError: !approverName });
+                        futureSteps.push({ role: '负责领导', name: '自动匹配', label: '待二审' });
+                        futureSteps.push({ role: '人事专员', name: '系统动作', label: '抄送人事' });
+                        futureSteps.push({ role: '执行人', name: finalNodeName, label: '待执行', isError: !finalNodeName });
+                      } else if (currentStatus === 'pending_review') {
+                        futureSteps.push({ role: '直属上级', name: approverName || '', label: '待一审', isError: !approverName });
+                        futureSteps.push({ role: '负责领导', name: '自动匹配', label: '待二审' });
+                        futureSteps.push({ role: '人事专员', name: '系统动作', label: '抄送人事' });
+                        futureSteps.push({ role: '执行人', name: finalNodeName, label: '待执行', isError: !finalNodeName });
+                      } else if (currentStatus === 'pending_dept_review') {
+                        const deptHeadName = initialData.dept_head_id ? (users.find(u => u.id === initialData.dept_head_id)?.name) : '未指定';
+                        futureSteps.push({ role: '负责领导', name: deptHeadName || '异常', label: '待二审', isError: !deptHeadName });
+                        futureSteps.push({ role: '人事专员', name: '系统动作', label: '抄送人事' });
+                        futureSteps.push({ role: '执行人', name: finalNodeName, label: '待执行', isError: !finalNodeName });
+                      } else if (currentStatus === 'in_progress') {
+                        futureSteps.push({ role: '直属上级', name: approverName || '', label: '待考核', isError: !approverName });
+                      } else if (currentStatus === 'pending_assessment') {
+                        futureSteps.push({ role: '直属上级', name: approverName || '', label: '待评分', isError: !approverName });
+                      } else if (currentStatus === 'assessed') {
+                        futureSteps.push({ role: '人事专员', name: '系统动作', label: '待发放奖励' });
+                      }
+                    } else {
+                      if (currentStatus === 'draft') {
+                        futureSteps.push({ role: '人事考评', name: '人事预设', label: '待初始核准' });
+                        futureSteps.push({ role: '总经理', name: '管理层', label: '待终审批复' });
+                      } else if (currentStatus === 'pending_hr') {
+                        futureSteps.push({ role: '人事考评', name: '人事预设', label: '待初始核准' });
+                        futureSteps.push({ role: '总经理', name: '管理层', label: '待终审批复' });
+                      } else if (currentStatus === 'pending_admin') {
+                        futureSteps.push({ role: '总经理', name: '管理层', label: '待终审批复' });
+                      }
                     }
+
+                    const hasMissingNodes = futureSteps.some(s => s.isError);
 
                     return (
                       <>
                         {flowSteps.map((step, i) => (
                           <React.Fragment key={`log-${i}`}>
-                            <div className={`flex flex-col rounded-lg px-3 py-1.5 border ${step.style}`}>
-                              <span className="font-bold">{step.name}</span>
-                              <span className="text-[10px] opacity-70">{step.label}</span>
+                            <div className={`flex flex-col rounded-lg px-3 py-1.5 border min-w-[70px] ${step.style}`}>
+                              <span className="text-[10px] opacity-60 mb-[2px]">{step.role}</span>
+                              <span className="font-bold leading-tight">{step.name || '-'}</span>
+                              <span className="text-[10px] opacity-80 mt-1">{step.label}</span>
                             </div>
                             {(i < flowSteps.length - 1 || futureSteps.length > 0) && (
                               <span className="material-symbols-outlined text-[16px] text-slate-300">arrow_right_alt</span>
@@ -1314,15 +1403,23 @@ export default function SmartTaskModal({ isOpen, onClose, onSubmit, title, type,
                         ))}
                         {futureSteps.map((step, i) => (
                           <React.Fragment key={`future-${i}`}>
-                            <div className="flex flex-col rounded-lg px-3 py-1.5 border border-dashed border-amber-300 bg-amber-50 text-amber-600">
-                              <span className="font-bold">{step.name}</span>
-                              <span className="text-[10px] opacity-80">{step.label}</span>
+                            <div className={`flex flex-col rounded-lg px-3 py-1.5 border min-w-[70px] ${step.isError ? 'border-red-300 bg-red-50 text-red-600 border-dashed' : 'border-dashed border-amber-300 bg-amber-50 text-amber-600'}`}>
+                              <span className="text-[10px] opacity-60 mb-[2px]">{step.role}</span>
+                              <span className="font-bold leading-tight">{step.name || '-'}</span>
+                              <span className="text-[10px] opacity-80 mt-1">{step.label}</span>
                             </div>
                             {i < futureSteps.length - 1 && (
                               <span className="material-symbols-outlined text-[16px] text-slate-300">arrow_right_alt</span>
                             )}
                           </React.Fragment>
                         ))}
+                        
+                        {hasMissingNodes && (
+                          <div className="ml-3 flex items-center gap-1.5 px-3 py-1.5 bg-red-50 border border-red-200 text-red-600 rounded-lg animate-pulse">
+                            <span className="material-symbols-outlined text-[14px]">error</span>
+                            <span className="text-xs font-bold">流程未生效或断裂，请联系人事配置节点人员</span>
+                          </div>
+                        )}
                       </>
                     );
                   })()}
@@ -1339,15 +1436,42 @@ export default function SmartTaskModal({ isOpen, onClose, onSubmit, title, type,
               </button>
             ) : (
               <>
-                <button onClick={onClose} disabled={submitting} className="px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100 rounded-xl transition-colors disabled:opacity-50">
+                {onDelete && (
+                  <button 
+                    onClick={() => {
+                      if (window.confirm('确认要删除此草稿/申请吗？')) onDelete();
+                    }}
+                    disabled={submitting || draftSaving} 
+                    className="px-4 py-2 text-sm font-bold text-rose-600 bg-white border border-rose-300 hover:bg-rose-50 rounded-xl transition-colors shadow-sm disabled:opacity-50"
+                  >
+                    删除
+                  </button>
+                )}
+                <div className="flex-1"></div>
+                <button onClick={onClose} disabled={submitting || draftSaving} className="px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100 rounded-xl transition-colors disabled:opacity-50">
                   取消
                 </button>
-                <button onClick={() => { onDraft?.({...headerSelections, ...formData}); }} disabled={submitting} className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 rounded-xl transition-colors shadow-sm disabled:opacity-50">
+                <button 
+                  onClick={async () => {
+                    if (draftSaving) return;
+                    setDraftSaving(true);
+                    try {
+                      await onDraft?.({...headerSelections, ...formData});
+                    } catch (e) {
+                      console.error('[Draft] 保存草稿失败:', e);
+                    } finally {
+                      setDraftSaving(false);
+                    }
+                  }} 
+                  disabled={submitting || draftSaving} 
+                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 rounded-xl transition-colors shadow-sm disabled:opacity-50 flex items-center gap-1.5"
+                >
+                  {draftSaving && <div className="w-3.5 h-3.5 border-2 border-gray-300 border-t-gray-600 rounded-full animate-spin"></div>}
                   存为草稿
                 </button>
                 <button 
                   onClick={handleSubmit} 
-                  disabled={submitting}
+                  disabled={submitting || draftSaving}
                   className="px-6 py-2 text-sm font-bold text-white bg-[#005ea4] hover:bg-[#0077ce] rounded-xl transition-colors shadow-sm flex items-center gap-2 disabled:opacity-50 cursor-pointer"
                 >
                   {submitting ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div> : <span className="material-symbols-outlined text-[16px]">send</span>}
@@ -1362,7 +1486,19 @@ export default function SmartTaskModal({ isOpen, onClose, onSubmit, title, type,
           {/* Inline Approver Footer */}
           {approverMode && (
             <div className="p-4 sm:px-6 sm:py-4 bg-white border-t border-gray-200 flex items-center justify-end gap-3 shrink-0 z-20 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
+              {propReadonly && (
+                <button
+                  type="button"
+                  onClick={() => setIsEditingMode(!isEditingMode)}
+                  disabled={submitting}
+                  className={`px-5 py-2 text-sm font-bold border rounded-lg transition-colors shadow-sm disabled:opacity-50 flex flex-shrink-0 ${isEditingMode ? 'text-gray-600 border-gray-300 bg-gray-50 hover:bg-gray-100' : 'text-blue-600 bg-white border-blue-300 hover:bg-blue-50'}`}
+                >
+                  {isEditingMode ? '取消修改' : '修改内容'}
+                </button>
+              )}
+              <div className="flex-1" />
               <button
+                type="button"
                 onClick={() => onReject?.('驳回(终止流程)')}
                 disabled={submitting}
                 className="px-5 py-2 text-sm font-bold text-rose-500 hover:text-rose-600 transition-colors disabled:opacity-50"
@@ -1370,6 +1506,7 @@ export default function SmartTaskModal({ isOpen, onClose, onSubmit, title, type,
                 驳回
               </button>
               <button
+                type="button"
                 onClick={() => {
                   const aggregated = sections.map(s => comments[s.id] ? `[${s.letter} ${s.title}]: ${comments[s.id]}` : '').filter(Boolean).join('\n\n');
                   onReject?.(aggregated || '退回修改');
@@ -1380,9 +1517,10 @@ export default function SmartTaskModal({ isOpen, onClose, onSubmit, title, type,
                 退回修改
               </button>
               <button
+                type="button"
                 onClick={() => {
                   const aggregated = sections.map(s => comments[s.id] ? `[${s.letter} ${s.title}]: ${comments[s.id]}` : '').filter(Boolean).join('\n\n');
-                  onApprove?.(aggregated || '同意', { bonus: headerSelections.bonus, rewardType: headerSelections.rewardType, maxParticipants: headerSelections.maxParticipants });
+                  onApprove?.(aggregated || '同意', { ...formData, bonus: headerSelections.bonus, rewardType: headerSelections.rewardType, maxParticipants: headerSelections.maxParticipants });
                 }}
                 disabled={submitting}
                 className="px-8 py-2 text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg transition-colors shadow-sm disabled:opacity-50"

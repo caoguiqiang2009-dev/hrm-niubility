@@ -10,8 +10,39 @@ router.get('/', authMiddleware, (req: AuthRequest, res: Response) => {
   const userId = req.userId;
   
   try {
-    const tasks = db.prepare('SELECT * FROM tasks WHERE user_id = ? ORDER BY CASE WHEN status = \'pending\' THEN 1 ELSE 2 END, due_date ASC, id DESC').all(userId);
-    res.json(tasks);
+    const tasks = db.prepare('SELECT * FROM tasks WHERE user_id = ?').all(userId);
+    
+    // Inject test assignments as tasks
+    const pendingTests = db.prepare(`
+        SELECT a.id, a.user_id, '【评测任务】 ' || b.title as title, b.description as description, 
+        a.created_at as due_date, 'high' as priority, a.status, 'test_assignment' as type
+        FROM test_assignments a
+        JOIN test_banks b ON a.bank_id = b.id
+        WHERE a.user_id = ? AND a.status = 'pending'
+    `).all(userId);
+
+    // Inject pending monthly evaluation tasks
+    const pendingEvals = db.prepare(`
+        SELECT r.id + 1000000 as id, r.reviewer_id as user_id, 
+        '【月度考评】 ' || u.name || ' 的 ' || e.month || ' 绩效打分' as title, 
+        '系统指派给您的月度发薪考评打分任务，请客观公正地进行百分制评价提交。' as description, 
+        e.created_at as due_date, 'high' as priority, r.status, 'monthly_eval' as type
+        FROM monthly_eval_reviewers r
+        JOIN monthly_evaluations e ON r.evaluation_id = e.id
+        JOIN users u ON e.user_id = u.id
+        WHERE r.reviewer_id = ? AND r.status = 'pending'
+    `).all(userId);
+    
+    const combined = [...tasks, ...pendingTests, ...pendingEvals].sort((a: any, b: any) => {
+        const valA = a.status === 'pending' ? 1 : 2;
+        const valB = b.status === 'pending' ? 1 : 2;
+        if (valA !== valB) return valA - valB;
+        if (!a.due_date && b.due_date) return 1;
+        if (a.due_date && !b.due_date) return -1;
+        return new Date(a.due_date || 0).getTime() - new Date(b.due_date || 0).getTime();
+    });
+
+    res.json(combined);
   } catch (err) {
     console.error('Failed to get tasks:', err);
     res.status(500).json({ error: 'Failed to fetch tasks' });

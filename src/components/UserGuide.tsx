@@ -24,6 +24,7 @@ const sections: GuideSection[] = [
             <li>🗺️ <b>人力地图</b> — 全公司人员分布可视化</li>
             <li>📈 <b>全景仪表盘</b> — 多维数据分析与 PDCA 监管</li>
             <li>🏗️ <b>组织关系</b> — 部门架构树状图管理</li>
+            <li>🎯 <b>能力大盘</b> — 团队能力评测模型与短板预警</li>
           </ul>
         </div>
       </div>
@@ -104,6 +105,26 @@ const sections: GuideSection[] = [
           <p>• <b>同步企微通讯录</b> — 点击"同步企微通讯录"按钮一键同步企业微信部门和人员</p>
           <p>• <b>部门管理</b> — 支持新建、编辑、删除和移动部门</p>
           <p>• <b>人员管理</b> — 点击部门可查看成员列表，编辑人员信息</p>
+        </div>
+      </div>
+    ),
+  },
+  {
+    id: 'competency',
+    icon: 'psychology',
+    title: '能力大盘与预警',
+    content: (
+      <div className="space-y-3">
+        <p>能力大盘用于建立公司的人才能力指标模型，发掘员工潜能，并实时追踪团队的能力短板以便于及时招聘补齐。</p>
+        <div className="space-y-2">
+          <h4 className="text-sm font-bold flex items-center gap-1.5"><span className="w-5 h-5 rounded bg-blue-500 text-white text-[10px] flex items-center justify-center font-black">1</span> 预设能力库配置 (字典)</h4>
+          <p className="text-sm text-slate-600 dark:text-slate-400 ml-7">HR 或架构师可在此沉淀通用的“职级能力”与“素养要求”，配置评估说明标准与满分，统一各部门评估尺度。</p>
+          
+          <h4 className="text-sm font-bold flex items-center gap-1.5"><span className="w-5 h-5 rounded bg-blue-500 text-white text-[10px] flex items-center justify-center font-black">2</span> 能力模型与目标分数</h4>
+          <p className="text-sm text-slate-600 dark:text-slate-400 ml-7">为不同岗位组装多项能力维度。创建模型时可「从字典一键导入」，并为其设定一个决定是否合格的<b className="text-blue-600">“达标分”(期望靶点)</b>。</p>
+
+          <h4 className="text-sm font-bold flex items-center gap-1.5"><span className="w-5 h-5 rounded bg-blue-500 text-white text-[10px] flex items-center justify-center font-black">3</span> 自动短板诊断与预警</h4>
+          <p className="text-sm text-slate-600 dark:text-slate-400 ml-7">当产生评估日志后，系统会<b className="text-red-500">自动聚合</b>计算。如果某项技能的<b className="text-red-500">团队实际均分持续低于期望达标线</b>，该领域大盘会「标红警报」，提示您团队当前该项人才短缺，亟待启动招募补充计划。</p>
         </div>
       </div>
     ),

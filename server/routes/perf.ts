@@ -8,15 +8,36 @@ const router = Router();
 
 // 创建绩效计划
 router.post('/plans', authMiddleware, (req: AuthRequest, res) => {
-  const { title, description, category, assignee_id, approver_id, department_id, difficulty, deadline, quarter, alignment, target_value, collaborators } = req.body;
+  const { title, description, category, assignee_id, approver_id, department_id, difficulty, deadline, quarter, alignment, target_value, collaborators, attachments } = req.body;
   const db = getDb();
 
   // 兼容旧表
   try { db.exec("ALTER TABLE perf_plans ADD COLUMN collaborators TEXT"); } catch(e) {}
+  try { db.exec("ALTER TABLE perf_plans ADD COLUMN attachments TEXT DEFAULT '[]'"); } catch(e) {}
+
+  const attachmentsStr = attachments ? (typeof attachments === 'string' ? attachments : JSON.stringify(attachments)) : '[]';
 
   const result = db.prepare(
-    `INSERT INTO perf_plans (title, description, category, creator_id, assignee_id, approver_id, department_id, difficulty, deadline, quarter, alignment, target_value, collaborators) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-  ).run(title, description, category, req.userId, assignee_id || req.userId, approver_id, department_id, difficulty, deadline, quarter, alignment, target_value, collaborators || null);
+    `INSERT INTO perf_plans (title, description, category, creator_id, assignee_id, approver_id, department_id, difficulty, deadline, quarter, alignment, target_value, collaborators, attachments) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).run(title, description, category, req.userId, assignee_id || req.userId, approver_id, department_id, difficulty, deadline, quarter, alignment, target_value, collaborators || null, attachmentsStr);
+
+  // 流程异常检测：创建时缺少审批人则通知HR
+  const issues: string[] = [];
+  if (!approver_id) issues.push('缺少审批人(直属上级)');
+  const creatorDeptId = department_id || (db.prepare('SELECT department_id FROM users WHERE id = ?').get(req.userId) as any)?.department_id;
+  if (creatorDeptId) {
+    const dept = db.prepare('SELECT leader_user_id FROM departments WHERE id = ?').get(creatorDeptId) as any;
+    if (!dept?.leader_user_id) issues.push('所属部门无负责人');
+  }
+  if (issues.length > 0) {
+    const { createNotification } = require('./notifications');
+    const hrAdmins = db.prepare("SELECT id FROM users WHERE role IN ('hr', 'admin')").all() as any[];
+    const hrIds = hrAdmins.map((u: any) => u.id);
+    const creatorName = (db.prepare('SELECT name FROM users WHERE id = ?').get(req.userId) as any)?.name || req.userId;
+    if (hrIds.length > 0) {
+      createNotification(hrIds, 'workflow_error', '⚠️ 流程节点异常', `${creatorName} 创建的绩效计划「${title}」${issues.join('、')}，请前往流程异常管理修复`, '/admin');
+    }
+  }
 
   return res.json({ code: 0, data: { id: result.lastInsertRowid } });
 });
@@ -48,12 +69,20 @@ router.get('/plans/:id', authMiddleware, (req, res) => {
 
 // 编辑绩效计划 (草稿 or 被驳回均可编辑)
 router.put('/plans/:id', authMiddleware, (req: AuthRequest, res) => {
-  const { title, description, category, difficulty, deadline, quarter, alignment, target_value, collaborators } = req.body;
+  const { title, description, category, difficulty, deadline, quarter, alignment, target_value, collaborators, attachments } = req.body;
   const db = getDb();
 
-  db.prepare(
-    `UPDATE perf_plans SET title=?, description=?, category=?, difficulty=?, deadline=?, quarter=?, alignment=?, target_value=?, collaborators=?, updated_at=? WHERE id = ? AND status IN ('draft', 'rejected')`
-  ).run(title, description, category, difficulty, deadline, quarter, alignment, target_value, collaborators || null, new Date().toISOString(), req.params.id);
+  const attachmentsStr = attachments !== undefined ? (typeof attachments === 'string' ? attachments : JSON.stringify(attachments)) : undefined;
+  const updates = ['title=?', 'description=?', 'category=?', 'difficulty=?', 'deadline=?', 'quarter=?', 'alignment=?', 'target_value=?', 'collaborators=?', 'updated_at=?'];
+  const params = [title, description, category, difficulty, deadline, quarter, alignment, target_value, collaborators || null, new Date().toISOString()];
+  
+  if (attachmentsStr !== undefined) {
+    updates.push('attachments=?');
+    params.push(attachmentsStr);
+  }
+  params.push(req.params.id);
+
+  db.prepare(`UPDATE perf_plans SET ${updates.join(', ')} WHERE id = ? AND status IN ('draft', 'rejected')`).run(...params);
 
   return res.json({ code: 0, message: '更新成功' });
 });
@@ -134,13 +163,53 @@ router.post('/plans/:id/submit', authMiddleware, async (req: AuthRequest, res) =
 
 // 审批通过
 router.post('/plans/:id/approve', authMiddleware, async (req: AuthRequest, res) => {
-  const result = await transitionPlan(Number(req.params.id), 'approved', req.userId!);
+  const db = getDb();
+  const planId = Number(req.params.id);
+  const plan = db.prepare('SELECT * FROM perf_plans WHERE id = ?').get(planId) as any;
+  if (!plan) return res.status(404).json({ code: 404, message: '计划不存在' });
+
+  if (plan.status === 'pending_review') {
+    let deptHeadId = null;
+    if (plan.department_id) {
+      const dept = db.prepare('SELECT leader_user_id FROM departments WHERE id = ?').get(plan.department_id) as any;
+      if (dept && dept.leader_user_id) deptHeadId = dept.leader_user_id;
+    }
+
+    if (!deptHeadId || deptHeadId === req.userId || deptHeadId === plan.creator_id) {
+      if (deptHeadId) db.prepare('UPDATE perf_plans SET dept_head_id = ? WHERE id = ?').run(deptHeadId, planId);
+      const result = await transitionPlan(planId, 'approved', req.userId!);
+      return res.json({ code: result.success ? 0 : 400, message: result.message });
+    } else {
+      db.prepare('UPDATE perf_plans SET dept_head_id = ? WHERE id = ?').run(deptHeadId, planId);
+      const result = await transitionPlan(planId, 'pending_dept_review', req.userId!);
+      return res.json({ code: result.success ? 0 : 400, message: result.message });
+    }
+  } else if (plan.status === 'pending_dept_review') {
+    if (plan.dept_head_id !== req.userId && req.userRole !== 'admin') {
+      return res.status(403).json({ code: 403, message: '无权限' });
+    }
+    const result = await transitionPlan(planId, 'approved', req.userId!);
+    return res.json({ code: result.success ? 0 : 400, message: result.message });
+  }
+
+  const result = await transitionPlan(planId, 'approved', req.userId!);
   return res.json({ code: result.success ? 0 : 400, message: result.message });
 });
 
 // 驳回
 router.post('/plans/:id/reject', authMiddleware, async (req: AuthRequest, res) => {
-  const result = await transitionPlan(Number(req.params.id), 'rejected', req.userId!, { comment: req.body.reason });
+  const db = getDb();
+  const planId = Number(req.params.id);
+  const plan = db.prepare('SELECT * FROM perf_plans WHERE id = ?').get(planId) as any;
+  if (!plan) return res.status(404).json({ code: 404, message: '计划不存在' });
+
+  if (plan.status === 'pending_dept_review') {
+    if (plan.dept_head_id !== req.userId && req.userRole !== 'admin') {
+      return res.status(403).json({ code: 403, message: '无权限' });
+    }
+  }
+
+  const result = await transitionPlan(planId, 'rejected', req.userId!, { comment: req.body.reason });
   return res.json({ code: result.success ? 0 : 400, message: result.message });
 });
 
@@ -193,7 +262,7 @@ router.put('/plans/:id/progress', authMiddleware, (req: AuthRequest, res) => {
 router.get('/plans/:id/logs', authMiddleware, (req, res) => {
   const db = getDb();
   const logs = db.prepare(
-    `SELECT pl.*, u.name as user_name FROM perf_logs pl LEFT JOIN users u ON pl.user_id = u.id WHERE pl.plan_id = ? ORDER BY pl.created_at DESC`
+    `SELECT pl.*, u.name as user_name FROM perf_logs pl LEFT JOIN users u ON pl.user_id = u.id WHERE pl.plan_id = ? ORDER BY pl.created_at ASC`
   ).all(req.params.id);
   return res.json({ code: 0, data: logs });
 });

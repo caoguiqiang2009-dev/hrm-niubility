@@ -4,7 +4,8 @@ import { notifyPerfStatusChange } from './message';
 // 有效的状态转换
 const VALID_TRANSITIONS: Record<string, string[]> = {
   draft: ['pending_review'],
-  pending_review: ['approved', 'rejected'],
+  pending_review: ['pending_dept_review', 'approved', 'rejected'],
+  pending_dept_review: ['approved', 'rejected'],
   rejected: ['draft'],
   approved: ['in_progress'],
   in_progress: ['pending_assessment', 'returned'],
@@ -40,6 +41,10 @@ export async function transitionPlan(
     case 'pending_review':
       notifyAction = 'submitted';
       if (plan.approver_id) notifyUsers.push(plan.approver_id);
+      break;
+    case 'pending_dept_review':
+      notifyAction = 'submitted'; // Using submitted for dept head too
+      if (plan.dept_head_id) notifyUsers.push(plan.dept_head_id);
       break;
     case 'approved':
       notifyAction = 'approved';
@@ -87,6 +92,40 @@ export async function transitionPlan(
       await notifyPerfStatusChange(planId, notifyAction, notifyUsers, plan.title, extra?.comment);
     } catch (e) {
       console.error('消息推送失败:', e);
+    }
+  }
+
+  // ── 流程异常检测：节点缺失时通知HR ──
+  if (['pending_review', 'pending_dept_review', 'in_progress', 'pending_assessment'].includes(targetStatus)) {
+    const { createNotification } = await import('../routes/notifications');
+    const updatedPlan = db.prepare('SELECT * FROM perf_plans WHERE id = ?').get(planId) as any;
+    const issues: string[] = [];
+    if (!updatedPlan.approver_id) issues.push('缺少审批人(直属上级)');
+    if (targetStatus === 'pending_dept_review' && !updatedPlan.dept_head_id) issues.push('缺少部门负责人(二审)');
+    if (!updatedPlan.assignee_id) issues.push('缺少执行人');
+
+    // 检查部门是否有负责人
+    if (updatedPlan.department_id || updatedPlan.creator_id) {
+      const creatorDeptId = updatedPlan.department_id || (db.prepare('SELECT department_id FROM users WHERE id = ?').get(updatedPlan.creator_id) as any)?.department_id;
+      if (creatorDeptId) {
+        const dept = db.prepare('SELECT leader_user_id FROM departments WHERE id = ?').get(creatorDeptId) as any;
+        if (!dept?.leader_user_id) issues.push('所属部门无负责人');
+      }
+    }
+
+    if (issues.length > 0) {
+      const hrAdmins = db.prepare("SELECT id FROM users WHERE role IN ('hr', 'admin')").all() as any[];
+      const hrAdminIds = hrAdmins.map((u: any) => u.id);
+      const creatorName = (db.prepare('SELECT name FROM users WHERE id = ?').get(updatedPlan.creator_id) as any)?.name || updatedPlan.creator_id;
+      if (hrAdminIds.length > 0) {
+        createNotification(
+          hrAdminIds,
+          'workflow_error',
+          '⚠️ 流程节点异常',
+          `${creatorName} 的绩效计划「${updatedPlan.title}」存在流程异常：${issues.join('、')}，请前往流程异常管理修复`,
+          '/admin'
+        );
+      }
     }
   }
 

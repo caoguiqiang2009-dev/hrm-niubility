@@ -3,7 +3,7 @@ import Sidebar from '../components/Sidebar';
 import PerfModuleV2 from '../components/PerfModuleV2';
 import { useAuth } from '../context/AuthContext';
 
-type Module = 'org' | 'perf' | 'salary' | 'msg' | 'pool' | 'settings' | 'permissions' | 'admin_mgmt' | 'approval_flows' | null;
+type Module = 'org' | 'perf' | 'salary' | 'msg' | 'pool' | 'settings' | 'permissions' | 'admin_mgmt' | 'approval_flows' | 'workflow_fix' | null;
 
 function useApiGet(url: string, deps: any[] = []) {
   const [data, setData] = useState<any>(null);
@@ -479,79 +479,14 @@ function MsgModule() {
 }
 
 // ─── MODULE: 绩效池管理 ────────────────────────────────────────────────
-function PoolModule() {
+export function PoolModule() {
   const { data: tasks, loading, refetch } = useApiGet('/api/pool/tasks');
   const [showCreate, setShowCreate] = useState(false);
   const [form, setForm] = useState({ title: '', department: '', difficulty: 'normal', bonus: '', max_participants: '5' });
   const [creating, setCreating] = useState(false);
   const [msg, setMsg] = useState('');
 
-  // Proposal review state
-  const [proposals, setProposals] = useState<any[]>([]);
-  const [proposalLoading, setProposalLoading] = useState(true);
-  const [reviewTab, setReviewTab] = useState<'pending_hr' | 'pending_admin'>('pending_hr');
-  const [rejectingId, setRejectingId] = useState<number | null>(null);
-  const [rejectReason, setRejectReason] = useState('');
-  const [reviewMsg, setReviewMsg] = useState('');
-
-  // Join requests state
-  const [joinRequests, setJoinRequests] = useState<any[]>([]);
-  const [joinLoading, setJoinLoading] = useState(true);
-
-  const fetchJoinRequests = async () => {
-    setJoinLoading(true);
-    try {
-      const token = localStorage.getItem('token');
-      const res = await fetch('/api/pool/join-requests?status=pending', { headers: { Authorization: `Bearer ${token}` } });
-      const json = await res.json();
-      if (json.code === 0) setJoinRequests(json.data || []);
-    } catch {}
-    setJoinLoading(false);
-  };
-
-  const handleJoinReview = async (id: number, action: 'approve' | 'reject', comment?: string) => {
-    const token = localStorage.getItem('token');
-    const res = await fetch(`/api/pool/join-requests/${id}/review`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ action, comment }),
-    });
-    const json = await res.json();
-    setReviewMsg(json.code === 0 ? `✅ ${json.message}` : `❌ ${json.message}`);
-    fetchJoinRequests();
-    if (action === 'approve' && json.code === 0) refetch();
-    setTimeout(() => setReviewMsg(''), 3000);
-  };
-
-  const fetchProposals = async () => {
-    setProposalLoading(true);
-    try {
-      const token = localStorage.getItem('token');
-      const res = await fetch('/api/pool/proposals', { headers: { Authorization: `Bearer ${token}` } });
-      const json = await res.json();
-      if (json.code === 0) setProposals(json.data || []);
-    } catch {}
-    setProposalLoading(false);
-  };
-
-  useEffect(() => { fetchProposals(); fetchJoinRequests(); }, []);
-
-  const handleReview = async (id: number, action: 'approve' | 'reject', reason?: string) => {
-    const token = localStorage.getItem('token');
-    const res = await fetch(`/api/pool/proposals/${id}/review`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ action, reason }),
-    });
-    const json = await res.json();
-    setReviewMsg(json.code === 0 ? `✅ ${json.message}` : `❌ ${json.message}`);
-    setRejectingId(null);
-    setRejectReason('');
-    fetchProposals();
-    if (action === 'approve' && json.code === 0) refetch();
-    setTimeout(() => setReviewMsg(''), 3000);
-  };
-
+  // Proposal & Join requests are now handled globally in MyWorkflows.tsx.
   const handleCreate = async () => {
     if (!form.title.trim() || !form.bonus) return;
     setCreating(true);
@@ -574,134 +509,8 @@ function PoolModule() {
   const difficultyMap: Record<string, string> = { easy: '简单', normal: '普通', hard: '困难', expert: '专家级', '低': '低', '中': '中', '高': '高', '专家': '专家' };
   const difficultyColor: Record<string, string> = { easy: 'text-green-600', normal: 'text-blue-600', hard: 'text-amber-600', expert: 'text-red-600', '低': 'text-green-600', '中': 'text-blue-600', '高': 'text-amber-600', '专家': 'text-red-600' };
 
-  const pendingHr = proposals.filter(p => p.proposal_status === 'pending_hr');
-  const pendingAdmin = proposals.filter(p => p.proposal_status === 'pending_admin');
-  const rejectedList = proposals.filter(p => p.proposal_status === 'rejected');
-  const filtered = reviewTab === 'pending_hr' ? pendingHr : pendingAdmin;
-
   return (
     <div>
-      {/* ── Proposal Review Section ── */}
-      <div className="mb-6">
-        <h4 className="font-bold text-slate-700 mb-3 flex items-center gap-2">
-          <span className="material-symbols-outlined text-[16px] text-amber-500">rate_review</span>
-          员工提案审批
-          {(pendingHr.length + pendingAdmin.length) > 0 && (
-            <span className="text-[10px] bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-bold">{pendingHr.length + pendingAdmin.length} 待处理</span>
-          )}
-        </h4>
-        {reviewMsg && <div className="text-sm mb-3 bg-slate-50 rounded-lg px-3 py-2">{reviewMsg}</div>}
-        <div className="flex gap-2 mb-3">
-          {[
-            { key: 'pending_hr' as const, label: `待人事审核 (${pendingHr.length})` },
-            { key: 'pending_admin' as const, label: `待总经理复核 (${pendingAdmin.length})` },
-          ].map(tab => (
-            <button key={tab.key} onClick={() => setReviewTab(tab.key)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${reviewTab === tab.key ? 'bg-amber-500 text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}>
-              {tab.label}
-            </button>
-          ))}
-        </div>
-        {proposalLoading ? <p className="text-slate-400 text-sm py-4 text-center">加载中...</p> : (
-          <div className="space-y-2">
-            {filtered.length === 0 ? (
-              <p className="text-sm text-slate-400 text-center py-6 bg-slate-50 rounded-xl">暂无待审批提案</p>
-            ) : filtered.map((p: any) => (
-              <div key={p.id} className="bg-slate-50 rounded-xl p-4 border border-slate-100">
-                <div className="flex items-start justify-between mb-2">
-                  <div>
-                    <p className="font-bold text-sm text-slate-800">{p.title}</p>
-                    <p className="text-[10px] text-slate-400 mt-0.5">提案人: {p.creator_name || p.created_by} · {new Date(p.created_at).toLocaleDateString()}</p>
-                  </div>
-                  <span className="text-sm font-black text-rose-600">¥{(p.bonus || 0).toLocaleString()}</span>
-                </div>
-                {p.description && <p className="text-xs text-slate-500 mb-2">{p.description}</p>}
-                <div className="flex items-center gap-2 text-[10px] text-slate-400 mb-3">
-                  {p.department && <span>部门: {p.department}</span>}
-                  <span>难度: {difficultyMap[p.difficulty] || p.difficulty}</span>
-                  <span>上限: {p.max_participants} 人</span>
-                </div>
-                {rejectingId === p.id ? (
-                  <div className="flex gap-2">
-                    <input className="flex-1 border border-red-200 rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-red-300"
-                      placeholder="驳回原因..." value={rejectReason} onChange={e => setRejectReason(e.target.value)} />
-                    <button onClick={() => handleReview(p.id, 'reject', rejectReason)} disabled={!rejectReason.trim()}
-                      className="px-3 py-1.5 bg-red-500 text-white rounded-lg text-xs font-bold hover:bg-red-600 disabled:opacity-50">确认驳回</button>
-                    <button onClick={() => setRejectingId(null)} className="px-3 py-1.5 bg-slate-200 rounded-lg text-xs">取消</button>
-                  </div>
-                ) : (
-                  <div className="flex gap-2">
-                    <button onClick={() => handleReview(p.id, 'approve')}
-                      className="px-4 py-1.5 bg-emerald-500 text-white rounded-lg text-xs font-bold hover:bg-emerald-600 flex items-center gap-1">
-                      <span className="material-symbols-outlined text-[14px]">check</span>
-                      {p.proposal_status === 'pending_hr' ? '人事通过' : '总经理通过'}
-                    </button>
-                    <button onClick={() => setRejectingId(p.id)}
-                      className="px-4 py-1.5 bg-white text-red-500 rounded-lg text-xs font-bold border border-red-200 hover:bg-red-50 flex items-center gap-1">
-                      <span className="material-symbols-outlined text-[14px]">close</span>驳回
-                    </button>
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-        {rejectedList.length > 0 && (
-          <details className="mt-3">
-            <summary className="text-xs text-slate-400 cursor-pointer hover:text-slate-600">已驳回 ({rejectedList.length})</summary>
-            <div className="mt-2 space-y-2">
-              {rejectedList.map((p: any) => (
-                <div key={p.id} className="bg-red-50/50 rounded-lg p-3">
-                  <p className="text-sm font-medium text-slate-600">{p.title}</p>
-                  <p className="text-[10px] text-red-500 mt-1">驳回原因: {p.reject_reason}</p>
-                </div>
-              ))}
-            </div>
-          </details>
-        )}
-      </div>
-
-      {/* ── Join Request Review Section ── */}
-      <div className="mb-6">
-        <h4 className="font-bold text-slate-700 mb-3 flex items-center gap-2">
-          <span className="material-symbols-outlined text-[16px] text-blue-500">person_add</span>
-          加入申请审批
-          {joinRequests.length > 0 && (
-            <span className="text-[10px] bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-bold">{joinRequests.length} 待处理</span>
-          )}
-        </h4>
-        {joinLoading ? <p className="text-slate-400 text-sm py-4 text-center">加载中...</p> : (
-          <div className="space-y-2">
-            {joinRequests.length === 0 ? (
-              <p className="text-sm text-slate-400 text-center py-4 bg-slate-50 rounded-xl">暂无待审批加入申请</p>
-            ) : joinRequests.map((jr: any) => (
-              <div key={jr.id} className="bg-blue-50/50 rounded-xl p-4 border border-blue-100">
-                <div className="flex items-start justify-between mb-2">
-                  <div>
-                    <p className="font-bold text-sm text-slate-800">{jr.user_name || jr.user_id} <span className="text-slate-400 font-normal">申请加入</span></p>
-                    <p className="text-xs text-blue-600 font-medium mt-0.5">任务：{jr.task_title || `#${jr.pool_task_id}`}</p>
-                  </div>
-                  <span className="text-[10px] text-slate-400">{new Date(jr.created_at).toLocaleDateString()}</span>
-                </div>
-                {jr.reason && <p className="text-xs text-slate-500 mb-2">申请理由：{jr.reason}</p>}
-                {jr.role && <p className="text-xs text-slate-500 mb-2">期望角色：{jr.role}</p>}
-                <div className="flex gap-2">
-                  <button onClick={() => handleJoinReview(jr.id, 'approve')}
-                    className="px-4 py-1.5 bg-emerald-500 text-white rounded-lg text-xs font-bold hover:bg-emerald-600 flex items-center gap-1">
-                    <span className="material-symbols-outlined text-[14px]">check</span>批准加入
-                  </button>
-                  <button onClick={() => handleJoinReview(jr.id, 'reject', '不符合条件')}
-                    className="px-4 py-1.5 bg-white text-red-500 rounded-lg text-xs font-bold border border-red-200 hover:bg-red-50 flex items-center gap-1">
-                    <span className="material-symbols-outlined text-[14px]">close</span>驳回
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      <hr className="border-slate-100 mb-4" />
 
       {/* ── Existing Pool Tasks ── */}
       <div className="flex items-center justify-between mb-4">
@@ -2258,21 +2067,230 @@ function AdminMgmtModule() {
 }
 
 
+// ─── MODULE: 流程异常管理 ─────────────────────────────────────────────
+function WorkflowFixModule() {
+  const [broken, setBroken] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [users, setUsers] = useState<any[]>([]);
+  const [fixing, setFixing] = useState<number | null>(null);
+  const [fixForm, setFixForm] = useState<any>({});
+  const [msg, setMsg] = useState('');
+
+  const fetchBroken = async () => {
+    setLoading(true);
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch('/api/workflow-fix/broken', { headers: { Authorization: `Bearer ${token}` } });
+      const json = await res.json();
+      if (json.code === 0) setBroken(json.data?.plans || []);
+    } catch {}
+    setLoading(false);
+  };
+
+  const fetchUsers = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch('/api/workflow-fix/users', { headers: { Authorization: `Bearer ${token}` } });
+      const json = await res.json();
+      if (json.code === 0) setUsers(json.data || []);
+    } catch {}
+  };
+
+  useEffect(() => { fetchBroken(); fetchUsers(); }, []);
+
+  const handleFix = async (planId: number) => {
+    setMsg('');
+    const token = localStorage.getItem('token');
+    const res = await fetch(`/api/workflow-fix/fix/${planId}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify(fixForm),
+    });
+    const json = await res.json();
+    if (json.code === 0) {
+      setMsg('✅ ' + json.message);
+      setFixing(null);
+      setFixForm({});
+      fetchBroken();
+    } else {
+      setMsg('❌ ' + json.message);
+    }
+    setTimeout(() => setMsg(''), 3000);
+  };
+
+  const statusMap: Record<string, [string, string]> = {
+    draft: ['草稿', 'bg-slate-100 text-slate-500'],
+    pending_review: ['待一审', 'bg-amber-100 text-amber-700'],
+    pending_dept_review: ['待二审', 'bg-orange-100 text-orange-700'],
+    in_progress: ['进行中', 'bg-blue-100 text-blue-700'],
+    pending_assessment: ['待评分', 'bg-purple-100 text-purple-700'],
+    approved: ['已通过', 'bg-emerald-100 text-emerald-700'],
+  };
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <h4 className="font-bold text-slate-700 flex items-center gap-2">
+            <span className="material-symbols-outlined text-[16px] text-red-500">warning</span>
+            异常流程列表
+            {broken.length > 0 && (
+              <span className="text-[10px] bg-red-100 text-red-700 px-2 py-0.5 rounded-full font-bold">{broken.length} 条异常</span>
+            )}
+          </h4>
+          <p className="text-xs text-slate-400 mt-1">检测到以下绩效计划的审批流程存在节点缺失，请手动指派人员修复</p>
+        </div>
+        <button onClick={fetchBroken} className="px-3 py-1.5 text-xs bg-slate-100 text-slate-600 rounded-lg hover:bg-slate-200 flex items-center gap-1">
+          <span className="material-symbols-outlined text-[14px]">refresh</span>刷新
+        </button>
+      </div>
+
+      {msg && <div className="text-sm mb-3 bg-slate-50 rounded-lg px-3 py-2">{msg}</div>}
+
+      {loading ? <div className="text-center py-8 text-slate-400">加载中...</div> : broken.length === 0 ? (
+        <div className="text-center py-12 bg-emerald-50 rounded-xl border border-emerald-100">
+          <span className="material-symbols-outlined text-emerald-400 text-4xl mb-2">check_circle</span>
+          <p className="text-sm text-emerald-600 font-bold">所有流程正常运行</p>
+          <p className="text-xs text-emerald-500 mt-1">暂无需要修复的异常节点</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {broken.map((plan: any) => {
+            const [statusLabel, statusCls] = statusMap[plan.status] || [plan.status, 'bg-slate-100 text-slate-500'];
+            const isFixing = fixing === plan.id;
+            return (
+              <div key={plan.id} className={`rounded-xl border transition-all ${isFixing ? 'border-blue-300 bg-blue-50/30 shadow-md' : 'border-red-200/60 bg-white hover:shadow-sm'}`}>
+                <div className="p-4">
+                  {/* Header */}
+                  <div className="flex items-start justify-between mb-3">
+                    <div>
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="font-mono text-[10px] font-bold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">
+                          PF-{String(plan.id).padStart(6, '0')}
+                        </span>
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${statusCls}`}>{statusLabel}</span>
+                      </div>
+                      <h5 className="font-bold text-sm text-slate-800">{plan.title}</h5>
+                      <p className="text-[11px] text-slate-400 mt-0.5">
+                        发起人: {plan.creator_name || plan.creator_id} · 部门: {plan.dept_name || '未知'}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => { setFixing(isFixing ? null : plan.id); setFixForm({}); }}
+                      className={`px-3 py-1.5 text-xs font-bold rounded-lg flex items-center gap-1 transition-colors ${
+                        isFixing ? 'bg-slate-200 text-slate-600' : 'bg-blue-600 text-white hover:bg-blue-700'
+                      }`}
+                    >
+                      <span className="material-symbols-outlined text-[14px]">{isFixing ? 'close' : 'build'}</span>
+                      {isFixing ? '取消' : '修复'}
+                    </button>
+                  </div>
+
+                  {/* Issues */}
+                  <div className="flex flex-wrap gap-1.5 mb-2">
+                    {plan.issues?.map((issue: string, i: number) => (
+                      <span key={i} className="flex items-center gap-1 px-2 py-1 bg-red-50 text-red-600 text-[10px] font-bold rounded-lg border border-red-100">
+                        <span className="material-symbols-outlined text-[12px]">error</span>
+                        {issue}
+                      </span>
+                    ))}
+                  </div>
+
+                  {/* Current assignments */}
+                  <div className="flex items-center gap-4 text-[11px] text-slate-500">
+                    <span>审批人: <b className={plan.approver_name ? 'text-emerald-600' : 'text-red-500'}>{plan.approver_name || '未指派'}</b></span>
+                    <span>执行人: <b className={plan.assignee_name ? 'text-emerald-600' : 'text-red-500'}>{plan.assignee_name || '未指派'}</b></span>
+                    <span>部门负责人: <b className={plan.dept_head_name ? 'text-emerald-600' : 'text-red-500'}>{plan.dept_head_name || '未指派'}</b></span>
+                  </div>
+
+                  {/* Fix Form */}
+                  {isFixing && (
+                    <div className="mt-4 pt-4 border-t border-blue-200">
+                      <h6 className="text-xs font-bold text-blue-700 mb-3 flex items-center gap-1">
+                        <span className="material-symbols-outlined text-[14px]">person_add</span>
+                        指派流程节点人员
+                      </h6>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        {/* 审批人 */}
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-500 mb-1">直属上级(一审)</label>
+                          <select
+                            className="w-full border border-blue-200 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-blue-300 bg-white"
+                            value={fixForm.approver_id || ''}
+                            onChange={e => setFixForm({ ...fixForm, approver_id: e.target.value || undefined })}
+                          >
+                            <option value="">-- {plan.approver_name ? `当前: ${plan.approver_name}` : '请选择'} --</option>
+                            {users.filter(u => u.id !== plan.creator_id).map(u => (
+                              <option key={u.id} value={u.id}>{u.name} ({u.role})</option>
+                            ))}
+                          </select>
+                        </div>
+                        {/* 执行人 */}
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-500 mb-1">执行人</label>
+                          <select
+                            className="w-full border border-blue-200 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-blue-300 bg-white"
+                            value={fixForm.assignee_id || ''}
+                            onChange={e => setFixForm({ ...fixForm, assignee_id: e.target.value || undefined })}
+                          >
+                            <option value="">-- {plan.assignee_name ? `当前: ${plan.assignee_name}` : '请选择'} --</option>
+                            {users.map(u => (
+                              <option key={u.id} value={u.id}>{u.name} ({u.role})</option>
+                            ))}
+                          </select>
+                        </div>
+                        {/* 部门负责人 */}
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-500 mb-1">部门负责人(二审)</label>
+                          <select
+                            className="w-full border border-blue-200 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-blue-300 bg-white"
+                            value={fixForm.dept_head_id || ''}
+                            onChange={e => setFixForm({ ...fixForm, dept_head_id: e.target.value || undefined })}
+                          >
+                            <option value="">-- {plan.dept_head_name ? `当前: ${plan.dept_head_name}` : '请选择'} --</option>
+                            {users.filter(u => ['admin', 'manager', 'hr'].includes(u.role)).map(u => (
+                              <option key={u.id} value={u.id}>{u.name} ({u.role})</option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+                      <div className="flex gap-2 mt-3">
+                        <button
+                          onClick={() => handleFix(plan.id)}
+                          disabled={!fixForm.approver_id && !fixForm.assignee_id && !fixForm.dept_head_id}
+                          className="px-4 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-bold hover:bg-blue-700 disabled:opacity-40 flex items-center gap-1"
+                        >
+                          <span className="material-symbols-outlined text-[14px]">check</span>确认修复
+                        </button>
+                        <button onClick={() => { setFixing(null); setFixForm({}); }}
+                          className="px-4 py-1.5 bg-white text-slate-600 rounded-lg text-xs border border-slate-200 hover:bg-slate-50">取消</button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── MAIN PAGE ────────────────────────────────────────────────────────
 const MODULES = [
   { key: 'org', label: '组织架构管理', desc: '同步企业微信通讯录，管理部门与人员信息', icon: 'account_tree', color: 'blue', hoverColor: 'hover:border-blue-400/30', iconBg: 'bg-blue-50', iconColor: 'text-[#0060a9]', stats: ['6 个部门', '8 名员工'] },
   { key: 'admin_mgmt', label: '管理员分配', desc: '最高管理员可指定系统管理员，授予或撤销管理权限', icon: 'shield_person', color: 'cyan', hoverColor: 'hover:border-cyan-400/30', iconBg: 'bg-cyan-50', iconColor: 'text-cyan-600', stats: ['角色分配', '权限管控'], superAdminOnly: true },
-  { key: 'salary', label: '工资表管理', desc: '制作月度工资表、审批发放、推送工资条', icon: 'payments', color: 'amber', hoverColor: 'hover:border-amber-400/30', iconBg: 'bg-amber-50', iconColor: 'text-amber-600', stats: ['薪资模板', '自动计算'] },
   { key: 'msg', label: '消息推送', desc: '企业微信消息推送、审批卡片与推送记录', icon: 'send', color: 'purple', hoverColor: 'hover:border-purple-400/30', iconBg: 'bg-purple-50', iconColor: 'text-purple-600', stats: ['卡片交互', '推送记录'] },
-  { key: 'pool', label: '绩效池管理', desc: '创建与调配绩效池任务、设置奖金额度', icon: 'pool', color: 'rose', hoverColor: 'hover:border-rose-400/30', iconBg: 'bg-rose-50', iconColor: 'text-rose-600', stats: ['任务创建', '奖金配额'] },
   { key: 'settings', label: '系统设置', desc: '企微配置、AI分析设置、数据备份与恢复', icon: 'settings', color: 'slate', hoverColor: 'hover:border-slate-400/30', iconBg: 'bg-slate-100', iconColor: 'text-slate-600', stats: ['企微配置', '数据备份'] },
   { key: 'permissions', label: '权限管理', desc: '按角色管控功能、操作及字段访问权限', icon: 'admin_panel_settings', color: 'violet', hoverColor: 'hover:border-violet-400/30', iconBg: 'bg-violet-50', iconColor: 'text-violet-600', stats: ['功能权限', '字段权限'] },
   { key: 'approval_flows', label: '流程审批设置', desc: '配置审批流模板、审批节点与条件分支', icon: 'account_tree', color: 'teal', hoverColor: 'hover:border-teal-400/30', iconBg: 'bg-teal-50', iconColor: 'text-teal-600', stats: ['流程模板', '节点配置'] },
+  { key: 'workflow_fix', label: '异常流程检测', desc: '管理悬停、报错或节点丢失的流程审批与任务记录', icon: 'healing', color: 'red', hoverColor: 'hover:border-red-400/30', iconBg: 'bg-red-50', iconColor: 'text-red-500', stats: ['一键排错', '节点补录'] },
 ];
 
-export default function AdminPanel({ navigate }: { navigate: (view: string) => void }) {
+export default function AdminPanel({ navigate, initialModule }: { navigate: (view: string) => void; initialModule?: string }) {
   const { currentUser } = useAuth();
-  const [activeModule, setActiveModule] = useState<Module>(null);
+  const [activeModule, setActiveModule] = useState<Module>((initialModule as Module) || null);
   const [actionMsg, setActionMsg] = useState('');
 
   const getModuleLabel = () => MODULES.find(m => m.key === activeModule)?.label || '';
@@ -2345,6 +2363,7 @@ export default function AdminPanel({ navigate }: { navigate: (view: string) => v
                   {activeModule === 'permissions' && <PermissionsModule />}
                   {activeModule === 'admin_mgmt' && <AdminMgmtModule />}
                   {activeModule === 'approval_flows' && <ApprovalFlowModule />}
+                  {activeModule === 'workflow_fix' && <WorkflowFixModule />}
                 </div>
               </div>
             </div>

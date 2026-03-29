@@ -156,52 +156,6 @@ export function initDatabase(): void {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
-    -- ============ 工资表 ============
-
-    CREATE TABLE IF NOT EXISTS salary_templates (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      name TEXT NOT NULL,
-      type TEXT,
-      default_amount REAL DEFAULT 0,
-      calc_formula TEXT,
-      sort_order INTEGER DEFAULT 0,
-      is_active INTEGER DEFAULT 1
-    );
-
-    CREATE TABLE IF NOT EXISTS salary_sheets (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      title TEXT NOT NULL,
-      month TEXT NOT NULL,
-      department_id INTEGER,
-      status TEXT DEFAULT 'draft',
-      total_amount REAL DEFAULT 0,
-      employee_count INTEGER DEFAULT 0,
-      creator_id TEXT,
-      approver_id TEXT,
-      approved_at DATETIME,
-      published_at DATETIME,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    );
-
-    CREATE TABLE IF NOT EXISTS salary_rows (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      sheet_id INTEGER NOT NULL,
-      user_id TEXT NOT NULL,
-      user_name TEXT,
-      department_name TEXT,
-      base_salary REAL DEFAULT 0,
-      perf_bonus REAL DEFAULT 0,
-      attendance_bonus REAL DEFAULT 0,
-      overtime_pay REAL DEFAULT 0,
-      other_income REAL DEFAULT 0,
-      social_insurance REAL DEFAULT 0,
-      housing_fund REAL DEFAULT 0,
-      tax REAL DEFAULT 0,
-      other_deduction REAL DEFAULT 0,
-      gross_pay REAL DEFAULT 0,
-      net_pay REAL DEFAULT 0,
-      remark TEXT
-    );
 
     -- ============ 消息推送记录 ============
 
@@ -213,6 +167,55 @@ export function initDatabase(): void {
       content TEXT,
       status TEXT DEFAULT 'sent',
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    -- ============ 能力维度与模型 ============
+    CREATE TABLE IF NOT EXISTS competency_models (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      department_id TEXT,
+      description TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS competency_library (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      category TEXT,
+      name TEXT NOT NULL,
+      description TEXT,
+      default_max_score REAL DEFAULT 5.0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS competency_dimensions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      model_id INTEGER NOT NULL,
+      library_id INTEGER,
+      category TEXT,
+      name TEXT NOT NULL,
+      max_score REAL DEFAULT 5.0,
+      weight REAL DEFAULT 1.0,
+      target_score REAL DEFAULT 3.0,
+      description TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS competency_evaluations (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id TEXT NOT NULL,
+      evaluator_id TEXT,
+      model_id INTEGER NOT NULL,
+      status TEXT DEFAULT 'pending_self', -- pending_self, pending_manager, completed
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      finished_at DATETIME
+    );
+
+    CREATE TABLE IF NOT EXISTS competency_scores (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      evaluation_id INTEGER NOT NULL,
+      dimension_id INTEGER NOT NULL,
+      self_score REAL,
+      manager_score REAL,
+      comment TEXT
     );
 
     -- ============ 日常待办任务 ============
@@ -282,7 +285,118 @@ export function initDatabase(): void {
       created_by TEXT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
+
+    -- ============ 题库与在线评测 ============
+    CREATE TABLE IF NOT EXISTS test_banks (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      title TEXT NOT NULL,
+      description TEXT,
+      mapped_library_id INTEGER, -- 关联到 competency_library.id
+      created_by TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS test_questions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      bank_id INTEGER NOT NULL,
+      type TEXT DEFAULT 'single', -- single, multiple
+      question TEXT NOT NULL,
+      options_json TEXT NOT NULL, -- JSON string array
+      correct_answer TEXT NOT NULL, -- "A" or "A,B"
+      score REAL DEFAULT 10,
+      sort_order INTEGER DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS test_assignments (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      bank_id INTEGER NOT NULL,
+      user_id TEXT NOT NULL,
+      assigned_by TEXT,
+      status TEXT DEFAULT 'pending', -- pending, completed
+      final_score REAL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      completed_at DATETIME
+    );
+
+    CREATE TABLE IF NOT EXISTS test_answers (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      assignment_id INTEGER NOT NULL,
+      question_id INTEGER NOT NULL,
+      user_answer TEXT,
+      is_correct INTEGER DEFAULT 0,
+      earned_score REAL DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    -- ============ 月度绩效考评引擎 ============
+    CREATE TABLE IF NOT EXISTS monthly_evaluations (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id TEXT NOT NULL,
+      month TEXT NOT NULL, -- e.g. "2024-06"
+      status TEXT DEFAULT 'pending', -- pending, completed
+      self_score REAL DEFAULT 0,
+      manager_score REAL DEFAULT 0,
+      prof_score REAL DEFAULT 0,
+      peer_score REAL DEFAULT 0,
+      final_score REAL DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      completed_at DATETIME
+    );
+
+    CREATE TABLE IF NOT EXISTS monthly_eval_reviewers (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      evaluation_id INTEGER NOT NULL,
+      reviewer_id TEXT NOT NULL,
+      role TEXT NOT NULL, -- self, manager, prof, peer
+      score REAL,
+      comment TEXT,
+      status TEXT DEFAULT 'pending', -- pending, submitted
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      submitted_at DATETIME
+    );
+
+    -- ============ 发薪台账导出模板 ============
+    CREATE TABLE IF NOT EXISTS payroll_export_templates (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      fields_json TEXT NOT NULL,
+      created_by TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
   `);
+
+
+  try {
+    db.prepare('ALTER TABLE competency_dimensions ADD COLUMN library_id INTEGER').run();
+  } catch (e) {}
+  try {
+    db.prepare('ALTER TABLE competency_dimensions ADD COLUMN target_score REAL DEFAULT 3.0').run();
+  } catch (e) {}
+
+
+  // ============ 初始化能力库预设数据 ============
+  const libCount = db.prepare('SELECT COUNT(*) as count FROM competency_library').get() as {count: number};
+  if (libCount && libCount.count === 0) {
+    const insertLib = db.prepare('INSERT INTO competency_library (category, name, description, default_max_score) VALUES (?, ?, ?, ?)');
+    const presets = [
+      ['通用基石', '沟通表达与协作', '能清晰、准确地表达观点，倾听他人意见，在跨部门或团队内顺畅协作，共同推进目标达成。', 5.0],
+      ['通用基石', '抗压与情绪管理', '面对高压、挫折或突发事件时，能够保持情绪稳定，快速恢复状态并积极面对挑战。', 5.0],
+      ['核心基础', '问题分析与解决', '面对复杂问题时，能抓住事物本质，运用结构化思维拆解问题，提供切实可行的解决方案。', 5.0],
+      ['核心基础', '结果导向与执行', '具有极强的目标感，在遇到困难时不找借口，主动寻求资源确保工作成果按时、保质交付。', 5.0],
+      ['专业技能', '专业技能与技术深度', '在岗位所属专业领域具备扎实的理论基础和实践经验，能够解决该领域的棘手技术/业务难题。', 5.0],
+      ['专业技能', '业务理解与创新力', '深入理解公司业务战略或产品逻辑，不设边界，经常提出有建设性的突破性、创新性方案。', 5.0],
+      ['管理领导', '团队管理与赋能', '有效选拔、培养和激励下属，合理分配任务，持续辅导团队成员提升能力并取得成功。', 5.0],
+      ['管理领导', '战略执行与辅导', '能够将公司战略分解为团队目标，并在执行过程中给予团队方向把控与资源支持。', 5.0],
+    ];
+    db.transaction(() => {
+      for (const p of presets) {
+        insertLib.run(p[0], p[1], p[2], p[3]);
+      }
+    })();
+    console.log('✅ Competency library seeded with default presets');
+  }
 
   console.log('✅ Database tables initialized');
 }
