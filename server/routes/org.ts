@@ -149,8 +149,8 @@ router.get('/users/:id', authMiddleware, (req, res) => {
 // 获取基础用户列表 (供全员选人组件使用)
 router.get('/users', authMiddleware, (_req, res) => {
   const db = getDb();
-  // 只返回 id 和 name 给普通的下拉选择组件
-  const users = db.prepare('SELECT id, name FROM users WHERE status = ? ORDER BY name').all('active');
+  // 返回 id, name, role 给选人组件和流程路径节点名称解析
+  const users = db.prepare('SELECT id, name, role FROM users WHERE status = ? ORDER BY name').all('active');
   return res.json({ code: 0, data: users });
 });
 

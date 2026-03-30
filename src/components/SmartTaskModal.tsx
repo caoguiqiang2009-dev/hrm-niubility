@@ -416,8 +416,11 @@ export default function SmartTaskModal({ isOpen, onClose, onSubmit, title, type,
         const d = initialData as any;
         const lookupName = (id: string) => users.find(u => u.id === id)?.name || id;
         const creator = d.creator_name || (d.creator_id ? lookupName(d.creator_id) : d.proposer_name || '发起人');
-        const hrReviewer = d.hr_reviewer_name || (d.hr_reviewer_id ? lookupName(d.hr_reviewer_id) : '');
-        const adminReviewer = d.admin_reviewer_name || (d.admin_reviewer_id ? lookupName(d.admin_reviewer_id) : '');
+        // When specific reviewer IDs are not yet assigned, fall back to role-based name lookup
+        const hrFallback = users.filter(u => u.role === 'hr').map(u => u.name).join(' 或 ') || '待指派';
+        const adminFallback = users.filter(u => u.role === 'admin').map(u => u.name).join(' 或 ') || '待指派';
+        const hrReviewer = d.hr_reviewer_name || (d.hr_reviewer_id ? lookupName(d.hr_reviewer_id) : hrFallback);
+        const adminReviewer = d.admin_reviewer_name || (d.admin_reviewer_id ? lookupName(d.admin_reviewer_id) : adminFallback);
         const st = d.status || d.proposal_status;
         
         // Node 1: creator submitted
@@ -1380,7 +1383,9 @@ export default function SmartTaskModal({ isOpen, onClose, onSubmit, title, type,
                       } else if (currentStatus === 'assessed') {
                         futureSteps.push({ role: '人事专员', name: hrUsers, label: '待发放奖励', isError: hrUsers === '缺失' });
                       }
-                    } else {
+                    } else if (resolvedFlowType !== 'proposal') {
+                      // 非提案类型的其他流程才添加 futureSteps
+                      // 提案类型的流程路径已在合成日志中完整生成（发起人→人事初审→总经理复核）
                       if (currentStatus === 'draft') {
                         futureSteps.push({ role: '人事考评', name: hrUsers, label: '待初始核准', isError: hrUsers === '缺失' });
                         futureSteps.push({ role: '总经理', name: adminUsers, label: '待终审批复', isError: adminUsers === '缺失' });
