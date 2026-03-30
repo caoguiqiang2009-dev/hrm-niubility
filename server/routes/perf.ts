@@ -291,59 +291,45 @@ router.get('/team-status', authMiddleware, (req: AuthRequest, res) => {
   const perms = getUserEffectivePerms(req.userId!);
   const canViewDept = perms.includes('view_dept_data');
 
-  if (['admin', 'hr'].includes(currentUser.role)) {
-    subordinates = db.prepare('SELECT id, name, title, avatar_url, role FROM users WHERE status = ?').all('active');
-  } else {
-    const userRow = db.prepare('SELECT department_id FROM users WHERE id = ?').get(req.userId) as any;
-    const userDeptId = userRow?.department_id;
+  const userRow = db.prepare('SELECT department_id FROM users WHERE id = ?').get(req.userId) as any;
+  const userDeptId = userRow?.department_id;
 
-    const departments = db.prepare('SELECT id, parent_id FROM departments').all() as any[];
-    const leaderDepts = db.prepare('SELECT id FROM departments WHERE leader_user_id = ?').all(req.userId) as any[];
-    
-    let deptIds = new Set<any>();
-    if (userDeptId) deptIds.add(userDeptId);
-    leaderDepts.forEach(d => deptIds.add(d.id));
-    
-    const findChildren = (parentIds: any[]) => {
-      const children = departments.filter(d => parentIds.includes(d.parent_id)).map(d => d.id);
-      if (children.length > 0) {
-        children.forEach(c => deptIds.add(c));
-        findChildren(children);
-      }
-    };
-    findChildren(leaderDepts.map(d => d.id));
-    
-    const finalDeptIds = Array.from(deptIds);
+  const leaderDepts = db.prepare('SELECT id FROM departments WHERE leader_user_id = ?').all(req.userId) as any[];
+  
+  let deptIds = new Set<any>();
+  if (userDeptId) deptIds.add(userDeptId);
+  leaderDepts.forEach(d => deptIds.add(d.id));
+  
+  const finalDeptIds = Array.from(deptIds);
 
-    if (finalDeptIds.length > 0) {
-      if (canViewDept) {
-        // Full department visibility allowed
-        const placeholders = finalDeptIds.map(() => '?').join(',');
-        subordinates = db.prepare(
-          `SELECT id, name, title, avatar_url, role FROM users WHERE department_id IN (${placeholders}) AND status = ?`
-        ).all(...finalDeptIds, 'active');
-      } else {
-        // Department visibility disabled: only see themselves + subordinates of their led departments (if they are a leader)
-        const allowedDeptIds = Array.from(deptIds).filter(id => id !== userDeptId || leaderDepts.some(ld => ld.id === id));
-        let baseSubordinates = db.prepare(
-          `SELECT id, name, title, avatar_url, role FROM users WHERE id = ? AND status = ?`
-        ).all(req.userId, 'active');
-
-        if (allowedDeptIds.length > 0) {
-          const placeholders = allowedDeptIds.map(() => '?').join(',');
-          const extraSubordinates = db.prepare(
-            `SELECT id, name, title, avatar_url, role FROM users WHERE department_id IN (${placeholders}) AND status = ? AND id != ?`
-          ).all(...allowedDeptIds, 'active', req.userId);
-          baseSubordinates = baseSubordinates.concat(extraSubordinates);
-        }
-        subordinates = baseSubordinates;
-      }
-    } else {
-      // Falback if no department
+  if (finalDeptIds.length > 0) {
+    if (canViewDept) {
+      // Full department visibility allowed for their specific departments
+      const placeholders = finalDeptIds.map(() => '?').join(',');
       subordinates = db.prepare(
-         `SELECT id, name, title, avatar_url, role FROM users WHERE id = ? AND status = ?`
+        `SELECT id, name, title, avatar_url, role FROM users WHERE department_id IN (${placeholders}) AND status = ?`
+      ).all(...finalDeptIds, 'active');
+    } else {
+      // Department visibility disabled: only see themselves + subordinates of their led departments (if they are a leader)
+      const allowedDeptIds = Array.from(deptIds).filter(id => id !== userDeptId || leaderDepts.some(ld => ld.id === id));
+      let baseSubordinates = db.prepare(
+        `SELECT id, name, title, avatar_url, role FROM users WHERE id = ? AND status = ?`
       ).all(req.userId, 'active');
+
+      if (allowedDeptIds.length > 0) {
+        const placeholders = allowedDeptIds.map(() => '?').join(',');
+        const extraSubordinates = db.prepare(
+          `SELECT id, name, title, avatar_url, role FROM users WHERE department_id IN (${placeholders}) AND status = ? AND id != ?`
+        ).all(...allowedDeptIds, 'active', req.userId);
+        baseSubordinates = baseSubordinates.concat(extraSubordinates);
+      }
+      subordinates = baseSubordinates;
     }
+  } else {
+    // Falback if no department
+    subordinates = db.prepare(
+        `SELECT id, name, title, avatar_url, role FROM users WHERE id = ? AND status = ?`
+    ).all(req.userId, 'active');
   }
 
   // 使用真实数据：平均分 + 任务列表
