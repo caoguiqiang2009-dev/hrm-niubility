@@ -154,13 +154,13 @@ router.get('/evaluations', authMiddleware, (req: any, res) => {
     }
     
     // Attach user_names easily by fetching mapping
-    const users = db.prepare('SELECT id, name, department FROM users').all();
+    const users = db.prepare('SELECT u.id, u.name, u.department_id, d.name as department FROM users u LEFT JOIN departments d ON u.department_id = d.id').all();
     const userMap = new Map(users.map((u: any) => [u.id.toString(), u]));
     
     const enriched = evals.map(e => ({
       ...e,
       user_name: userMap.get(e.user_id?.toString())?.name || e.user_id,
-      department: userMap.get(e.user_id?.toString())?.department,
+      department: userMap.get(e.user_id?.toString())?.department || '',
       evaluator_name: userMap.get(e.evaluator_id?.toString())?.name || e.evaluator_id,
     }));
     

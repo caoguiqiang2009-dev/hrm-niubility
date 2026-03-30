@@ -616,7 +616,7 @@ export default function EmployeeDashboard({ navigate }: { navigate: (view: strin
       setUnreadCount(ucRes?.data?.count || 0);
 
       const ongoingPlans = (plansRes?.data || []).filter((p: any) => !['completed', 'cancelled'].includes(p.status));
-      setTotalPlansCount(ongoingPlans.length);
+      setTotalPlansCount(ongoingPlans.filter((p: any) => p.status === 'in_progress').length);
       setMyPlans(ongoingPlans.slice(0, 4));
 
       setMyProposals((proposalsRes?.data || []).slice(0, 3));

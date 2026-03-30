@@ -375,6 +375,45 @@ export function initDatabase(): void {
     db.prepare('ALTER TABLE competency_dimensions ADD COLUMN target_score REAL DEFAULT 3.0').run();
   } catch (e) {}
 
+  // ============ 数据库迁移：缺失表和列 ============
+  // pool_role_claims 表（RACI 角色认领）
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS pool_role_claims (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      pool_task_id INTEGER NOT NULL,
+      user_id TEXT NOT NULL,
+      role_name TEXT NOT NULL,
+      reward REAL,
+      reason TEXT,
+      status TEXT DEFAULT 'pending',
+      reviewer_id TEXT,
+      review_comment TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      reviewed_at DATETIME
+    );
+  `);
+
+  // pool_tasks 缺失列迁移
+  const poolMigrations = [
+    'ALTER TABLE pool_tasks ADD COLUMN deleted_at DATETIME',
+    'ALTER TABLE pool_tasks ADD COLUMN progress INTEGER DEFAULT 0',
+    'ALTER TABLE pool_tasks ADD COLUMN roles_config TEXT',
+    'ALTER TABLE pool_tasks ADD COLUMN dept_head_id TEXT',
+  ];
+  for (const sql of poolMigrations) {
+    try { db.prepare(sql).run(); } catch (e) {}
+  }
+
+  // perf_plans 缺失列迁移
+  const perfMigrations = [
+    'ALTER TABLE perf_plans ADD COLUMN dept_head_id TEXT',
+    'ALTER TABLE perf_plans ADD COLUMN resource TEXT',
+    'ALTER TABLE perf_plans ADD COLUMN relevance TEXT',
+  ];
+  for (const sql of perfMigrations) {
+    try { db.prepare(sql).run(); } catch (e) {}
+  }
+
 
   // ============ 初始化能力库预设数据 ============
   const libCount = db.prepare('SELECT COUNT(*) as count FROM competency_library').get() as {count: number};

@@ -117,20 +117,24 @@ router.get('/pending', authMiddleware, (req: AuthRequest, res) => {
 
   // 3. 待我审核的加入申请 (HR/Admin)
   if (['hr', 'admin'].includes(role)) {
-    const joinPending = db.prepare(
-      `SELECT jr.*, u.name as creator_name, pt.title as task_title, 'pool_join' as flow_type
-       FROM pool_join_requests jr
-       LEFT JOIN users u ON jr.user_id = u.id
-       LEFT JOIN pool_tasks pt ON jr.pool_task_id = pt.id
-       WHERE jr.status = 'pending'
-       ORDER BY jr.created_at DESC`
-    ).all();
-    joinPending.forEach((j: any) => {
-      j.title = `${j.creator_name || j.user_id} 申请加入「${j.task_title || '任务#' + j.pool_task_id}」`;
-      j.proposal_status = 'pending';
-      j.pending_reviewer_name = currentUserName;
-    });
-    items.push(...joinPending);
+    try {
+      const joinPending = db.prepare(
+        `SELECT jr.*, u.name as creator_name, pt.title as task_title, 'pool_join' as flow_type
+         FROM pool_join_requests jr
+         LEFT JOIN users u ON jr.user_id = u.id
+         LEFT JOIN pool_tasks pt ON jr.pool_task_id = pt.id
+         WHERE jr.status = 'pending'
+         ORDER BY jr.created_at DESC`
+      ).all();
+      joinPending.forEach((j: any) => {
+        j.title = `${j.creator_name || j.user_id} 申请加入「${j.task_title || '任务#' + j.pool_task_id}」`;
+        j.proposal_status = 'pending';
+        j.pending_reviewer_name = currentUserName;
+      });
+      items.push(...joinPending);
+    } catch (e) {
+      console.warn('[workflows/pending] pool_join_requests查询跳过:', (e as any)?.message);
+    }
   }
 
   items.sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
@@ -177,18 +181,23 @@ router.get('/reviewed', authMiddleware, (req: AuthRequest, res) => {
   ).all(userId, userId);
 
   // 3. 我审核过的加入申请
-  const joinReviewed = db.prepare(
-    `SELECT jr.*, u.name as creator_name, pt.title as task_title, 'pool_join' as flow_type
-     FROM pool_join_requests jr
-     LEFT JOIN users u ON jr.user_id = u.id
-     LEFT JOIN pool_tasks pt ON jr.pool_task_id = pt.id
-     WHERE jr.reviewer_id = ? AND jr.status IN ('approved', 'rejected')
-     ORDER BY jr.reviewed_at DESC`
-  ).all(userId);
-  joinReviewed.forEach((j: any) => {
-    j.title = `${j.creator_name || j.user_id} 申请加入「${j.task_title || '任务#' + j.pool_task_id}」`;
-    j.proposal_status = j.status;
-  });
+  let joinReviewed: any[] = [];
+  try {
+    joinReviewed = db.prepare(
+      `SELECT jr.*, u.name as creator_name, pt.title as task_title, 'pool_join' as flow_type
+       FROM pool_join_requests jr
+       LEFT JOIN users u ON jr.user_id = u.id
+       LEFT JOIN pool_tasks pt ON jr.pool_task_id = pt.id
+       WHERE jr.reviewer_id = ? AND jr.status IN ('approved', 'rejected')
+       ORDER BY jr.reviewed_at DESC`
+    ).all(userId);
+    joinReviewed.forEach((j: any) => {
+      j.title = `${j.creator_name || j.user_id} 申请加入「${j.task_title || '任务#' + j.pool_task_id}」`;
+      j.proposal_status = j.status;
+    });
+  } catch (e) {
+    console.warn('[workflows/reviewed] pool_join_requests查询跳过:', (e as any)?.message);
+  }
 
   const all = [...perfReviewed, ...proposalReviewed, ...joinReviewed].sort((a: any, b: any) =>
     new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
