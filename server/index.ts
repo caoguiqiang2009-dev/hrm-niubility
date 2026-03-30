@@ -47,6 +47,7 @@ const PORT = process.env.SERVER_PORT || 3001;
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use(express.text({ type: ['text/xml', 'application/xml'] }));
 
 // API Routes
 app.use('/api/auth', authRoutes);

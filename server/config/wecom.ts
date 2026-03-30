@@ -9,4 +9,7 @@ export const wecomConfig = {
   // 智能表格 — 工资表
   salaryDocId: process.env.WECOM_SALARY_DOC_ID || '',
   salarySheetId: process.env.WECOM_SALARY_SHEET_ID || '',
+  // 回调验证（交互式卡片按钮回调）
+  callbackToken: process.env.WECOM_CALLBACK_TOKEN || '',
+  callbackAesKey: process.env.WECOM_CALLBACK_AES_KEY || '',
 };
