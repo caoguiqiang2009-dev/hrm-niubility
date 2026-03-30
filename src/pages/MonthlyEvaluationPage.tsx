@@ -436,9 +436,15 @@ export default function MonthlyEvaluationPage({ navigate }: { navigate: (view: s
                             </td>
                             <td className="px-6 py-4">{statusEl}</td>
                             <td className="px-6 py-4 text-right">
-                              <button onClick={() => openPreview(u)} className="px-4 py-1.5 bg-white text-indigo-600 font-bold rounded-lg border border-indigo-200 hover:bg-indigo-50 hover:border-indigo-300 text-xs transition-all shadow-sm">
-                                {u.eval_status ? '覆盖重设考评人' : '核定考评人'}
-                              </button>
+                              {(currentUser?.role === 'hr' || currentUser?.role === 'admin' || currentUser?.is_super_admin) ? (
+                                <button onClick={() => openPreview(u)} className="px-4 py-1.5 bg-white text-indigo-600 font-bold rounded-lg border border-indigo-200 hover:bg-indigo-50 hover:border-indigo-300 text-xs transition-all shadow-sm">
+                                  {u.eval_status ? '覆盖重设考评人' : '核定考评人'}
+                                </button>
+                              ) : (
+                                <span className={`text-xs font-bold px-3 py-1.5 rounded-lg ${u.eval_status === 'completed' ? 'text-emerald-600 bg-emerald-50' : u.eval_status ? 'text-amber-600 bg-amber-50' : 'text-slate-400 bg-slate-100'}`}>
+                                  {u.eval_status === 'completed' ? '✅ 已完成' : u.eval_status ? '⏳ 进行中' : '未开始'}
+                                </span>
+                              )}
                             </td>
                           </tr>
                         );

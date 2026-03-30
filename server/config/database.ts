@@ -169,6 +169,13 @@ export function initDatabase(): void {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
+    -- ============ 企微交互卡片 response_code ============
+    CREATE TABLE IF NOT EXISTS card_response_codes (
+      plan_id INTEGER PRIMARY KEY,
+      response_code TEXT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
     -- ============ 能力维度与模型 ============
     CREATE TABLE IF NOT EXISTS competency_models (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
