@@ -51,6 +51,8 @@ export default function TeamPerformance({ navigate }: { navigate: (view: string)
   const [searchKey, setSearchKey] = useState('');
   const [sortKey, setSortKey] = useState<'status' | 'deadline' | 'progress' | 'assignee_name'>('deadline');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
+  const [isScopeModalOpen, setIsScopeModalOpen] = useState(false);
+
   
   const flatTasks = React.useMemo(() => {
     let tasks: any[] = [];
@@ -367,7 +369,18 @@ export default function TeamPerformance({ navigate }: { navigate: (view: string)
                 className="w-full pl-9 pr-4 py-2 bg-white border border-surface-container rounded-xl text-xs text-on-surface focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
               />
             </div>
+            {/* 团队可视范围配置入口 — 仅 HR / 管理员可见 */}
+            {(currentUser?.role === 'hr' || currentUser?.role === 'admin' || (currentUser as any)?.is_super_admin) && (
+              <button
+                onClick={() => setIsScopeModalOpen(true)}
+                title="配置团队可视范围"
+                className="w-9 h-9 flex items-center justify-center rounded-xl bg-white border border-surface-container text-slate-400 hover:text-indigo-600 hover:border-indigo-300 hover:bg-indigo-50 transition-all flex-shrink-0"
+              >
+                <span className="material-symbols-outlined text-[18px]">manage_accounts</span>
+              </button>
+            )}
           </div>
+
         </div>
 
         {/* ── View: Personnel (Original Card Layout) ── */}
@@ -840,6 +853,219 @@ export default function TeamPerformance({ navigate }: { navigate: (view: string)
           r: currentUser?.id
         }}
       />
+
+      {/* ── TeamScope Modal ── */}
+      {isScopeModalOpen && (
+        <TeamScopeModal onClose={() => setIsScopeModalOpen(false)} />
+      )}
     </div>
   );
 }
+
+// ── 内嵌团队可视范围配置浮层 ─────────────────────────────────────────────
+function TeamScopeModal({ onClose }: { onClose: () => void }) {
+  const [allUsers, setAllUsers] = useState<any[]>([]);
+  const [allConfigs, setAllConfigs] = useState<any[]>([]);
+  const [selectedMgr, setSelectedMgr] = useState<any | null>(null);
+  const [selectedMemberIds, setSelectedMemberIds] = useState<string[]>([]);
+  const [hasOverride, setHasOverride] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState('');
+  const [searchMgr, setSearchMgr] = useState('');
+  const [searchMember, setSearchMember] = useState('');
+
+  const fetchAllUsers = async () => {
+    const token = localStorage.getItem('token');
+    const res = await fetch('/api/org/users', { headers: { Authorization: `Bearer ${token}` } });
+    const json = await res.json();
+    if (json.code === 0) setAllUsers(json.data || []);
+  };
+
+  const fetchAllConfigs = async () => {
+    const token = localStorage.getItem('token');
+    const res = await fetch('/api/team-scope', { headers: { Authorization: `Bearer ${token}` } });
+    const json = await res.json();
+    if (json.code === 0) setAllConfigs(json.data || []);
+  };
+
+  useEffect(() => { fetchAllUsers(); fetchAllConfigs(); }, []);
+
+  const selectManager = async (user: any) => {
+    setSelectedMgr(user);
+    setMsg('');
+    const token = localStorage.getItem('token');
+    const res = await fetch(`/api/team-scope/${user.id}`, { headers: { Authorization: `Bearer ${token}` } });
+    const json = await res.json();
+    if (json.code === 0) {
+      setSelectedMemberIds(json.data.member_ids || []);
+      setHasOverride(json.data.has_override);
+    }
+  };
+
+  const toggleMember = (id: string) =>
+    setSelectedMemberIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+
+  const toggleAll = () => {
+    const filtered = allUsers.filter(u => u.name.includes(searchMember));
+    const allSel = filtered.every(u => selectedMemberIds.includes(u.id));
+    if (allSel) setSelectedMemberIds(prev => prev.filter(id => !filtered.some(u => u.id === id)));
+    else setSelectedMemberIds(prev => [...prev, ...filtered.map(u => u.id).filter(id => !prev.includes(id))]);
+  };
+
+  const handleSave = async () => {
+    if (!selectedMgr) return;
+    setSaving(true); setMsg('');
+    const token = localStorage.getItem('token');
+    const res = await fetch(`/api/team-scope/${selectedMgr.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ member_ids: selectedMemberIds }),
+    });
+    const json = await res.json();
+    setMsg(json.code === 0 ? `✅ ${json.message}` : `❌ ${json.message}`);
+    if (json.code === 0) { setHasOverride(selectedMemberIds.length > 0); fetchAllConfigs(); }
+    setSaving(false);
+    setTimeout(() => setMsg(''), 4000);
+  };
+
+  const handleClear = async () => {
+    if (!selectedMgr || !window.confirm(`确定清除「${selectedMgr.name}」的自定义团队范围？将恢复按部门归属显示。`)) return;
+    setSaving(true);
+    const token = localStorage.getItem('token');
+    const res = await fetch(`/api/team-scope/${selectedMgr.id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } });
+    const json = await res.json();
+    setMsg(json.code === 0 ? `✅ ${json.message}` : `❌ ${json.message}`);
+    if (json.code === 0) { setSelectedMemberIds([]); setHasOverride(false); fetchAllConfigs(); }
+    setSaving(false);
+    setTimeout(() => setMsg(''), 4000);
+  };
+
+  const filteredMgrs = allUsers.filter(u => u.name.includes(searchMgr));
+  const filteredMembers = allUsers.filter(u => u.name.includes(searchMember));
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl mx-4 max-h-[90vh] flex flex-col overflow-hidden animate-[fadeIn_0.2s_ease]">
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+          <div className="flex items-center gap-2.5">
+            <span className="w-8 h-8 bg-indigo-100 rounded-lg flex items-center justify-center">
+              <span className="material-symbols-outlined text-indigo-600 text-[18px]">manage_accounts</span>
+            </span>
+            <div>
+              <h3 className="font-bold text-slate-800 text-sm">团队可视范围</h3>
+              <p className="text-[11px] text-slate-400">为指定人员自定义「团队绩效追踪」页面的可见成员范围，不影响其他任何权限</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100">
+            <span className="material-symbols-outlined text-[18px]">close</span>
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="flex-1 overflow-hidden flex flex-col p-5 gap-4 min-h-0">
+          {/* 已配置人员快捷标签 */}
+          {allConfigs.length > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              {allConfigs.map((cfg: any) => (
+                <button
+                  key={cfg.manager_id}
+                  onClick={() => selectManager({ id: cfg.manager_id, name: cfg.manager_name })}
+                  className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold border transition-all ${
+                    selectedMgr?.id === cfg.manager_id
+                      ? 'bg-indigo-600 text-white border-indigo-600'
+                      : 'bg-white text-slate-500 border-slate-200 hover:border-indigo-300 hover:text-indigo-600'
+                  }`}
+                >
+                  {cfg.manager_name} <span className="opacity-60">({cfg.member_count}人)</span>
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Two-panel */}
+          <div className="grid grid-cols-2 gap-4 flex-1 min-h-0">
+            {/* Left: select configuree */}
+            <div className="border border-slate-200 rounded-xl flex flex-col overflow-hidden">
+              <div className="bg-slate-50 px-3 py-2 border-b border-slate-200 flex items-center gap-1.5">
+                <span className="material-symbols-outlined text-[13px] text-slate-400">person_search</span>
+                <span className="text-[11px] font-bold text-slate-600">选择被配置人</span>
+              </div>
+              <div className="p-2.5 flex flex-col gap-2 flex-1 min-h-0">
+                <input type="text" placeholder="搜索姓名..." className="w-full text-[11px] border border-slate-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-200" value={searchMgr} onChange={e => setSearchMgr(e.target.value)} />
+                <div className="space-y-0.5 overflow-y-auto flex-1">
+                  {filteredMgrs.map(u => (
+                    <button key={u.id} onClick={() => selectManager(u)} className={`w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-left text-[11px] transition-all ${selectedMgr?.id === u.id ? 'bg-indigo-600 text-white' : 'hover:bg-slate-50 text-slate-700'}`}>
+                      <span className={`w-6 h-6 rounded-full flex items-center justify-center font-bold text-[9px] flex-shrink-0 ${selectedMgr?.id === u.id ? 'bg-white/20 text-white' : 'bg-indigo-100 text-indigo-600'}`}>{u.name[0]}</span>
+                      <span className="font-medium truncate">{u.name}</span>
+                      {allConfigs.some((c: any) => c.manager_id === u.id) && (
+                        <span className={`ml-auto text-[9px] px-1.5 py-0.5 rounded-full font-bold flex-shrink-0 ${selectedMgr?.id === u.id ? 'bg-white/20 text-white' : 'bg-indigo-100 text-indigo-600'}`}>已配置</span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Right: choose visible members */}
+            <div className="border border-slate-200 rounded-xl flex flex-col overflow-hidden">
+              <div className="bg-slate-50 px-3 py-2 border-b border-slate-200 flex items-center justify-between">
+                <div className="flex items-center gap-1.5">
+                  <span className="material-symbols-outlined text-[13px] text-slate-400">group</span>
+                  <span className="text-[11px] font-bold text-slate-600">{selectedMgr ? `${selectedMgr.name} 的可见范围` : '请先选择被配置人'}</span>
+                </div>
+                {selectedMgr && <button onClick={toggleAll} className="text-[10px] text-indigo-600 font-bold hover:underline">{filteredMembers.every(u => selectedMemberIds.includes(u.id)) ? '取消全选' : '全选'}</button>}
+              </div>
+              <div className="p-2.5 flex flex-col gap-2 flex-1 min-h-0">
+                {selectedMgr ? (
+                  <>
+                    <input type="text" placeholder="搜索成员..." className="w-full text-[11px] border border-slate-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-200" value={searchMember} onChange={e => setSearchMember(e.target.value)} />
+                    <div className="space-y-0.5 overflow-y-auto flex-1">
+                      {filteredMembers.map(u => {
+                        const checked = selectedMemberIds.includes(u.id);
+                        return (
+                          <label key={u.id} className={`flex items-center gap-2 px-2.5 py-2 rounded-lg cursor-pointer text-[11px] transition-all ${checked ? 'bg-indigo-50 border border-indigo-200' : 'hover:bg-slate-50 border border-transparent'}`}>
+                            <input type="checkbox" checked={checked} onChange={() => toggleMember(u.id)} className="accent-indigo-600 w-3.5 h-3.5 flex-shrink-0" />
+                            <span className={`w-5 h-5 rounded-full flex items-center justify-center font-bold text-[8px] flex-shrink-0 ${checked ? 'bg-indigo-600 text-white' : 'bg-slate-200 text-slate-500'}`}>{u.name[0]}</span>
+                            <span className={`font-medium truncate ${checked ? 'text-indigo-700' : 'text-slate-700'}`}>{u.name}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </>
+                ) : (
+                  <div className="flex flex-col items-center justify-center flex-1 text-slate-300">
+                    <span className="material-symbols-outlined text-4xl mb-2">arrow_back</span>
+                    <p className="text-[11px]">请在左侧选择需要配置的人员</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Footer */}
+          {selectedMgr && (
+            <div className="flex items-center justify-between pt-2 border-t border-slate-100">
+              <span className={`text-[11px] font-medium ${hasOverride ? 'text-amber-600' : 'text-slate-400'}`}>
+                {hasOverride ? `⚡ 已有自定义配置 · 已选 ${selectedMemberIds.length} 人` : `已选 ${selectedMemberIds.length} 人 · 未配置时按部门归属显示`}
+              </span>
+              <div className="flex gap-2">
+                {hasOverride && (
+                  <button onClick={handleClear} disabled={saving} className="px-3 py-1.5 text-[11px] text-red-500 border border-red-200 rounded-lg hover:bg-red-50 font-bold">清除配置</button>
+                )}
+                <button onClick={handleSave} disabled={saving || selectedMemberIds.length === 0} className="px-4 py-1.5 text-[11px] bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-bold disabled:opacity-40">
+                  {saving ? '保存中...' : '保存配置'}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {msg && (
+            <div className={`text-[11px] px-3 py-2 rounded-lg font-medium ${msg.startsWith('✅') ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>{msg}</div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
