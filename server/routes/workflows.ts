@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { getDb } from '../config/database';
-import { authMiddleware, AuthRequest } from '../middleware/auth';
+import { authMiddleware, AuthRequest, isSuperAdmin } from '../middleware/auth';
 
 const router = Router();
 
@@ -55,7 +55,7 @@ router.get('/pending', authMiddleware, (req: AuthRequest, res) => {
   const db = getDb();
   const userId = req.userId;
   const user = db.prepare('SELECT role, name FROM users WHERE id = ?').get(userId) as any;
-  const role = user?.role || 'employee';
+  const role = (isSuperAdmin(userId) ? 'admin' : user?.role) || 'employee';
   const currentUserName = user?.name || userId;
 
   const items: any[] = [];

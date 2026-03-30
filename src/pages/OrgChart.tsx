@@ -207,12 +207,14 @@ function MemberCard({
   canManage,
   onDelete,
   onMove,
+  onSetLeader,
 }: {
   user: UserInfo;
   isLeader: boolean;
   canManage?: boolean;
   onDelete?: (userId: string, name: string) => void;
   onMove?: (userId: string, name: string) => void;
+  onSetLeader?: (userId: string, name: string) => void;
 }) {
   const rc = roleConfig[user.role] || roleConfig.employee;
   const [confirmingDelete, setConfirmingDelete] = useState(false);
@@ -282,17 +284,26 @@ function MemberCard({
               </button>
             </div>
           ) : (
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5">
+              {!isLeader && onSetLeader && (
+                <button
+                  onClick={() => onSetLeader(user.id, user.name)}
+                  className="flex-1 flex items-center justify-center gap-1 px-1 py-1.5 text-[10px] sm:text-[11px] font-bold text-amber-600 bg-amber-50 hover:bg-amber-100 dark:bg-amber-900/20 dark:hover:bg-amber-900/30 rounded-lg transition-colors"
+                >
+                  <span className="material-symbols-outlined text-[14px]">star</span>
+                  设为负责人
+                </button>
+              )}
               <button
                 onClick={() => onMove?.(user.id, user.name)}
-                className="flex-1 flex items-center justify-center gap-1 px-2 py-1.5 text-[11px] font-bold text-blue-600 bg-blue-50 hover:bg-blue-100 dark:bg-blue-900/20 dark:hover:bg-blue-900/30 rounded-lg transition-colors"
+                className="flex-1 flex items-center justify-center gap-1 px-1 py-1.5 text-[10px] sm:text-[11px] font-bold text-blue-600 bg-blue-50 hover:bg-blue-100 dark:bg-blue-900/20 dark:hover:bg-blue-900/30 rounded-lg transition-colors"
               >
                 <span className="material-symbols-outlined text-[14px]">swap_horiz</span>
                 调整部门
               </button>
               <button
                 onClick={() => setConfirmingDelete(true)}
-                className="flex-1 flex items-center justify-center gap-1 px-2 py-1.5 text-[11px] font-bold text-red-500 bg-red-50 hover:bg-red-100 dark:bg-red-900/20 dark:hover:bg-red-900/30 rounded-lg transition-colors"
+                className="flex-1 flex items-center justify-center gap-1 px-1 py-1.5 text-[10px] sm:text-[11px] font-bold text-red-500 bg-red-50 hover:bg-red-100 dark:bg-red-900/20 dark:hover:bg-red-900/30 rounded-lg transition-colors"
               >
                 <span className="material-symbols-outlined text-[14px]">person_remove</span>
                 设为离职
@@ -453,6 +464,28 @@ export default function OrgChart({ navigate }: { navigate: (view: string) => voi
           const ddata = await dres.json();
           if (ddata.code === 0) setDeptDetail(ddata.data);
         }
+      } else {
+        alert(json.message || '操作失败');
+      }
+    } catch { alert('网络异常'); }
+  };
+
+  // 设为负责人
+  const handleSetLeader = async (userId: string, name: string) => {
+    if (!selectedDeptId) return;
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`/api/org/departments/${selectedDeptId}/leader`, {
+        method: 'PUT',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ leader_user_id: userId }),
+      });
+      const json = await res.json();
+      if (json.code === 0) {
+        // 刷新部门详情
+        const dres = await fetch(`/api/org/departments/${selectedDeptId}`, { headers: { Authorization: `Bearer ${token}` } });
+        const ddata = await dres.json();
+        if (ddata.code === 0) setDeptDetail(ddata.data);
       } else {
         alert(json.message || '操作失败');
       }
@@ -706,6 +739,7 @@ export default function OrgChart({ navigate }: { navigate: (view: string) => voi
                             canManage={canManage}
                             onDelete={handleDeleteMember}
                             onMove={(userId, name) => { setMoveTarget({ userId, name }); setMoveDeptId(null); }}
+                            onSetLeader={handleSetLeader}
                           />
                         ))}
                       </div>

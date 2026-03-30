@@ -197,15 +197,7 @@ function OrgModule() {
                     value={editUserForm[field] || ''} onChange={e => setEditUserForm({ ...editUserForm, [field]: e.target.value })} />
                 </div>
               ))}
-              <div>
-                <label className="block text-xs font-medium text-slate-500 mb-1">角色</label>
-                <select className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  value={editUserForm.role || 'employee'} onChange={e => setEditUserForm({ ...editUserForm, role: e.target.value })}>
-                  {[['admin', '系统管理员'], ['hr', 'HR'], ['manager', '主管'], ['employee', '员工']].map(([v, l]) => (
-                    <option key={v} value={v}>{l}</option>
-                  ))}
-                </select>
-              </div>
+
               <div>
                 <label className="block text-xs font-medium text-slate-500 mb-1">状态</label>
                 <select className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"

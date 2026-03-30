@@ -289,6 +289,23 @@ router.put('/departments/:id', authMiddleware, requireRole('admin', 'hr'), (req:
   return res.json({ code: 0, message: `已重命名为「${name.trim()}」` });
 });
 
+// 设置部门负责人
+router.put('/departments/:id/leader', authMiddleware, requireRole('admin', 'hr'), (req: AuthRequest, res) => {
+  const { leader_user_id } = req.body;
+  const db = getDb();
+
+  if (!leader_user_id) return res.status(400).json({ code: 400, message: '缺少负责人 ID' });
+
+  const dept = db.prepare('SELECT id, name FROM departments WHERE id = ?').get(req.params.id) as any;
+  if (!dept) return res.status(404).json({ code: 404, message: '部门不存在' });
+
+  const user = db.prepare('SELECT id, name FROM users WHERE id = ?').get(leader_user_id) as any;
+  if (!user) return res.status(404).json({ code: 404, message: '用户不存在' });
+
+  db.prepare('UPDATE departments SET leader_user_id = ? WHERE id = ?').run(leader_user_id, req.params.id);
+  return res.json({ code: 0, message: `已将「${user.name}」设为「${dept.name}」的负责人` });
+});
+
 // 移动部门 (修改上级)
 router.put('/departments/:id/parent', authMiddleware, requireRole('admin', 'hr'), (req: AuthRequest, res) => {
   const { parent_id } = req.body;
