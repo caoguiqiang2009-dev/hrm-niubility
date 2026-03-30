@@ -3,7 +3,8 @@ import Sidebar from '../components/Sidebar';
 import PerfModuleV2 from '../components/PerfModuleV2';
 import { useAuth } from '../context/AuthContext';
 
-type Module = 'org' | 'perf' | 'salary' | 'msg' | 'pool' | 'settings' | 'permissions' | 'admin_mgmt' | 'approval_flows' | 'workflow_fix' | null;
+type Module = 'org' | 'perf' | 'salary' | 'msg' | 'pool' | 'settings' | 'permissions' | 'admin_mgmt' | 'approval_flows' | 'workflow_fix' | 'team_scope' | null;
+
 
 function useApiGet(url: string, deps: any[] = []) {
   const [data, setData] = useState<any>(null);
@@ -1503,6 +1504,274 @@ function WorkflowFixModule() {
   );
 }
 
+// ─── MODULE: 团队数据可视范围 ─────────────────────────────────────────
+function TeamScopeModule() {
+  const [allUsers, setAllUsers] = useState<any[]>([]);
+  const [allConfigs, setAllConfigs] = useState<any[]>([]);
+  const [selectedMgr, setSelectedMgr] = useState<any | null>(null);
+  const [selectedMemberIds, setSelectedMemberIds] = useState<string[]>([]);
+  const [hasOverride, setHasOverride] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState('');
+  const [searchMgr, setSearchMgr] = useState('');
+  const [searchMember, setSearchMember] = useState('');
+
+  const fetchAllUsers = async () => {
+    const token = localStorage.getItem('token');
+    const res = await fetch('/api/org/users', { headers: { Authorization: `Bearer ${token}` } });
+    const json = await res.json();
+    if (json.code === 0) setAllUsers(json.data || []);
+  };
+
+  const fetchAllConfigs = async () => {
+    const token = localStorage.getItem('token');
+    const res = await fetch('/api/team-scope', { headers: { Authorization: `Bearer ${token}` } });
+    const json = await res.json();
+    if (json.code === 0) setAllConfigs(json.data || []);
+  };
+
+  useEffect(() => { fetchAllUsers(); fetchAllConfigs(); }, []);
+
+  const selectManager = async (user: any) => {
+    setSelectedMgr(user);
+    setMsg('');
+    // 获取该人的自定义范围配置
+    const token = localStorage.getItem('token');
+    const res = await fetch(`/api/team-scope/${user.id}`, { headers: { Authorization: `Bearer ${token}` } });
+    const json = await res.json();
+    if (json.code === 0) {
+      setSelectedMemberIds(json.data.member_ids || []);
+      setHasOverride(json.data.has_override);
+    }
+  };
+
+  const toggleMember = (memberId: string) => {
+    setSelectedMemberIds(prev =>
+      prev.includes(memberId) ? prev.filter(id => id !== memberId) : [...prev, memberId]
+    );
+  };
+
+  const toggleAll = () => {
+    const filtered = allUsers.filter(u => u.name.includes(searchMember));
+    const allSelected = filtered.every(u => selectedMemberIds.includes(u.id));
+    if (allSelected) {
+      setSelectedMemberIds(prev => prev.filter(id => !filtered.some(u => u.id === id)));
+    } else {
+      const adds = filtered.map(u => u.id).filter(id => !selectedMemberIds.includes(id));
+      setSelectedMemberIds(prev => [...prev, ...adds]);
+    }
+  };
+
+  const handleSave = async () => {
+    if (!selectedMgr) return;
+    setSaving(true);
+    setMsg('');
+    const token = localStorage.getItem('token');
+    const res = await fetch(`/api/team-scope/${selectedMgr.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ member_ids: selectedMemberIds }),
+    });
+    const json = await res.json();
+    setMsg(json.code === 0 ? `✅ ${json.message}` : `❌ ${json.message}`);
+    if (json.code === 0) { setHasOverride(selectedMemberIds.length > 0); fetchAllConfigs(); }
+    setSaving(false);
+    setTimeout(() => setMsg(''), 4000);
+  };
+
+  const handleClear = async () => {
+    if (!selectedMgr || !window.confirm(`确定清除「${selectedMgr.name}」的自定义团队范围？清除后将恢复按部门归属显示。`)) return;
+    setSaving(true);
+    const token = localStorage.getItem('token');
+    const res = await fetch(`/api/team-scope/${selectedMgr.id}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const json = await res.json();
+    setMsg(json.code === 0 ? `✅ ${json.message}` : `❌ ${json.message}`);
+    if (json.code === 0) { setSelectedMemberIds([]); setHasOverride(false); fetchAllConfigs(); }
+    setSaving(false);
+    setTimeout(() => setMsg(''), 4000);
+  };
+
+  const filteredMgrs = allUsers.filter(u => u.name.includes(searchMgr));
+  const filteredMembers = allUsers.filter(u => u.name.includes(searchMember));
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-start justify-between mb-2">
+        <div>
+          <h4 className="font-bold text-slate-700 flex items-center gap-2">
+            <span className="material-symbols-outlined text-[16px] text-indigo-500">manage_accounts</span>
+            团队数据可视范围
+          </h4>
+          <p className="text-xs text-slate-400 mt-1">为指定人员自定义「团队绩效追踪」页面的可见成员范围，不影响其他任何权限</p>
+        </div>
+        {allConfigs.length > 0 && (
+          <div className="text-xs bg-indigo-50 text-indigo-600 px-3 py-1.5 rounded-full font-bold border border-indigo-100">
+            已配置 {allConfigs.length} 人
+          </div>
+        )}
+      </div>
+
+      {/* 已配置概览 */}
+      {allConfigs.length > 0 && (
+        <div className="flex flex-wrap gap-2 pb-3 border-b border-slate-100">
+          {allConfigs.map((cfg: any) => (
+            <button
+              key={cfg.manager_id}
+              onClick={() => selectManager({ id: cfg.manager_id, name: cfg.manager_name, title: cfg.title })}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold border transition-all ${
+                selectedMgr?.id === cfg.manager_id
+                  ? 'bg-indigo-600 text-white border-indigo-600'
+                  : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-300 hover:text-indigo-600'
+              }`}
+            >
+              <span className="material-symbols-outlined text-[12px]">person</span>
+              {cfg.manager_name}
+              <span className="opacity-70">({cfg.member_count}人)</span>
+            </button>
+          ))}
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+        {/* 左侧：选择被配置人 */}
+        <div className="border border-slate-200 rounded-xl overflow-hidden">
+          <div className="bg-slate-50 px-4 py-2.5 flex items-center gap-2 border-b border-slate-200">
+            <span className="material-symbols-outlined text-[14px] text-slate-500">person_search</span>
+            <span className="text-xs font-bold text-slate-600">选择被配置人</span>
+          </div>
+          <div className="p-3">
+            <input
+              type="text"
+              placeholder="搜索姓名..."
+              className="w-full text-xs border border-slate-200 rounded-lg px-3 py-2 mb-2 focus:outline-none focus:ring-2 focus:ring-indigo-300"
+              value={searchMgr}
+              onChange={e => setSearchMgr(e.target.value)}
+            />
+            <div className="space-y-1 max-h-72 overflow-y-auto">
+              {filteredMgrs.map(u => (
+                <button
+                  key={u.id}
+                  onClick={() => selectManager(u)}
+                  className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-left text-xs transition-all ${
+                    selectedMgr?.id === u.id
+                      ? 'bg-indigo-600 text-white'
+                      : 'hover:bg-slate-50 text-slate-700'
+                  }`}
+                >
+                  <span className={`w-6 h-6 rounded-full flex items-center justify-center font-bold text-[10px] flex-shrink-0 ${
+                    selectedMgr?.id === u.id ? 'bg-white/20 text-white' : 'bg-indigo-100 text-indigo-600'
+                  }`}>{u.name[0]}</span>
+                  <span className="font-medium">{u.name}</span>
+                  {allConfigs.some((c: any) => c.manager_id === u.id) && (
+                    <span className={`ml-auto text-[9px] px-1.5 py-0.5 rounded-full font-bold ${
+                      selectedMgr?.id === u.id ? 'bg-white/20 text-white' : 'bg-indigo-100 text-indigo-600'
+                    }`}>已配置</span>
+                  )}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* 右侧：勾选可见成员 */}
+        <div className="border border-slate-200 rounded-xl overflow-hidden">
+          <div className="bg-slate-50 px-4 py-2.5 flex items-center gap-2 justify-between border-b border-slate-200">
+            <div className="flex items-center gap-2">
+              <span className="material-symbols-outlined text-[14px] text-slate-500">group</span>
+              <span className="text-xs font-bold text-slate-600">
+                {selectedMgr ? `配置 ${selectedMgr.name} 的可见范围` : '请先选择被配置人'}
+              </span>
+            </div>
+            {selectedMgr && (
+              <button onClick={toggleAll} className="text-[10px] text-indigo-600 font-bold hover:underline">
+                {filteredMembers.every(u => selectedMemberIds.includes(u.id)) ? '取消全选' : '全选'}
+              </button>
+            )}
+          </div>
+          <div className="p-3">
+            {selectedMgr ? (
+              <>
+                <input
+                  type="text"
+                  placeholder="搜索成员姓名..."
+                  className="w-full text-xs border border-slate-200 rounded-lg px-3 py-2 mb-2 focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                  value={searchMember}
+                  onChange={e => setSearchMember(e.target.value)}
+                />
+                <div className="space-y-1 max-h-72 overflow-y-auto">
+                  {filteredMembers.map(u => {
+                    const checked = selectedMemberIds.includes(u.id);
+                    return (
+                      <label
+                        key={u.id}
+                        className={`flex items-center gap-2.5 px-3 py-2 rounded-lg cursor-pointer text-xs transition-all ${
+                          checked ? 'bg-indigo-50 border border-indigo-200' : 'hover:bg-slate-50 border border-transparent'
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() => toggleMember(u.id)}
+                          className="accent-indigo-600 w-3.5 h-3.5 flex-shrink-0"
+                        />
+                        <span className={`w-5 h-5 rounded-full flex items-center justify-center font-bold text-[9px] flex-shrink-0 ${
+                          checked ? 'bg-indigo-600 text-white' : 'bg-slate-200 text-slate-500'
+                        }`}>{u.name[0]}</span>
+                        <span className={`font-medium ${checked ? 'text-indigo-700' : 'text-slate-700'}`}>{u.name}</span>
+                        {u.role && (
+                          <span className="ml-auto text-[9px] text-slate-400">{u.role}</span>
+                        )}
+                      </label>
+                    );
+                  })}
+                </div>
+
+                <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between">
+                  <div className="text-xs text-slate-400">
+                    {hasOverride ? (
+                      <span className="text-amber-600 font-medium">⚡ 已有自定义配置 · 已选 {selectedMemberIds.length} 人</span>
+                    ) : (
+                      <span>已选 {selectedMemberIds.length} 人 · 未配置则按部门归属显示</span>
+                    )}
+                  </div>
+                  <div className="flex gap-2">
+                    {hasOverride && (
+                      <button
+                        onClick={handleClear}
+                        disabled={saving}
+                        className="px-3 py-1.5 text-xs text-red-500 border border-red-200 rounded-lg hover:bg-red-50 font-bold"
+                      >清除配置</button>
+                    )}
+                    <button
+                      onClick={handleSave}
+                      disabled={saving || selectedMemberIds.length === 0}
+                      className="px-4 py-1.5 text-xs bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-bold disabled:opacity-40"
+                    >{saving ? '保存中...' : '保存配置'}</button>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div className="flex flex-col items-center justify-center h-48 text-slate-400">
+                <span className="material-symbols-outlined text-4xl mb-2 text-slate-300">arrow_back</span>
+                <p className="text-xs">请在左侧选择需要配置的人员</p>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {msg && (
+        <div className={`text-sm px-4 py-2.5 rounded-lg font-medium ${
+          msg.startsWith('✅') ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' : 'bg-red-50 text-red-700 border border-red-100'
+        }`}>{msg}</div>
+      )}
+    </div>
+  );
+}
+
 // ─── MAIN PAGE ────────────────────────────────────────────────────────
 const MODULES = [
   { key: 'org', label: '组织架构管理', desc: '同步企业微信通讯录，管理部门与人员信息', icon: 'account_tree', color: 'blue', hoverColor: 'hover:border-blue-400/30', iconBg: 'bg-blue-50', iconColor: 'text-[#0060a9]', stats: ['6 个部门', '8 名员工'] },
@@ -1510,6 +1779,7 @@ const MODULES = [
   { key: 'msg', label: '消息推送', desc: '企业微信消息推送、审批卡片与推送记录', icon: 'send', color: 'purple', hoverColor: 'hover:border-purple-400/30', iconBg: 'bg-purple-50', iconColor: 'text-purple-600', stats: ['卡片交互', '推送记录'] },
   { key: 'settings', label: '系统设置', desc: '企微配置、AI分析设置、数据备份与恢复', icon: 'settings', color: 'slate', hoverColor: 'hover:border-slate-400/30', iconBg: 'bg-slate-100', iconColor: 'text-slate-600', stats: ['企微配置', '数据备份'] },
   { key: 'permissions', label: '权限管理', desc: '按角色管控功能、操作及字段访问权限', icon: 'admin_panel_settings', color: 'violet', hoverColor: 'hover:border-violet-400/30', iconBg: 'bg-violet-50', iconColor: 'text-violet-600', stats: ['功能权限', '字段权限'] },
+  { key: 'team_scope', label: '团队可视范围', desc: '为指定人员自由匹配团队成员，单独管理其数据可视范围', icon: 'manage_accounts', color: 'indigo', hoverColor: 'hover:border-indigo-400/30', iconBg: 'bg-indigo-50', iconColor: 'text-indigo-600', stats: ['自由匹配', '仅限视图'] },
   { key: 'approval_flows', label: '流程审批设置', desc: '配置审批流模板、审批节点与条件分支', icon: 'account_tree', color: 'teal', hoverColor: 'hover:border-teal-400/30', iconBg: 'bg-teal-50', iconColor: 'text-teal-600', stats: ['流程模板', '节点配置'] },
   { key: 'workflow_fix', label: '异常流程检测', desc: '管理悬停、报错或节点丢失的流程审批与任务记录', icon: 'healing', color: 'red', hoverColor: 'hover:border-red-400/30', iconBg: 'bg-red-50', iconColor: 'text-red-500', stats: ['一键排错', '节点补录'] },
 ];
@@ -1590,6 +1860,8 @@ export default function AdminPanel({ navigate, initialModule }: { navigate: (vie
                   {activeModule === 'admin_mgmt' && <AdminMgmtModule />}
                   {activeModule === 'approval_flows' && <ApprovalFlowModule />}
                   {activeModule === 'workflow_fix' && <WorkflowFixModule />}
+                  {activeModule === 'team_scope' && <TeamScopeModule />}
+
                 </div>
               </div>
             </div>

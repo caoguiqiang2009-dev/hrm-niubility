@@ -294,6 +294,20 @@ router.get('/team-status', authMiddleware, (req: AuthRequest, res) => {
   const userRow = db.prepare('SELECT department_id FROM users WHERE id = ?').get(req.userId) as any;
   const userDeptId = userRow?.department_id;
 
+  // ── 优先：检查是否存在自定义团队可视范围配置 ──────────────────────────
+  // 如果 HR/管理员为该用户配置了自定义范围，完全替换部门推算逻辑
+  const scopeRows = db.prepare(
+    'SELECT member_id FROM team_view_scopes WHERE manager_id = ?'
+  ).all(req.userId) as any[];
+
+  if (scopeRows.length > 0) {
+    const memberIds = scopeRows.map((r: any) => r.member_id);
+    const placeholders = memberIds.map(() => '?').join(',');
+    subordinates = db.prepare(
+      `SELECT id, name, title, avatar_url, role FROM users WHERE id IN (${placeholders}) AND status = ?`
+    ).all(...memberIds, 'active');
+  } else {
+  // ── 默认：按部门归属推算 ──────────────────────────────────────────────
   const leaderDepts = db.prepare('SELECT id FROM departments WHERE leader_user_id = ?').all(req.userId) as any[];
   
   let deptIds = new Set<any>();
@@ -304,13 +318,11 @@ router.get('/team-status', authMiddleware, (req: AuthRequest, res) => {
 
   if (finalDeptIds.length > 0) {
     if (canViewDept) {
-      // Full department visibility allowed for their specific departments
       const placeholders = finalDeptIds.map(() => '?').join(',');
       subordinates = db.prepare(
         `SELECT id, name, title, avatar_url, role FROM users WHERE department_id IN (${placeholders}) AND status = ?`
       ).all(...finalDeptIds, 'active');
     } else {
-      // Department visibility disabled: only see themselves + subordinates of their led departments (if they are a leader)
       const allowedDeptIds = Array.from(deptIds).filter(id => id !== userDeptId || leaderDepts.some(ld => ld.id === id));
       let baseSubordinates = db.prepare(
         `SELECT id, name, title, avatar_url, role FROM users WHERE id = ? AND status = ?`
@@ -326,11 +338,11 @@ router.get('/team-status', authMiddleware, (req: AuthRequest, res) => {
       subordinates = baseSubordinates;
     }
   } else {
-    // Falback if no department
     subordinates = db.prepare(
         `SELECT id, name, title, avatar_url, role FROM users WHERE id = ? AND status = ?`
     ).all(req.userId, 'active');
   }
+  } // end else (default dept logic)
 
   // 使用真实数据：平均分 + 任务列表
   for (let sub of subordinates) {

@@ -250,6 +250,15 @@ export function initDatabase(): void {
       PRIMARY KEY (user_id, perm_key)
     );
 
+    -- ============ 团队数据可视范围自定义 ============
+    -- 仅影响"团队绩效与任务追踪"页面的成员可见范围，不影响其他权限
+    CREATE TABLE IF NOT EXISTS team_view_scopes (
+      manager_id TEXT NOT NULL,
+      member_id  TEXT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (manager_id, member_id)
+    );
+
     -- ============ 审批流模板 ============
     CREATE TABLE IF NOT EXISTS approval_templates (
       id INTEGER PRIMARY KEY AUTOINCREMENT,

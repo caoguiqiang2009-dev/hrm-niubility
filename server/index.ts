@@ -38,6 +38,8 @@ import workflowFixRoutes from './routes/workflow-fix';
 import testsRoutes from './routes/tests';
 import monthlyEvalRoutes from './routes/monthly-eval';
 import payrollExportRoutes from './routes/payroll-export';
+import teamScopeRoutes from './routes/team-scope';
+
 const app = express();
 const PORT = process.env.SERVER_PORT || 3001;
 
@@ -72,6 +74,8 @@ app.use('/api/workflow-fix', workflowFixRoutes);
 app.use('/api/tests', testsRoutes);
 app.use('/api/monthly-eval', monthlyEvalRoutes);
 app.use('/api/payroll-export', payrollExportRoutes);
+app.use('/api/team-scope', teamScopeRoutes);
+
 // 健康检查
 app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
