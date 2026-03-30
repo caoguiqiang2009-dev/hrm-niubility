@@ -184,7 +184,7 @@ export default function TeamPerformance({ navigate }: { navigate: (view: string)
           deadline: data.t,
           collaborators: data.c,
           assignee_id: data.a || subordinates[0]?.id || '',
-          quarter: '2024 Q2', 
+          quarter: data.quarter || undefined, 
           creator_id: currentUser?.id,
           approver_id: currentUser?.id
         })
@@ -242,7 +242,7 @@ export default function TeamPerformance({ navigate }: { navigate: (view: string)
           deadline: data.t,
           collaborators: data.c,
           assignee_id: currentUser?.id,
-          quarter: '2024 Q2', 
+          quarter: data.quarter || undefined, 
           creator_id: currentUser?.id,
           approver_id: approverId
         })
@@ -737,7 +737,7 @@ export default function TeamPerformance({ navigate }: { navigate: (view: string)
                 deadline: data.t,
                 collaborators: data.c,
                 assignee_id: data.a || subordinates[0]?.id || '',
-                quarter: '2024 Q2',
+                quarter: data.quarter || undefined,
                 creator_id: currentUser?.id,
                 approver_id: currentUser?.id,
               })
@@ -828,7 +828,7 @@ export default function TeamPerformance({ navigate }: { navigate: (view: string)
                 deadline: data.t,
                 collaborators: data.c,
                 assignee_id: currentUser?.id,
-                quarter: '2024 Q2',
+                quarter: data.quarter || undefined,
                 creator_id: currentUser?.id,
                 approver_id: approverId
               })

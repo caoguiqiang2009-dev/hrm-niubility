@@ -103,6 +103,7 @@ export default function PersonalGoalsPanel() {
           category: data.taskType || '常规任务',
           target_value: targetValue,
           deadline: data.t,
+          quarter: data.quarter || undefined,
           collaborators: data.c,
           assignee_id: currentUser?.id,
           approver_id: approverId
@@ -318,12 +319,22 @@ export default function PersonalGoalsPanel() {
                           onClick={() => setSelectedPlan(plan)}
                           className="bg-slate-50 dark:bg-slate-800 rounded-xl p-3.5 border border-slate-200/50 dark:border-slate-700/50 hover:shadow-md hover:border-slate-300/80 dark:hover:border-slate-600 transition-all group cursor-pointer">
 
-                          {/* Card top: category + title */}
+                          {/* Card top: category + period + title */}
                           <div className="flex items-start gap-2 mb-2.5">
                             <span className="flex-none mt-0.5 text-[9px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider"
                               style={{ background: col.bg, color: col.color }}>
                               {plan.category}
                             </span>
+                            {/* 季度/月度标签 */}
+                            {plan.quarter ? (
+                              <span className="flex-none mt-0.5 text-[9px] font-bold px-1.5 py-0.5 rounded bg-blue-100 text-blue-600 border border-blue-200/60">
+                                {plan.quarter}
+                              </span>
+                            ) : plan.deadline ? (
+                              <span className="flex-none mt-0.5 text-[9px] font-bold px-1.5 py-0.5 rounded bg-violet-100 text-violet-600 border border-violet-200/60">
+                                {plan.deadline.substring(0, 7)}
+                              </span>
+                            ) : null}
                             <h4 className="text-xs font-bold text-slate-800 dark:text-slate-200 leading-snug line-clamp-2 flex-1">
                               {plan.title}
                             </h4>
@@ -349,9 +360,6 @@ export default function PersonalGoalsPanel() {
                                 <span className="material-symbols-outlined text-[10px]">flag</span>
                                 {plan.target_value}
                               </span>
-                            )}
-                            {plan.quarter && (
-                              <span className="text-[10px] text-slate-400">{plan.quarter}</span>
                             )}
                           </div>
 

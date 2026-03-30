@@ -1,6 +1,8 @@
 import express from 'express';
 import { getDb } from '../config/database';
 import { v4 as uuidv4 } from 'uuid';
+import { authMiddleware, AuthRequest } from '../middleware/auth';
+
 
 const router = express.Router();
 
@@ -160,8 +162,9 @@ router.post('/hr/publish', (req, res) => {
 });
 
 // 2. 获取当前用户需要执行的所有打分任务 (作为 reviewer)
-router.get('/my-tasks', (req, res) => {
-  const userId = (req as any).user?.id || 'admin'; // Authorization middleware will set this
+router.get('/my-tasks', authMiddleware, (req: AuthRequest, res) => {
+  const userId = req.userId;
+  if (!userId) return res.status(401).json({ code: 401, message: '未登录' });
   const db = getDb();
   
   try {

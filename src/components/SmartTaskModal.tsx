@@ -363,6 +363,7 @@ export interface SmartTaskData {
   logs?: any[];
   status?: string;
   approver_name?: string;
+  quarter?: string;
 }
 
 export interface SmartTaskModalProps {
@@ -497,7 +498,8 @@ export default function SmartTaskModal({ isOpen, onClose, onSubmit, title, type,
     bonus: initialData?.bonus || '0',
     rewardType: initialData?.rewardType || 'money',
     taskType: initialData?.taskType || '常规任务',
-    maxParticipants: initialData?.maxParticipants || '5'
+    maxParticipants: initialData?.maxParticipants || '5',
+    quarter: initialData?.quarter || ''
   });
 
   // Safely parse attachments: handles JSON string, array, null, undefined
@@ -562,7 +564,8 @@ export default function SmartTaskModal({ isOpen, onClose, onSubmit, title, type,
         bonus: initialData?.bonus || '0',
         rewardType: initialData?.rewardType || 'money',
         taskType: initialData?.taskType || '常规任务',
-        maxParticipants: initialData?.maxParticipants || '5'
+        maxParticipants: initialData?.maxParticipants || '5',
+        quarter: initialData?.quarter || ''
       });
       setFormData({
         summary: initialData?.summary || '',
@@ -896,6 +899,32 @@ export default function SmartTaskModal({ isOpen, onClose, onSubmit, title, type,
                   onChange={v => setHeaderSelections({...headerSelections, taskType: v})}
                   readonly={readonly}
                 />
+
+                {/* 周期选择 */}
+                {!readonly ? (
+                  <div className="flex items-center bg-white/10 backdrop-blur-sm rounded-lg px-3.5 py-2 border border-white/20 hover:bg-white/20 transition-all">
+                    <span className="text-[11px] font-black text-white/70 mr-2 tracking-wider uppercase">周期</span>
+                    <select
+                      value={headerSelections.quarter}
+                      onChange={e => setHeaderSelections({...headerSelections, quarter: e.target.value})}
+                      className="bg-transparent text-sm text-white outline-none cursor-pointer font-semibold appearance-none pr-4"
+                      style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='white' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3E%3C/svg%3E")`, backgroundPosition: 'right 0 center', backgroundRepeat: 'no-repeat', backgroundSize: '16px' }}
+                    >
+                      <option value="" style={{color:'#333'}}>不限</option>
+                      <optgroup label="季度" style={{color:'#333'}}>
+                        {(() => { const y = new Date().getFullYear(); return [1,2,3,4].map(q => <option key={`q${q}`} value={`${y} Q${q}`} style={{color:'#333'}}>{y} Q{q}</option>); })()}
+                      </optgroup>
+                      <optgroup label="月度" style={{color:'#333'}}>
+                        {(() => { const y = new Date().getFullYear(); return Array.from({length:12},(_,i)=>i+1).map(m => <option key={`m${m}`} value={`${y}-${String(m).padStart(2,'0')}`} style={{color:'#333'}}>{y}-{String(m).padStart(2,'0')}</option>); })()}
+                      </optgroup>
+                    </select>
+                  </div>
+                ) : headerSelections.quarter ? (
+                  <div className="flex items-center bg-white/10 backdrop-blur-sm rounded-lg px-3.5 py-2 border border-white/20">
+                    <span className="text-[11px] font-black text-white/70 mr-2 tracking-wider uppercase">周期</span>
+                    <span className="text-sm text-white font-semibold">{headerSelections.quarter}</span>
+                  </div>
+                ) : null}
               </div>
             </div>
 
