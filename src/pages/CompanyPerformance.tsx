@@ -5,6 +5,8 @@ import SmartGoalDisplay from '../components/SmartGoalDisplay';
 import SmartTaskModal, { SmartTaskData } from '../components/SmartTaskModal';
 import { decodeSmartDescription } from '../components/SmartFormInputs';
 import { useIsMobile } from '../hooks/useIsMobile';
+import STARReportModal from '../components/STARReportModal';
+import RewardDistributionModal from '../components/RewardDistributionModal';
 
 interface PoolTask {
   id: number;
@@ -97,6 +99,17 @@ export default function CompanyPerformance({ navigate }: { navigate: (view: stri
   // Publish Task state
   const [showPublish, setShowPublish] = useState(false);
   const [publishing, setPublishing] = useState(false);
+
+  // 奖励分配平台 state
+  const [showStarModal, setShowStarModal] = useState<PoolTask | null>(null);
+  const [showExtendModal, setShowExtendModal] = useState<PoolTask | null>(null);
+  const [showTerminateModal, setShowTerminateModal] = useState<PoolTask | null>(null);
+  const [showRewardModal, setShowRewardModal] = useState<PoolTask | null>(null);
+  const [extendForm, setExtendForm] = useState({ new_deadline: '', reason: '', impact_analysis: '' });
+  const [terminateForm, setTerminateForm] = useState({ reason: '', actual_completion: '80', delivered_content: '' });
+  const [actionLoading, setActionLoading] = useState(false);
+  const [actionMsg, setActionMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
+
 
   const { hasPermission, currentUser } = useAuth();
   const isMobile = useIsMobile();
@@ -454,7 +467,7 @@ export default function CompanyPerformance({ navigate }: { navigate: (view: stri
                 </button>
               )}
               {canDeleteTask && (
-                <button onClick={() => setShowTrash(true)}
+                <button onClick={() => { setShowTrash(true); fetchTrash(); }}
                   className={`relative flex items-center gap-1 rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-all border border-outline-variant/10 bg-surface-container-low ${isMobile ? 'p-2' : 'px-3 py-2 text-xs font-medium'}`}>
                   <span className={`material-symbols-outlined ${isMobile ? 'text-[18px]' : 'text-[16px]'}`}>delete_sweep</span>
                   {!isMobile && '回收站'}
@@ -883,7 +896,7 @@ export default function CompanyPerformance({ navigate }: { navigate: (view: stri
             })()}
 
             {/* ── 操作按钮 ── */}
-            <div className="flex gap-3 w-full">
+            <div className="flex gap-3 w-full flex-wrap">
             {selectedTask?.status === 'claiming' ? (
               <>
                 <button onClick={() => setSelectedTask(null)}
@@ -926,6 +939,60 @@ export default function CompanyPerformance({ navigate }: { navigate: (view: stri
               </button>
             )}
             </div>
+
+            {/* ── 赏金榜专用操作（in_progress / completed / terminated）── */}
+            {['in_progress', 'completed', 'terminated'].includes(selectedTask?.status || '') && (() => {
+              const myClaim = (selectedTask?.role_claims || []).find((c: any) => c.user_id === currentUser?.id && c.status === 'approved');
+              const myRole = myClaim?.role_name;
+              const isA = myRole === 'A';
+              const isRA = myRole === 'R' || myRole === 'A';
+              if (!myClaim) return null;
+              return (
+                <div className="w-full border-t border-slate-100 dark:border-slate-800 pt-3 space-y-2">
+                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">
+                    我的操作（{myRole}·{myRole === 'A' ? '负责人' : '执行人'}）
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {/* STAR 填写 — R/A 均可 */}
+                    {isRA && (
+                      <button
+                        onClick={() => setShowStarModal(selectedTask!)}
+                        className="flex items-center gap-1.5 px-3 py-2 bg-violet-50 border border-violet-200 text-violet-700 rounded-xl text-xs font-bold hover:bg-violet-100 transition-colors">
+                        <span className="material-symbols-outlined text-[14px]">star</span>
+                        填写我的 STAR
+                      </button>
+                    )}
+                    {/* 延期 — 仅 A 角色，任务进行中 */}
+                    {isA && selectedTask?.status === 'in_progress' && (
+                      <button
+                        onClick={() => setShowExtendModal(selectedTask!)}
+                        className="flex items-center gap-1.5 px-3 py-2 bg-blue-50 border border-blue-200 text-blue-700 rounded-xl text-xs font-bold hover:bg-blue-100 transition-colors">
+                        <span className="material-symbols-outlined text-[14px]">schedule</span>
+                        申请延期
+                      </button>
+                    )}
+                    {/* 提前完结 — 仅 A 角色，任务进行中 */}
+                    {isA && selectedTask?.status === 'in_progress' && (
+                      <button
+                        onClick={() => setShowTerminateModal(selectedTask!)}
+                        className="flex items-center gap-1.5 px-3 py-2 bg-amber-50 border border-amber-200 text-amber-700 rounded-xl text-xs font-bold hover:bg-amber-100 transition-colors">
+                        <span className="material-symbols-outlined text-[14px]">stop_circle</span>
+                        提前完结
+                      </button>
+                    )}
+                    {/* 发起奖励分配 — 仅 A 角色，100% 或已终止 */}
+                    {isA && ['completed', 'terminated'].includes(selectedTask?.status || '') && (
+                      <button
+                        onClick={() => setShowRewardModal(selectedTask!)}
+                        className="flex items-center gap-1.5 px-3 py-2 bg-gradient-to-r from-orange-400 to-amber-500 text-white rounded-xl text-xs font-bold hover:opacity-90 transition-opacity shadow-sm">
+                        <span className="material-symbols-outlined text-[14px]">workspace_premium</span>
+                        发起奖励分配
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
           </div>
         }
       />
@@ -1474,6 +1541,177 @@ export default function CompanyPerformance({ navigate }: { navigate: (view: stri
           </div>
         </div>
       )}
+
+      {/* ── STAR 报告弹窗 ─────────────────────────────────────────────── */}
+      {showStarModal && (
+        <STARReportModal
+          taskId={showStarModal.id}
+          taskTitle={showStarModal.title}
+          roleName={(showStarModal.role_claims || []).find((c: any) => c.user_id === currentUser?.id)?.role_name || 'R'}
+          onClose={() => setShowStarModal(null)}
+          onSubmitted={() => { setShowStarModal(null); fetchTasks(); }}
+        />
+      )}
+
+      {/* ── 延期申请弹窗 ─────────────────────────────────────────────── */}
+      {showExtendModal && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setShowExtendModal(null)}>
+          <div className="bg-white dark:bg-slate-900 rounded-2xl w-full max-w-md shadow-2xl" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center gap-3 p-5 border-b border-slate-200/60">
+              <div className="w-9 h-9 rounded-xl bg-blue-100 flex items-center justify-center">
+                <span className="material-symbols-outlined text-blue-500 text-[20px]">schedule</span>
+              </div>
+              <div>
+                <h2 className="font-black text-slate-800 dark:text-white">PDCA 延期申请</h2>
+                <p className="text-[11px] text-slate-400 truncate max-w-xs">{showExtendModal.title}</p>
+              </div>
+              <button onClick={() => setShowExtendModal(null)} className="ml-auto w-8 h-8 rounded-lg hover:bg-slate-100 flex items-center justify-center text-slate-400">
+                <span className="material-symbols-outlined text-[18px]">close</span>
+              </button>
+            </div>
+            <div className="p-5 space-y-4">
+              {actionMsg && (
+                <div className={`px-4 py-3 rounded-xl text-sm font-bold ${actionMsg.type === 'ok' ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-600'}`}>
+                  {actionMsg.text}
+                </div>
+              )}
+              <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 text-xs text-blue-700">
+                ⚡ 延期申请无需审批，提交后直接生效，并通知 HR 和 C/I 成员
+              </div>
+              <div>
+                <label className="text-[11px] font-bold text-slate-500 block mb-1.5">新截止日期 <span className="text-red-500">*</span></label>
+                <input type="date" value={extendForm.new_deadline}
+                  onChange={e => setExtendForm(p => ({ ...p, new_deadline: e.target.value }))}
+                  className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-blue-400" />
+              </div>
+              <div>
+                <label className="text-[11px] font-bold text-slate-500 block mb-1.5">延期原因 <span className="text-red-500">*</span></label>
+                <textarea value={extendForm.reason}
+                  onChange={e => setExtendForm(p => ({ ...p, reason: e.target.value }))}
+                  rows={3} placeholder="说明需要延期的原因及影响..."
+                  className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm resize-none focus:outline-none focus:border-blue-400" />
+              </div>
+              <div>
+                <label className="text-[11px] font-bold text-slate-500 block mb-1.5">影响分析 <span className="text-slate-400 font-normal">选填</span></label>
+                <textarea value={extendForm.impact_analysis}
+                  onChange={e => setExtendForm(p => ({ ...p, impact_analysis: e.target.value }))}
+                  rows={2} placeholder="说明延期对项目目标或依赖方的影响..."
+                  className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm resize-none focus:outline-none focus:border-blue-400" />
+              </div>
+            </div>
+            <div className="flex gap-3 p-5 border-t border-slate-200/60">
+              <button onClick={() => setShowExtendModal(null)}
+                className="flex-1 py-2.5 border border-slate-200 rounded-xl text-sm font-bold text-slate-600 hover:bg-slate-50">取消</button>
+              <button onClick={async () => {
+                if (!extendForm.new_deadline || !extendForm.reason) { setActionMsg({ type: 'err', text: '请填写新截止日期和延期原因' }); return; }
+                setActionLoading(true);
+                const token = localStorage.getItem('token');
+                const res = await fetch(`/api/pool/tasks/${showExtendModal.id}/extend`, {
+                  method: 'POST',
+                  headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+                  body: JSON.stringify(extendForm),
+                }).then(r => r.json());
+                setActionLoading(false);
+                if (res.code === 0) {
+                  setActionMsg({ type: 'ok', text: res.message });
+                  setTimeout(() => { setShowExtendModal(null); setActionMsg(null); setExtendForm({ new_deadline: '', reason: '', impact_analysis: '' }); fetchTasks(); }, 1500);
+                } else { setActionMsg({ type: 'err', text: res.message }); }
+              }} disabled={actionLoading}
+                className="flex-1 py-2.5 bg-blue-500 text-white rounded-xl text-sm font-bold hover:bg-blue-600 disabled:opacity-50">
+                {actionLoading ? '提交中...' : '✅ 确认延期'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── 提前完结弹窗 ─────────────────────────────────────────────── */}
+      {showTerminateModal && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setShowTerminateModal(null)}>
+          <div className="bg-white dark:bg-slate-900 rounded-2xl w-full max-w-md shadow-2xl" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center gap-3 p-5 border-b border-slate-200/60">
+              <div className="w-9 h-9 rounded-xl bg-amber-100 flex items-center justify-center">
+                <span className="material-symbols-outlined text-amber-500 text-[20px]">stop_circle</span>
+              </div>
+              <div>
+                <h2 className="font-black text-slate-800 dark:text-white">提前完结任务</h2>
+                <p className="text-[11px] text-slate-400 truncate max-w-xs">{showTerminateModal.title}</p>
+              </div>
+              <button onClick={() => setShowTerminateModal(null)} className="ml-auto w-8 h-8 rounded-lg hover:bg-slate-100 flex items-center justify-center text-slate-400">
+                <span className="material-symbols-outlined text-[18px]">close</span>
+              </button>
+            </div>
+            <div className="p-5 space-y-4">
+              {actionMsg && (
+                <div className={`px-4 py-3 rounded-xl text-sm font-bold ${actionMsg.type === 'ok' ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-600'}`}>
+                  {actionMsg.text}
+                </div>
+              )}
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-700">
+                ⚡ 提前完结无需审批，直接进入 STAR 汇报阶段，系统会通知所有 R/A 成员填写 STAR 报告
+              </div>
+              <div>
+                <label className="text-[11px] font-bold text-slate-500 block mb-1.5">实际完成度 <span className="text-red-500">*</span></label>
+                <div className="flex items-center gap-3">
+                  <input type="range" min="0" max="99" value={terminateForm.actual_completion}
+                    onChange={e => setTerminateForm(p => ({ ...p, actual_completion: e.target.value }))}
+                    className="flex-1" />
+                  <span className="font-black text-amber-600 text-lg w-12 text-right">{terminateForm.actual_completion}%</span>
+                </div>
+              </div>
+              <div>
+                <label className="text-[11px] font-bold text-slate-500 block mb-1.5">完结原因 <span className="text-red-500">*</span></label>
+                <textarea value={terminateForm.reason}
+                  onChange={e => setTerminateForm(p => ({ ...p, reason: e.target.value }))}
+                  rows={3} placeholder="说明为何提前完结（外部环境变化、资源限制、战略调整等）..."
+                  className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm resize-none focus:outline-none focus:border-amber-400" />
+              </div>
+              <div>
+                <label className="text-[11px] font-bold text-slate-500 block mb-1.5">已交付成果 <span className="text-red-500">*</span></label>
+                <textarea value={terminateForm.delivered_content}
+                  onChange={e => setTerminateForm(p => ({ ...p, delivered_content: e.target.value }))}
+                  rows={3} placeholder="列出已完成的交付物、文档、数据或其他成果..."
+                  className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm resize-none focus:outline-none focus:border-amber-400" />
+              </div>
+            </div>
+            <div className="flex gap-3 p-5 border-t border-slate-200/60">
+              <button onClick={() => setShowTerminateModal(null)}
+                className="flex-1 py-2.5 border border-slate-200 rounded-xl text-sm font-bold text-slate-600 hover:bg-slate-50">取消</button>
+              <button onClick={async () => {
+                if (!terminateForm.reason || !terminateForm.delivered_content) { setActionMsg({ type: 'err', text: '请填写完结原因和已交付成果' }); return; }
+                setActionLoading(true);
+                const token = localStorage.getItem('token');
+                const res = await fetch(`/api/pool/tasks/${showTerminateModal.id}/terminate`, {
+                  method: 'POST',
+                  headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+                  body: JSON.stringify(terminateForm),
+                }).then(r => r.json());
+                setActionLoading(false);
+                if (res.code === 0) {
+                  setActionMsg({ type: 'ok', text: res.message });
+                  setTimeout(() => { setShowTerminateModal(null); setActionMsg(null); setTerminateForm({ reason: '', actual_completion: '80', delivered_content: '' }); fetchTasks(); }, 1500);
+                } else { setActionMsg({ type: 'err', text: res.message }); }
+              }} disabled={actionLoading}
+                className="flex-1 py-2.5 bg-amber-500 text-white rounded-xl text-sm font-bold hover:bg-amber-600 disabled:opacity-50">
+                {actionLoading ? '提交中...' : '⚠️ 确认提前完结'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── 奖励分配弹窗 ─────────────────────────────────────────────── */}
+      {showRewardModal && (
+        <RewardDistributionModal
+          taskId={showRewardModal.id}
+          taskTitle={showRewardModal.title}
+          totalBonus={showRewardModal.bonus}
+          rewardType={showRewardModal.reward_type || 'money'}
+          onClose={() => setShowRewardModal(null)}
+          onSubmitted={() => { setShowRewardModal(null); fetchTasks(); }}
+        />
+      )}
     </div>
   );
 }
+

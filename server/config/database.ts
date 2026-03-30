@@ -415,10 +415,88 @@ export function initDatabase(): void {
     'ALTER TABLE pool_tasks ADD COLUMN progress INTEGER DEFAULT 0',
     'ALTER TABLE pool_tasks ADD COLUMN roles_config TEXT',
     'ALTER TABLE pool_tasks ADD COLUMN dept_head_id TEXT',
+    // 奖励分配平台新增字段
+    'ALTER TABLE pool_tasks ADD COLUMN actual_end_reason TEXT',
+    'ALTER TABLE pool_tasks ADD COLUMN actual_completion REAL',
+    'ALTER TABLE pool_tasks ADD COLUMN terminated_by TEXT',
+    'ALTER TABLE pool_tasks ADD COLUMN terminated_at DATETIME',
+    'ALTER TABLE pool_tasks ADD COLUMN star_phase_started_at DATETIME',
   ];
   for (const sql of poolMigrations) {
     try { db.prepare(sql).run(); } catch (e) {}
   }
+
+  // ── 延期记录表
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS pool_task_extensions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      pool_task_id INTEGER NOT NULL,
+      initiator_id TEXT NOT NULL,
+      original_deadline TEXT NOT NULL,
+      new_deadline TEXT NOT NULL,
+      reason TEXT NOT NULL,
+      impact_analysis TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+  `);
+
+  // ── STAR 绩效报告表
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS pool_star_reports (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      pool_task_id INTEGER NOT NULL,
+      reward_plan_id INTEGER,
+      user_id TEXT NOT NULL,
+      role_name TEXT NOT NULL,
+      situation TEXT,
+      task_desc TEXT,
+      action TEXT,
+      result TEXT,
+      is_submitted INTEGER DEFAULT 0,
+      submitted_at DATETIME,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_star_task_user
+      ON pool_star_reports(pool_task_id, user_id);
+  `);
+
+  // ── 奖励分配主表
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS pool_reward_plans (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      pool_task_id INTEGER NOT NULL,
+      initiator_id TEXT NOT NULL,
+      status TEXT DEFAULT 'draft',
+      total_bonus REAL NOT NULL DEFAULT 0,
+      reward_type TEXT DEFAULT 'money',
+      attachments TEXT DEFAULT '[]',
+      hr_reviewer_id TEXT,
+      hr_comment TEXT,
+      hr_reviewed_at DATETIME,
+      admin_reviewer_id TEXT,
+      admin_comment TEXT,
+      admin_reviewed_at DATETIME,
+      pay_period TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+  `);
+
+  // ── 每人奖励分配明细表
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS pool_reward_distributions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      reward_plan_id INTEGER NOT NULL,
+      pool_task_id INTEGER NOT NULL,
+      user_id TEXT NOT NULL,
+      role_name TEXT NOT NULL,
+      bonus_amount REAL DEFAULT 0,
+      perf_score REAL DEFAULT 0,
+      paid_at DATETIME,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+  `);
+
 
   // perf_plans 缺失列迁移
   const perfMigrations = [

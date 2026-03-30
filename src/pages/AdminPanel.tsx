@@ -1781,7 +1781,7 @@ const MODULES = [
   { key: 'permissions', label: '权限管理', desc: '按角色管控功能、操作及字段访问权限', icon: 'admin_panel_settings', color: 'violet', hoverColor: 'hover:border-violet-400/30', iconBg: 'bg-violet-50', iconColor: 'text-violet-600', stats: ['功能权限', '字段权限'] },
   { key: 'team_scope', label: '团队可视范围', desc: '为指定人员自由匹配团队成员，单独管理其数据可视范围', icon: 'manage_accounts', color: 'indigo', hoverColor: 'hover:border-indigo-400/30', iconBg: 'bg-indigo-50', iconColor: 'text-indigo-600', stats: ['自由匹配', '仅限视图'] },
   { key: 'approval_flows', label: '流程审批设置', desc: '配置审批流模板、审批节点与条件分支', icon: 'account_tree', color: 'teal', hoverColor: 'hover:border-teal-400/30', iconBg: 'bg-teal-50', iconColor: 'text-teal-600', stats: ['流程模板', '节点配置'] },
-  { key: 'workflow_fix', label: '异常流程检测', desc: '管理悬停、报错或节点丢失的流程审批与任务记录', icon: 'healing', color: 'red', hoverColor: 'hover:border-red-400/30', iconBg: 'bg-red-50', iconColor: 'text-red-500', stats: ['一键排错', '节点补录'] },
+  { key: 'workflow_fix', label: '异常流程检测', desc: '管理悬停、报错或节点丢失的流程审批与任务记录（已整合至「我的工作流」→「流程异常」）', icon: 'healing', color: 'red', hoverColor: 'hover:border-red-400/30', iconBg: 'bg-red-50', iconColor: 'text-red-500', stats: ['跳转工作流', '一站式管理'], redirect: 'workflows?tab=exception_mgmt' },
 ];
 
 export default function AdminPanel({ navigate, initialModule }: { navigate: (view: string) => void; initialModule?: string }) {
@@ -1871,7 +1871,7 @@ export default function AdminPanel({ navigate, initialModule }: { navigate: (vie
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {MODULES.filter(mod => !(mod as any).superAdminOnly || currentUser?.is_super_admin).map(mod => (
               <div key={mod.key}
-                onClick={() => setActiveModule(mod.key as Module)}
+                onClick={() => (mod as any).redirect ? navigate((mod as any).redirect) : setActiveModule(mod.key as Module)}
                 className={`bg-white dark:bg-slate-900 rounded-2xl p-6 border transition-all cursor-pointer group ${
                   activeModule === mod.key
                     ? 'border-[#0060a9]/50 shadow-lg shadow-[#0060a9]/5 ring-2 ring-[#0060a9]/10'

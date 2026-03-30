@@ -878,3 +878,136 @@ router.post('/tasks/:id/start-project', authMiddleware, (req: AuthRequest, res) 
 });
 
 export default router;
+
+// ─── PDCA 延期申请（A 角色，无需审批）────────────────────────────
+router.post('/tasks/:id/extend', authMiddleware, async (req: AuthRequest, res) => {
+  const db = getDb();
+  const taskId = parseInt(req.params.id);
+  const userId = req.userId!;
+
+  const claim = db.prepare(
+    `SELECT * FROM pool_role_claims WHERE pool_task_id = ? AND user_id = ? AND role_name = 'A'`
+  ).get(taskId, userId);
+  if (!claim) return res.status(403).json({ code: 403, message: '仅 A 角色可发起延期申请' });
+
+  const task = db.prepare('SELECT * FROM pool_tasks WHERE id = ?').get(taskId) as any;
+  if (!task) return res.status(404).json({ code: 404, message: '任务不存在' });
+  if (!['open', 'in_progress'].includes(task.status)) {
+    return res.status(400).json({ code: 400, message: '任务当前状态不支持延期' });
+  }
+
+  const { new_deadline, reason, impact_analysis } = req.body;
+  if (!new_deadline || !reason) {
+    return res.status(400).json({ code: 400, message: '新截止日期和延期原因为必填项' });
+  }
+
+  const desc = task.description || '';
+  const originalDeadline = task.deadline || desc.match(/Act:\s*([^\s|]+)/)?.[1] || '未设置';
+
+  db.prepare(`
+    INSERT INTO pool_task_extensions (pool_task_id, initiator_id, original_deadline, new_deadline, reason, impact_analysis)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `).run(taskId, userId, originalDeadline, new_deadline, reason, impact_analysis || null);
+
+  if (desc.includes('Act:')) {
+    const newDesc = desc.replace(/Act:\s*[^\s|]+/, 'Act: ' + new_deadline);
+    db.prepare(`UPDATE pool_tasks SET description = ?, updated_at = ? WHERE id = ?`)
+      .run(newDesc, new Date().toISOString(), taskId);
+  }
+
+  const operator = db.prepare('SELECT name FROM users WHERE id = ?').get(userId) as any;
+  const ciMembers = db.prepare(
+    `SELECT prc.user_id FROM pool_role_claims prc WHERE prc.pool_task_id = ? AND prc.role_name IN ('C', 'I')`
+  ).all(taskId) as any[];
+  const hrs = db.prepare(`SELECT id FROM users WHERE role IN ('hr', 'admin')`).all() as any[];
+  const notifyIds = [...hrs.map((u: any) => u.id), ...ciMembers.map((u: any) => u.user_id)];
+
+  try {
+    const { sendMarkdownMessage } = await import('../services/message');
+    await sendMarkdownMessage(
+      [...new Set(notifyIds)] as string[],
+      `**延期通知**\n\n> 任务：${task.title}\n> 负责人：${operator?.name}\n> 原截止：${originalDeadline}\n> 新截止：${new_deadline}\n> 原因：${reason}`
+    );
+  } catch {}
+
+  return res.json({ code: 0, message: `延期申请已生效，新截止日期：${new_deadline}` });
+});
+
+// ─── 提前完结（A 角色，无需审批，直接进入 STAR 阶段）──────────────
+router.post('/tasks/:id/terminate', authMiddleware, async (req: AuthRequest, res) => {
+  const db = getDb();
+  const taskId = parseInt(req.params.id);
+  const userId = req.userId!;
+
+  const claim = db.prepare(
+    `SELECT * FROM pool_role_claims WHERE pool_task_id = ? AND user_id = ? AND role_name = 'A'`
+  ).get(taskId, userId);
+  if (!claim) return res.status(403).json({ code: 403, message: '仅 A 角色可发起提前完结' });
+
+  const task = db.prepare('SELECT * FROM pool_tasks WHERE id = ?').get(taskId) as any;
+  if (!task) return res.status(404).json({ code: 404, message: '任务不存在' });
+  if (!['open', 'in_progress'].includes(task.status)) {
+    return res.status(400).json({ code: 400, message: '任务当前状态不支持提前完结' });
+  }
+
+  const { reason, actual_completion, delivered_content } = req.body;
+  if (!reason || actual_completion === undefined || !delivered_content) {
+    return res.status(400).json({ code: 400, message: '完结原因、实际完成度、已交付成果均为必填项' });
+  }
+
+  const now = new Date().toISOString();
+  db.prepare(`
+    UPDATE pool_tasks
+    SET status = 'terminated', actual_end_reason = ?, actual_completion = ?,
+        terminated_by = ?, terminated_at = ?, star_phase_started_at = ?, updated_at = ?
+    WHERE id = ?
+  `).run(reason, actual_completion, userId, now, now, now, taskId);
+
+  const raMembers = db.prepare(
+    `SELECT prc.user_id FROM pool_role_claims prc WHERE prc.pool_task_id = ? AND prc.role_name IN ('R', 'A')`
+  ).all(taskId) as any[];
+  const hrs = db.prepare(`SELECT id FROM users WHERE role IN ('hr', 'admin')`).all() as any[];
+  const operator = db.prepare('SELECT name FROM users WHERE id = ?').get(userId) as any;
+
+  try {
+    const { sendMarkdownMessage } = await import('../services/message');
+    await sendMarkdownMessage(
+      raMembers.map((m: any) => m.user_id),
+      `**任务提前完结 — 请填写 STAR 报告**\n\n> 任务：${task.title}\n> 负责人：${operator?.name}\n> 实际完成度：${actual_completion}%\n> 完结原因：${reason}\n\n请尽快填写 STAR 绩效报告，这是获得任务奖励的必要条件！`
+    );
+    await sendMarkdownMessage(
+      hrs.map((u: any) => u.id),
+      `**任务提前完结通知**\n\n> 任务：${task.title}\n> 负责人：${operator?.name}\n> 实际完成度：${actual_completion}%\n> 已交付：${delivered_content}\n> 原因：${reason}\n\n任务已进入 STAR 汇报阶段。`
+    );
+  } catch {}
+
+  return res.json({ code: 0, message: '任务已提前完结，已通知所有成员填写 STAR' });
+});
+
+// ─── 任务进度更新（含 100% 自动触发 STAR 阶段）──────────────────
+router.post('/tasks/:id/complete', authMiddleware, async (req: AuthRequest, res) => {
+  const db = getDb();
+  const taskId = parseInt(req.params.id);
+
+  const task = db.prepare('SELECT * FROM pool_tasks WHERE id = ?').get(taskId) as any;
+  if (!task) return res.status(404).json({ code: 404, message: '任务不存在' });
+  if (task.progress < 100) return res.status(400).json({ code: 400, message: '进度未达100%' });
+
+  const now = new Date().toISOString();
+  db.prepare(`UPDATE pool_tasks SET status = 'completed', star_phase_started_at = ?, updated_at = ? WHERE id = ?`)
+    .run(now, now, taskId);
+
+  const raMembers = db.prepare(
+    `SELECT prc.user_id FROM pool_role_claims prc WHERE prc.pool_task_id = ? AND prc.role_name IN ('R', 'A')`
+  ).all(taskId) as any[];
+
+  try {
+    const { sendMarkdownMessage } = await import('../services/message');
+    await sendMarkdownMessage(
+      raMembers.map((m: any) => m.user_id),
+      `**任务已完成 — 请填写 STAR 报告**\n\n> 任务：${task.title}\n> 进度：100%\n\n恭喜！任务圆满完成！请填写 STAR 绩效报告来领取奖励！`
+    );
+  } catch {}
+
+  return res.json({ code: 0, message: '任务已完成，已进入 STAR 汇报阶段' });
+});
