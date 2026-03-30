@@ -131,7 +131,7 @@ router.get('/tree', authMiddleware, (_req, res) => {
 router.get('/departments/:id', authMiddleware, (req, res) => {
   const db = getDb();
   const dept = db.prepare('SELECT * FROM departments WHERE id = ?').get(req.params.id);
-  const members = db.prepare('SELECT id, name, title, avatar_url, role, status FROM users WHERE department_id = ?').all(req.params.id);
+  const members = db.prepare("SELECT id, name, title, avatar_url, role, status FROM users WHERE department_id = ? AND status = 'active'").all(req.params.id);
 
   if (!dept) return res.status(404).json({ code: 404, message: '部门不存在' });
   return res.json({ code: 0, data: { ...(dept as Record<string, any>), members } });
@@ -226,10 +226,10 @@ router.get('/users-list', authMiddleware, requireRole('admin', 'hr'), (_req, res
   return res.json({ code: 0, data: users });
 });
 
-// 删除用户 (设为 inactive, 仅 admin/hr)
+// 删除用户 (设为离职, 仅 admin/hr)
 router.delete('/users/:id', authMiddleware, requireRole('admin', 'hr'), (req: AuthRequest, res) => {
   const db = getDb();
-  const user = db.prepare('SELECT id, name FROM users WHERE id = ?').get(req.params.id) as any;
+  const user = db.prepare('SELECT id, name, status FROM users WHERE id = ?').get(req.params.id) as any;
   if (!user) return res.status(404).json({ code: 404, message: '用户不存在' });
 
   // 不允许删除超级管理员
@@ -237,8 +237,10 @@ router.delete('/users/:id', authMiddleware, requireRole('admin', 'hr'), (req: Au
     return res.status(403).json({ code: 403, message: '不可删除最高系统管理员' });
   }
 
-  db.prepare('UPDATE users SET status = ? WHERE id = ?').run('inactive', req.params.id);
-  return res.json({ code: 0, message: `已将 ${user.name} 设为离职状态` });
+  if (user.status === 'resigned') return res.json({ code: 0, message: `${user.name} 已是离职状态` });
+
+  db.prepare("UPDATE users SET status = 'resigned' WHERE id = ?").run(req.params.id);
+  return res.json({ code: 0, message: `已将「${user.name}」设为离职` });
 });
 
 // 调整用户部门 (仅 admin/hr)
@@ -353,19 +355,7 @@ router.delete('/departments/:id', authMiddleware, requireRole('admin', 'hr'), (r
   return res.json({ code: 0, message: `已删除部门「${dept.name}」` });
 });
 
-// ─── 成员设为离职 ─────────────────────────────────────────────────
-router.delete('/users/:userId', authMiddleware, requireRole('admin', 'hr'), (req: AuthRequest, res) => {
-  const db = getDb();
-  const userId = req.params.userId;
 
-  const user = db.prepare('SELECT id, name, status FROM users WHERE id = ?').get(userId) as any;
-  if (!user) return res.status(404).json({ code: 404, message: '用户不存在' });
-  if (user.status === 'resigned') return res.json({ code: 0, message: `${user.name} 已是离职状态` });
-
-  // Set status to resigned instead of deleting, to preserve historical data
-  db.prepare("UPDATE users SET status = 'resigned' WHERE id = ?").run(userId);
-  return res.json({ code: 0, message: `已将「${user.name}」设为离职` });
-});
 
 // ─── 部门绩效统计 ─────────────────────────────────────────────────
 router.get('/departments/:id/stats', authMiddleware, (req: AuthRequest, res) => {
