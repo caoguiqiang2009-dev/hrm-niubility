@@ -154,14 +154,6 @@ router.get('/users', authMiddleware, (_req, res) => {
   return res.json({ code: 0, data: users });
 });
 
-// 临时修复：将所有 inactive 用户转为 resigned（一次性使用后删除）
-router.post('/fix-inactive', (_req, res) => {
-  const db = getDb();
-  const inactive = db.prepare("SELECT id, name FROM users WHERE status = 'inactive'").all() as any[];
-  const result = db.prepare("UPDATE users SET status = 'resigned' WHERE status = 'inactive'").run();
-  return res.json({ code: 0, message: `修正完成：${result.changes} 名用户从 inactive 转为 resigned`, data: inactive });
-});
-
 
 // 更新用户信息 (HR / Admin)
 router.put('/users/:id', authMiddleware, requireRole('admin', 'hr'), (req: AuthRequest, res) => {
