@@ -164,7 +164,8 @@ export default function MonthlyEvaluationPage({ navigate }: { navigate: (view: s
   };
 
   const fetchHrData = async () => {
-    if (currentUser?.role !== 'hr' && !currentUser?.is_super_admin) return;
+    const isManagementRole = ['hr', 'admin', 'supervisor', 'manager'].includes(currentUser?.role || '') || currentUser?.is_super_admin;
+    if (!isManagementRole) return;
     setHrLoading(true);
     const token = localStorage.getItem('token');
     try {
@@ -374,23 +375,31 @@ export default function MonthlyEvaluationPage({ navigate }: { navigate: (view: s
           )}
         </div>
 
-        {/* --- HR 全景控制台 --- */}
-        {(currentUser?.role === 'hr' || currentUser?.is_super_admin) && (
+        {/* --- HR/管理员/主管 全景控制台 --- */}
+        {(['hr', 'admin', 'supervisor', 'manager'].includes(currentUser?.role || '') || currentUser?.is_super_admin) && (
           <div className="mt-10 mb-20 animate-in slide-in-from-bottom-5">
             <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-6">
               <div>
                 <h2 className="text-2xl font-black text-slate-800 dark:text-white flex items-center gap-2">
                   <span className="material-symbols-outlined text-indigo-500 text-3xl">admin_panel_settings</span>
-                  HR 考评统筹控制台
+                  {currentUser?.role === 'supervisor' || currentUser?.role === 'manager'
+                    ? '部门考评概览'
+                    : 'HR 考评统筹控制台'}
                 </h2>
-                <p className="text-sm text-slate-500 mt-1">全局总览并调配人员的四大维度打分池，一键流转到终端。</p>
+                <p className="text-sm text-slate-500 mt-1">
+                  {currentUser?.role === 'supervisor' || currentUser?.role === 'manager'
+                    ? '查看本部门员工的月度考评进度，确认评分是否完成。'
+                    : '全局总览并调配人员的四大维度打分池，一键流转到终端。'}
+                </p>
               </div>
               <div className="flex items-center gap-3 bg-indigo-50 dark:bg-indigo-900/20 p-2 rounded-xl border border-indigo-100 dark:border-indigo-800">
                 <input type="month" value={triggerMonth} onChange={e => setTriggerMonth(e.target.value)} className="px-3 py-2 rounded-lg border border-indigo-200 dark:border-indigo-700 font-bold bg-white dark:bg-slate-800 outline-none w-48" />
-                <div className="px-5 py-2 bg-slate-200 text-slate-500 font-bold rounded-lg text-sm flex items-center gap-1.5 cursor-not-allowed" title="根据最新业务流程，已剥离一键发布功能，请下方逐一核实。">
-                  <span className="material-symbols-outlined text-[18px]">block</span>
-                  一键发布已停用
-                </div>
+                {(currentUser?.role === 'hr' || currentUser?.role === 'admin' || currentUser?.is_super_admin) && (
+                  <div className="px-5 py-2 bg-slate-200 text-slate-500 font-bold rounded-lg text-sm flex items-center gap-1.5 cursor-not-allowed" title="根据最新业务流程，已剥离一键发布功能，请下方逐一核实。">
+                    <span className="material-symbols-outlined text-[18px]">block</span>
+                    一键发布已停用
+                  </div>
+                )}
               </div>
             </div>
             

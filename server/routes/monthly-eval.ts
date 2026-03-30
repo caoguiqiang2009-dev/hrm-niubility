@@ -55,21 +55,33 @@ function getSuggestedReviewers(db: any, month: string, userId: string, departmen
   return { self: [selfId], manager: [managerId], prof: profIds, peer: peerIds };
 }
 
-// 1. HR 获取当月全员大名单及考评状态
-router.get('/hr/employees-status', (req, res) => {
+// 1. HR/Admin/主管 获取当月全员大名单及考评状态
+router.get('/hr/employees-status', authMiddleware, (req: AuthRequest, res) => {
   const { month } = req.query;
   if (!month) return res.status(400).json({ code: 1, message: '请提供月份' });
   const db = getDb();
   try {
-    const list = db.prepare(`
-      SELECT u.id as user_id, u.name as user_name, u.department_id, d.name as department_name, 
+    const caller = db.prepare('SELECT role, department_id FROM users WHERE id = ?').get(req.userId) as any;
+    const isSupervisor = caller?.role === 'supervisor' || caller?.role === 'manager';
+
+    let sql = `
+      SELECT u.id as user_id, u.name as user_name, u.department_id, d.name as department_name,
              e.status as eval_status, e.final_score
       FROM users u
       LEFT JOIN departments d ON u.department_id = d.id
       LEFT JOIN monthly_evaluations e ON u.id = e.user_id AND e.month = ?
       WHERE u.status = 'active'
-      ORDER BY d.id, u.id
-    `).all(month);
+    `;
+    const params: any[] = [month];
+
+    // 主管/主管只看自己部门
+    if (isSupervisor && caller?.department_id) {
+      sql += ' AND u.department_id = ?';
+      params.push(caller.department_id);
+    }
+    sql += ' ORDER BY d.id, u.id';
+
+    const list = db.prepare(sql).all(...params);
     res.json({ code: 0, data: list });
   } catch (err: any) {
     res.status(500).json({ code: 1, message: err.message });
@@ -77,7 +89,7 @@ router.get('/hr/employees-status', (req, res) => {
 });
 
 // 2. HR 预览智能推荐的评审人 (不落库)
-router.get('/hr/preview-reviewers', (req, res) => {
+router.get('/hr/preview-reviewers', authMiddleware, (req: AuthRequest, res) => {
   const { month, userId } = req.query;
   if (!month || !userId) return res.status(400).json({ code: 1, message: '参数缺失' });
   const db = getDb();
@@ -113,7 +125,7 @@ router.get('/hr/all-users', (req, res) => {
 });
 
 // 4. 下发考核单 (单人精细配置 或 批量自动推车)
-router.post('/hr/publish', (req, res) => {
+router.post('/hr/publish', authMiddleware, (req: AuthRequest, res) => {
   const { month, userIds, manualReviewers } = req.body;
   if (!month || !userIds || !userIds.length) return res.status(400).json({ code: 1, message: '缺少参数' });
 

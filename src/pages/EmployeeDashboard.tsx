@@ -668,26 +668,31 @@ export default function EmployeeDashboard({ navigate }: { navigate: (view: strin
           </div>
 
           {/* 管理专属入口 (绩效管理 & 工资表管理) */}
-          {(currentUser?.role === 'admin' || currentUser?.role === 'hr') && (
+          {(currentUser?.role === 'admin' || currentUser?.role === 'hr' || currentUser?.role === 'supervisor' || currentUser?.role === 'manager') && (
             <div className="mt-10 border-t border-slate-200/60 dark:border-slate-800 pt-8">
               <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100 mb-5 flex items-center gap-2">
                 <span className="material-symbols-outlined text-emerald-500">category</span>
                 管理专属
               </h3>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-              {/* 绩效核算 (原月度考评) 放在第一位以保持一致性 */}
+              {/* 绩效核算 (原月度考评) 放在第一位以保持一致性 - 全角色可见 */}
               <div onClick={() => navigate('monthly-eval')} className="bg-white dark:bg-slate-900 rounded-3xl p-6 border border-slate-100 dark:border-slate-800 shadow-sm hover:shadow-xl transition-all cursor-pointer group flex flex-col hover:-translate-y-1 hover:border-blue-200 dark:hover:border-blue-800/50">
                 <div className="w-12 h-12 rounded-2xl bg-blue-50 dark:bg-blue-900/30 flex items-center justify-center mb-5 group-hover:bg-blue-100 transition-colors">
                   <span className="material-symbols-outlined text-[24px] text-blue-600 font-bold" style={{ fontVariationSettings: "'wght' 600" }}>rule</span>
                 </div>
                 <h4 className="text-xl font-black text-slate-800 dark:text-slate-100 mb-3 tracking-tight">月度考评系统</h4>
-                <p className="text-sm text-slate-500 dark:text-slate-400 mb-6 font-medium">所有员工必须参与的月底绩效四大维度打分</p>
+                <p className="text-sm text-slate-500 dark:text-slate-400 mb-6 font-medium">
+                  {currentUser?.role === 'supervisor' || currentUser?.role === 'manager'
+                    ? '查看与管理本部门员工的月度绩效考评'
+                    : '所有员工必须参与的月底绩效四大维度打分'}
+                </p>
                 <div className="flex gap-3 text-[12px] font-bold text-slate-400 mt-auto">
                   <span className="flex items-center gap-1.5"><div className="w-1.5 h-1.5 rounded-full bg-slate-200 dark:bg-slate-700 group-hover:bg-blue-300"></div>待审阅打分</span>
                   <span className="flex items-center gap-1.5"><div className="w-1.5 h-1.5 rounded-full bg-slate-200 dark:bg-slate-700 group-hover:bg-blue-300"></div>百分制测评</span>
                 </div>
               </div>
 
+              {(currentUser?.role === 'admin' || currentUser?.role === 'hr') && (<>
               {/* 绩效管理 */}
               <div onClick={() => navigate('perf-analytics')} className="bg-white dark:bg-slate-900 rounded-3xl p-6 border border-slate-100 dark:border-slate-800 shadow-sm hover:shadow-xl transition-all cursor-pointer group flex flex-col h-full hover:-translate-y-1 hover:border-emerald-200 dark:hover:border-emerald-800/50">
                 <div className="w-12 h-12 rounded-2xl bg-emerald-50 dark:bg-emerald-900/30 flex items-center justify-center mb-5 group-hover:bg-emerald-100 transition-colors">
@@ -739,6 +744,7 @@ export default function EmployeeDashboard({ navigate }: { navigate: (view: strin
                   <span className="flex items-center gap-1.5"><div className="w-1.5 h-1.5 rounded-full bg-slate-200 dark:bg-slate-700 group-hover:bg-indigo-300"></div>奖金池</span>
                 </div>
               </div>
+              </>)}
             </div>
           </div>
           )}
