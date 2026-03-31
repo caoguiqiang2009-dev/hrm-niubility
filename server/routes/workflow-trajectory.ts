@@ -213,10 +213,10 @@ router.get('/:type/:id', authMiddleware, (req: AuthRequest, res) => {
     // 3. 个人计划流 (PERF_PLAN) - 拼装引擎节点与真实日志
     // ==========================================
     else if (type === 'perf_plan') {
-      const plan = db.prepare(`SELECT p.*, u.name as initiator_name FROM perf_plans p JOIN users u ON p.user_id = u.id WHERE p.id = ?`).get(id) as any;
+      const plan = db.prepare(`SELECT p.*, u.name as initiator_name FROM perf_plans p JOIN users u ON p.creator_id = u.id WHERE p.id = ?`).get(id) as any;
       if (!plan) return res.status(404).json({ code: 404, message: '单据不存在' });
 
-      const nodes = WorkflowEngine.resolveAssignees(WORKFLOWS.PERF_PLAN, { initiatorId: plan.user_id });
+      const nodes = WorkflowEngine.resolveAssignees(WORKFLOWS.PERF_PLAN, { initiatorId: plan.creator_id });
       const logs = db.prepare('SELECT * FROM perf_logs WHERE plan_id = ? ORDER BY created_at ASC').all(id) as any[];
       const currentStatus = plan.status;
 
@@ -226,7 +226,7 @@ router.get('/:type/:id', authMiddleware, (req: AuthRequest, res) => {
         seq: 1,
         name: '发起申请',
         status: submitLog ? 'past' : (currentStatus === 'draft' ? 'current' : 'past'),
-        assignees: [{ id: plan.user_id, name: plan.initiator_name }],
+        assignees: [{ id: plan.creator_id, name: plan.initiator_name }],
         comment: submitLog?.comment,
         timestamp: submitLog?.created_at
       });

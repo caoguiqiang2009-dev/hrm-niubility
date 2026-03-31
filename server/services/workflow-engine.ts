@@ -191,8 +191,8 @@ export class WorkflowEngine {
     const db = getDb();
     const u = db.prepare('SELECT department_id FROM users WHERE id = ?').get(userId) as any;
     if (!u || !u.department_id) return null;
-    const d = db.prepare('SELECT p_manager_id FROM departments WHERE id = ?').get(u.department_id) as any;
-    return d?.p_manager_id || null;
+    const d = db.prepare('SELECT leader_user_id FROM departments WHERE id = ?').get(u.department_id) as any;
+    return d?.leader_user_id || null;
   }
 
   static getParentDeptHead(userId: string): string | null {
@@ -204,7 +204,7 @@ export class WorkflowEngine {
     const d = db.prepare('SELECT parent_id FROM departments WHERE id = ?').get(u.department_id) as any;
     if (!d || !d.parent_id || d.parent_id === 0) return null;
 
-    const pd = db.prepare('SELECT p_manager_id FROM departments WHERE id = ?').get(d.parent_id) as any;
-    return pd?.p_manager_id || null;
+    const pd = db.prepare('SELECT leader_user_id FROM departments WHERE id = ?').get(d.parent_id) as any;
+    return pd?.leader_user_id || null;
   }
 }

@@ -122,6 +122,7 @@ export function initDatabase(): void {
       reject_reason TEXT,
       status TEXT DEFAULT 'open',
       proposal_status TEXT DEFAULT 'approved',
+      deadline DATE,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
