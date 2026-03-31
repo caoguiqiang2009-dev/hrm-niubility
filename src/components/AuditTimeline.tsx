@@ -120,7 +120,7 @@ export default function AuditTimeline({ businessType, businessId, className = ''
   useEffect(() => {
     if (!businessId) return;
     setLoading(true);
-    fetch(`/api/workflow/audit-log/${businessType}/${businessId}`, {
+    fetch(`/api/workflow/trajectory/audit-log/${businessType}/${businessId}`, {
       headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
     })
       .then(r => r.json())
@@ -278,7 +278,7 @@ export function useLatestAuditInfo(businessType: string, businessId: number | st
 
   useEffect(() => {
     if (!businessId) return;
-    fetch(`/api/workflow/audit-log/${businessType}/${businessId}`, {
+    fetch(`/api/workflow/trajectory/audit-log/${businessType}/${businessId}`, {
       headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
     })
       .then(r => r.json())
