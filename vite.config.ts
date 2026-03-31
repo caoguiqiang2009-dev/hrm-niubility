@@ -20,5 +20,16 @@ export default defineConfig(() => {
         },
       },
     },
+    build: {
+      rollupOptions: {
+        output: {
+          manualChunks: {
+            'vendor-react': ['react', 'react-dom'],
+            'vendor-ui': ['lucide-react', 'motion'],
+            'vendor-editor': ['@uiw/react-md-editor']
+          }
+        }
+      }
+    }
   };
 });

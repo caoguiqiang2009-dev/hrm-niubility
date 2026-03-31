@@ -1,24 +1,27 @@
-import { useState } from 'react';
+import React, { useState, Suspense, lazy } from 'react';
 import { useIsMobile } from './hooks/useIsMobile';
-import EmployeeDashboard from './pages/EmployeeDashboard';
-import PersonalGoals from './pages/PersonalGoals';
-import TeamPerformance from './pages/TeamPerformance';
-import CompanyPerformance from './pages/CompanyPerformance';
-import HRMap from './pages/HRMap';
-import PanoramaDashboard from './pages/PanoramaDashboard';
-import AdminPanel from './pages/AdminPanel';
-import OrgChart from './pages/OrgChart';
-import MyWorkflows from './pages/MyWorkflows';
-import PerformanceManager from './pages/PerformanceManager';
-import PerfAnalyticsPage from './pages/PerfAnalyticsPage';
-import PerfAccountingPage from './pages/PerfAccountingPage';
-import CompetencyManager from './pages/CompetencyManager';
-import TestBankManager from './pages/TestBankManager';
-import MonthlyEvaluationPage from './pages/MonthlyEvaluationPage';
+
+const EmployeeDashboard = lazy(() => import('./pages/EmployeeDashboard'));
+const PersonalGoals = lazy(() => import('./pages/PersonalGoals'));
+const TeamPerformance = lazy(() => import('./pages/TeamPerformance'));
+const CompanyPerformance = lazy(() => import('./pages/CompanyPerformance'));
+const HRMap = lazy(() => import('./pages/HRMap'));
+const PanoramaDashboard = lazy(() => import('./pages/PanoramaDashboard'));
+const AdminPanel = lazy(() => import('./pages/AdminPanel'));
+const OrgChart = lazy(() => import('./pages/OrgChart'));
+const MyWorkflows = lazy(() => import('./pages/MyWorkflows'));
+const PerformanceManager = lazy(() => import('./pages/PerformanceManager'));
+const PerfAnalyticsPage = lazy(() => import('./pages/PerfAnalyticsPage'));
+const PerfAccountingPage = lazy(() => import('./pages/PerfAccountingPage'));
+const CompetencyManager = lazy(() => import('./pages/CompetencyManager'));
+const TestBankManager = lazy(() => import('./pages/TestBankManager'));
+const MonthlyEvaluationPage = lazy(() => import('./pages/MonthlyEvaluationPage'));
+
 import DevRoleSwitcher from './components/DevRoleSwitcher';
 import Watermark from './components/Watermark';
 import FloatingAiChat from './components/FloatingAiChat';
 import GlobalToast from './components/GlobalToast';
+import GlobalPageSkeleton from './components/GlobalPageSkeleton';
 import { useAuth } from './context/AuthContext';
 
 export default function App() {
@@ -140,7 +143,9 @@ export default function App() {
   return (
     <>
       <div key={currentView} className={isMobile ? 'mobile-page-enter' : ''}>
-        {renderView()}
+        <Suspense fallback={<GlobalPageSkeleton />}>
+          {renderView()}
+        </Suspense>
       </div>
       <DevRoleSwitcher />
       <Watermark text={currentUser.name} />

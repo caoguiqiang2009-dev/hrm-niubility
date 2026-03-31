@@ -837,15 +837,6 @@ export default function SmartTaskModal({ isOpen, onClose, onSubmit, title, type,
                         placeholder="执行人"
                         readonly={readonly}
                       />
-                      {/* A 负责/验收人 */}
-                      <SearchableUserDropdown
-                        label="A"
-                        value={headerSelections.a}
-                        onChange={v => setHeaderSelections({...headerSelections, a: v})}
-                        users={users}
-                        placeholder="验收人"
-                        readonly={readonly || title === '申请新任务' || type === 'personal'}
-                      />
                       {/* C 咨询人 */}
                       <MultiSelectUserDropdown
                         label="C"
@@ -856,6 +847,26 @@ export default function SmartTaskModal({ isOpen, onClose, onSubmit, title, type,
                         readonly={readonly}
                       />
                     </>
+                  )}
+                  {/* A 负责/验收人 (交付对象) */}
+                  {type !== 'pool_propose' ? (
+                    <SearchableUserDropdown
+                      label="A"
+                      value={headerSelections.a}
+                      onChange={v => setHeaderSelections({...headerSelections, a: v})}
+                      users={users}
+                      placeholder="验收人"
+                      readonly={readonly || title === '申请新任务' || type === 'personal'}
+                    />
+                  ) : (
+                    <SearchableUserDropdown
+                      label="交付"
+                      value={headerSelections.a}
+                      onChange={v => setHeaderSelections({...headerSelections, a: v})}
+                      users={users}
+                      placeholder="指定交付对象"
+                      readonly={readonly || !approverMode}
+                    />
                   )}
                   {/* 任务属性 */}
                   <TaskTypeDropdown
@@ -900,14 +911,6 @@ export default function SmartTaskModal({ isOpen, onClose, onSubmit, title, type,
                       placeholder="选择执行人"
                       readonly={readonly}
                     />
-                    <SearchableUserDropdown
-                      label="A 负责/验收人"
-                      value={headerSelections.a}
-                      onChange={v => setHeaderSelections({...headerSelections, a: v})}
-                      users={users}
-                      placeholder="选择负责/验收人"
-                      readonly={readonly || title === '申请新任务' || type === 'personal'}
-                    />
                     <MultiSelectUserDropdown
                       label="C 咨询人"
                       value={headerSelections.c}
@@ -925,6 +928,26 @@ export default function SmartTaskModal({ isOpen, onClose, onSubmit, title, type,
                       readonly={readonly}
                     />
                     </>
+                  )}
+                  
+                  {type !== 'pool_propose' ? (
+                    <SearchableUserDropdown
+                      label="A 负责/验收人"
+                      value={headerSelections.a}
+                      onChange={v => setHeaderSelections({...headerSelections, a: v})}
+                      users={users}
+                      placeholder="选择负责/验收人"
+                      readonly={readonly || title === '申请新任务' || type === 'personal'}
+                    />
+                  ) : (
+                    <SearchableUserDropdown
+                      label="交付对象(验收人)"
+                      value={headerSelections.a}
+                      onChange={v => setHeaderSelections({...headerSelections, a: v})}
+                      users={users}
+                      placeholder="强制必填: 指定交付对象"
+                      readonly={readonly || !approverMode}
+                    />
                   )}
 
                   {/* 奖励机制 (奖金/积分) Dropdown & Input */}
@@ -1478,8 +1501,12 @@ export default function SmartTaskModal({ isOpen, onClose, onSubmit, title, type,
               <button
                 type="button"
                 onClick={() => {
+                  if (type === 'pool_propose' && !headerSelections.a && approverMode) {
+                    alert('请指定交付对象(验收人)！');
+                    return;
+                  }
                   const aggregated = sections.map(s => comments[s.id] ? `[${s.letter} ${s.title}]: ${comments[s.id]}` : '').filter(Boolean).join('\n\n');
-                  onApprove?.(aggregated || '同意', { ...formData, bonus: headerSelections.bonus, rewardType: headerSelections.rewardType, maxParticipants: headerSelections.maxParticipants });
+                  onApprove?.(aggregated || '同意', { ...formData, bonus: headerSelections.bonus, rewardType: headerSelections.rewardType, maxParticipants: headerSelections.maxParticipants, a: headerSelections.a });
                 }}
                 disabled={submitting}
                 className="px-8 py-2 text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg transition-colors shadow-sm disabled:opacity-50"

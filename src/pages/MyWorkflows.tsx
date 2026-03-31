@@ -177,6 +177,7 @@ export default function MyWorkflows({ navigate, initialTab }: MyWorkflowsProps) 
           ...(updatedData?.maxParticipants ? { max_participants: updatedData.maxParticipants } : {}),
           ...(updatedData?.taskType ? { department: updatedData.taskType } : {}),
           ...(updatedData?.attachments ? { attachments: updatedData.attachments } : {}),
+          ...(updatedData?.a ? { a: updatedData.a } : {}),
           ...(updatedData?.s !== undefined ? { s: updatedData.s, m: updatedData.m, a_smart: updatedData.a_smart, r_smart: updatedData.r_smart, t: updatedData.t, summary: updatedData.summary } : {})
         };
       }

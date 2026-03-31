@@ -413,6 +413,19 @@ router.post('/proposals/:id/review', authMiddleware, async (req: AuthRequest, re
       if (max_participants) { updateSql += ', max_participants = ?'; params.push(Number(max_participants) || 5); }
       if (department) { updateSql += ', department = ?'; params.push(department); }
       if (attachments !== undefined) { updateSql += ', attachments = ?'; params.push(typeof attachments === 'string' ? attachments : JSON.stringify(attachments)); }
+      if (req.body.a) {
+        const aUser = db.prepare('SELECT name FROM users WHERE id = ?').get(req.body.a) as any;
+        if (aUser) {
+          const defaultRolesConfig = [
+            { name: 'R', max: 0, users: [] },
+            { name: 'A', max: 1, users: [{ id: req.body.a, name: aUser.name }] },
+            { name: 'C', max: 0, users: [] },
+            { name: 'I', max: 0, users: [] }
+          ];
+          updateSql += ', roles_config = ?';
+          params.push(JSON.stringify(defaultRolesConfig));
+        }
+      }
       if (req.body.s) { 
         const pdca = proposal.description?.match(/【PDCA】\\n(.*)/s)?.[1] || 'Plan:  | Do:  | Check:  | Act: ';
         updateSql += ', title = ?, description = ?'; 
