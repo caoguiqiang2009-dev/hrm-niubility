@@ -317,6 +317,13 @@ export default function MonthlyEvaluationPage({ navigate }: { navigate: (view: s
       <main className="flex-1 overflow-y-auto h-[calc(100vh-4rem)] mt-16 p-4 lg:p-10 relative pb-24 lg:pb-10">
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-8">
           <div>
+            <button 
+              onClick={() => navigate('dashboard')} 
+              className="mb-4 text-sm font-bold text-slate-500 hover:text-blue-600 dark:hover:text-blue-400 flex items-center gap-1 transition-colors"
+            >
+              <span className="material-symbols-outlined text-[18px]">arrow_back</span>
+              返回上一页
+            </button>
             <h1 className="text-3xl font-black text-slate-900 dark:text-white tracking-tight flex items-center gap-3">
               <span className="material-symbols-outlined text-4xl text-blue-600 dark:text-blue-400">rule</span>
               月度四大维度考评

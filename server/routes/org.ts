@@ -172,37 +172,50 @@ router.put('/users/:id', authMiddleware, requireRole('admin', 'hr'), (req: AuthR
   return res.json({ code: 0, message: '更新成功' });
 });
 
-// ── 系统管理员管理 (仅 Super Admin) ───────────────────────────────
 
-// 获取所有管理员列表
-router.get('/admins', authMiddleware, requireRole('admin'), (_req, res) => {
+
+// 获取当前的角色配置列表
+router.get('/role-tags', authMiddleware, requireSuperAdmin(), (_req, res) => {
   const db = getDb();
-  const admins = db.prepare(
-    `SELECT u.id, u.name, u.title, u.avatar_url, u.department_id, d.name as department_name
-     FROM users u LEFT JOIN departments d ON u.department_id = d.id
-     WHERE u.role = 'admin' ORDER BY u.name`
-  ).all();
-  return res.json({ code: 0, data: { admins, super_admin_id: SUPER_ADMIN_ID } });
+  const tags = db.prepare(`
+    SELECT t.id, t.user_id, t.tag, t.label, u.name as user_name, d.name as department_name
+    FROM user_role_tags t
+    JOIN users u ON t.user_id = u.id
+    LEFT JOIN departments d ON u.department_id = d.id
+    ORDER BY t.created_at DESC
+  `).all();
+  return res.json({ code: 0, data: tags });
 });
 
-// 设置/取消管理员 (仅 Super Admin)
-router.post('/admins/set', authMiddleware, requireSuperAdmin(), (req: AuthRequest, res) => {
-  const { userId, isAdmin } = req.body;
+// 添加/取消 用户的高层角色标签 (仅 Super Admin)
+router.post('/role-tags', authMiddleware, requireSuperAdmin(), (req: AuthRequest, res) => {
+  const { userId, tag, isSet, label } = req.body;
+  if (!userId || !tag) return res.status(400).json({ code: 400, message: '参数缺失' });
   const db = getDb();
 
-  if (!userId) return res.status(400).json({ code: 400, message: '缺少 userId' });
-
-  // 不允许修改自己的角色
-  if (isSuperAdmin(userId)) {
-    return res.status(400).json({ code: 400, message: '最高管理员角色不可修改' });
+  // 不要尝试配置超级管理员为别的标签，因为不需要且多余
+  if (isSuperAdmin(userId) && isSet) {
+      return res.status(400).json({ code: 400, message: '最高系统管理员拥有全局最高权限，无需打标签' });
   }
 
-  const user = db.prepare('SELECT id, name, role FROM users WHERE id = ?').get(userId) as any;
+  const user = db.prepare('SELECT name FROM users WHERE id = ?').get(userId) as any;
   if (!user) return res.status(404).json({ code: 404, message: '用户不存在' });
 
-  const newRole = isAdmin ? 'admin' : 'employee';
-  db.prepare('UPDATE users SET role = ? WHERE id = ?').run(newRole, userId);
-  return res.json({ code: 0, message: `已${isAdmin ? '授予' : '撤销'} ${user.name} 的管理员权限` });
+  if (isSet) {
+    try {
+      db.prepare('INSERT OR IGNORE INTO user_role_tags (user_id, tag, label) VALUES (?, ?, ?)').run(userId, tag, label || tag);
+      return res.json({ code: 0, message: `已将「${user.name}」设为「${label || tag}」` });
+    } catch (e) {
+      return res.status(500).json({ code: 500, message: '数据库写入失败' });
+    }
+  } else {
+    try {
+      db.prepare('DELETE FROM user_role_tags WHERE user_id = ? AND tag = ?').run(userId, tag);
+      return res.json({ code: 0, message: `已撤销「${user.name}」的「${label || tag}」头衔` });
+    } catch (e) {
+      return res.status(500).json({ code: 500, message: '数据库删除失败' });
+    }
+  }
 });
 
 // 获取所有用户列表 (用于管理员分配选人)
@@ -346,12 +359,16 @@ router.delete('/departments/:id', authMiddleware, requireRole('admin', 'hr'), (r
     return res.status(400).json({ code: 400, message: `「${dept.name}」下还有 ${children.count} 个子部门，请先移走或删除子部门` });
   }
 
-  // 检查是否有成员
-  const members = db.prepare('SELECT COUNT(*) as count FROM users WHERE department_id = ?').get(deptId) as any;
-  if (members.count > 0) {
-    return res.status(400).json({ code: 400, message: `「${dept.name}」下还有 ${members.count} 名成员，请先将成员调至其他部门` });
+  // 1. 检查是否还有在职成员
+  const activeMembers = db.prepare("SELECT COUNT(*) as count FROM users WHERE department_id = ? AND status = 'active'").get(deptId) as any;
+  if (activeMembers.count > 0) {
+    return res.status(400).json({ code: 400, message: `「${dept.name}」下还有 ${activeMembers.count} 名在职成员，请先将成员调至其他部门` });
   }
 
+  // 2. 将离职成员的部门关联置空（转移到虚拟部门 0），防止产生查询幽灵数据
+  db.prepare("UPDATE users SET department_id = 0 WHERE department_id = ? AND status = 'resigned'").run(deptId);
+
+  // 3. 安全删除部门
   db.prepare('DELETE FROM departments WHERE id = ?').run(deptId);
   return res.json({ code: 0, message: `已删除部门「${dept.name}」` });
 });

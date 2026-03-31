@@ -513,11 +513,24 @@ function PlansTab() {
   const [scoreInputs, setScoreInputs] = useState<Record<number, string>>({});
   const [bonusInputs, setBonusInputs] = useState<Record<number, string>>({});
   const [working, setWorking] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [expandedId, setExpandedId] = useState<number | null>(null);
 
-  const pending = allPlans?.filter((p: any) => p.status === 'pending_review') || [];
-  const active = allPlans?.filter((p: any) => ['in_progress', 'approved'].includes(p.status)) || [];
-  const assess = allPlans?.filter((p: any) => ['in_progress', 'assessed'].includes(p.status)) || [];
-  const done = allPlans?.filter((p: any) => p.status === 'completed') || [];
+  const filteredPlans = allPlans?.filter((p: any) => {
+    if (!searchQuery.trim()) return true;
+    const q = searchQuery.toLowerCase();
+    return (
+      (p.title || '').toLowerCase().includes(q) ||
+      (p.description || '').toLowerCase().includes(q) ||
+      (p.creator_name || p.creator_id || '').toLowerCase().includes(q) ||
+      (p.assignee_name || p.assignee_id || '').toLowerCase().includes(q)
+    );
+  }) || [];
+
+  const pending = filteredPlans.filter((p: any) => p.status === 'pending_review');
+  const active = filteredPlans.filter((p: any) => ['in_progress', 'approved'].includes(p.status));
+  const assess = filteredPlans.filter((p: any) => ['in_progress', 'assessed'].includes(p.status));
+  const done = filteredPlans.filter((p: any) => p.status === 'completed');
 
   const doAction = async (id: number, action: string, extra?: any) => {
     setWorking(true);
@@ -549,68 +562,114 @@ function PlansTab() {
       {loading ? <div className="text-center py-8 text-slate-400">加载中...</div> : (
         <div className="space-y-3">
           {displayList?.length ? displayList.map((plan: any) => (
-            <div key={plan.id} className="bg-slate-50 rounded-xl p-4">
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="text-[10px] font-mono text-slate-400 bg-slate-200 px-1.5 py-0.5 rounded">PF-{String(plan.id).padStart(6, '0')}</span>
-                    <span className="font-medium text-sm text-slate-800 truncate">{plan.title}</span>
-                    <StatusBadge status={plan.status} />
-                    {plan.score != null && <span className="text-xs font-bold text-violet-600 bg-violet-50 px-1.5 py-0.5 rounded">{plan.score}分</span>}
-                    {plan.bonus != null && <span className="text-xs font-bold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded">¥{plan.bonus}</span>}
-                  </div>
-                  <p className="text-xs text-slate-400">发起人: {plan.creator_id} · 负责人: {plan.assignee_id} · 截止: {plan.deadline || '—'}</p>
-                  {plan.progress != null && plan.status !== 'completed' && (
-                    <div className="mt-2 flex items-center gap-2">
-                      <div className="flex-1 h-1.5 bg-slate-200 rounded-full overflow-hidden">
-                        <div className="h-full bg-blue-500 rounded-full" style={{ width: `${plan.progress}%` }} />
+            <div key={plan.id} className="bg-white border border-slate-200 shadow-sm rounded-xl overflow-hidden transition-all hover:shadow-md group">
+              <div 
+                className="p-4 cursor-pointer"
+                onClick={() => setExpandedId(expandedId === plan.id ? null : plan.id)}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex-1 min-w-0 flex items-start gap-2">
+                    <button className="mt-0.5 text-slate-400 hover:text-slate-600 transition-colors shrink-0">
+                      <span className="material-symbols-outlined text-[18px]">
+                        {expandedId === plan.id ? 'keyboard_arrow_up' : 'keyboard_arrow_down'}
+                      </span>
+                    </button>
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1.5">
+                        <span className="text-[10px] font-mono text-slate-500 bg-slate-100 border border-slate-200 px-1.5 py-0.5 rounded">PF-{String(plan.id).padStart(6, '0')}</span>
+                        <span className="font-bold text-sm text-slate-800 line-clamp-1 group-hover:text-violet-700 transition-colors">{plan.title}</span>
+                        <StatusBadge status={plan.status} />
+                        {plan.score != null && <span className="text-[10px] font-bold text-violet-700 bg-violet-50 border border-violet-100 px-1.5 py-0.5 rounded shadow-sm">{plan.score}分</span>}
+                        {plan.bonus != null && <span className="text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-100 px-1.5 py-0.5 rounded shadow-sm">¥{plan.bonus}</span>}
                       </div>
-                      <span className="text-[10px] font-bold text-slate-500">{plan.progress}%</span>
+                      <p className="text-xs text-slate-500 font-medium">发起人: <span className="text-slate-700">{plan.creator_name || plan.creator_id}</span> · 负责人: <span className="text-slate-700">{plan.assignee_name || plan.assignee_id}</span> · 截止: {plan.deadline || '—'}</p>
+                      
+                      {plan.progress != null && plan.status !== 'completed' && (
+                        <div className="mt-2.5 flex items-center gap-2">
+                          <div className="flex-1 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                            <div className="h-full bg-blue-500 rounded-full transition-all" style={{ width: `${plan.progress}%` }} />
+                          </div>
+                          <span className="text-[10px] font-bold text-slate-500">{plan.progress}%</span>
+                        </div>
+                      )}
                     </div>
-                  )}
+                  </div>
+
+                  <div className="shrink-0 flex items-center" onClick={e => e.stopPropagation()}>
+                    {tab === 'pending' && plan.status === 'pending_review' && (
+                      <div className="flex gap-2 shrink-0">
+                        <button onClick={() => doAction(plan.id, 'approve')} disabled={working}
+                          className="px-3 py-1.5 bg-emerald-600 text-white rounded-lg text-xs font-medium hover:bg-emerald-700 disabled:opacity-60">通过</button>
+                        <button onClick={() => setRejectingId(plan.id)}
+                          className="px-3 py-1.5 bg-red-50 text-red-600 rounded-lg text-xs font-medium hover:bg-red-100">驳回</button>
+                      </div>
+                    )}
+
+                    {tab === 'assess' && plan.status === 'in_progress' && (
+                      <div className="flex gap-2 shrink-0 items-center">
+                        <input type="number" min="0" max="100" placeholder="分数"
+                          value={scoreInputs[plan.id] || ''} onChange={e => setScoreInputs({ ...scoreInputs, [plan.id]: e.target.value })}
+                          className="w-16 border border-slate-200 rounded-lg px-2 py-1.5 text-xs text-center focus:outline-none focus:ring-2 focus:ring-violet-300" />
+                        <button onClick={() => doAction(plan.id, 'assess', { score: Number(scoreInputs[plan.id]) })}
+                          disabled={working || !scoreInputs[plan.id]}
+                          className="px-3 py-1.5 bg-violet-600 text-white rounded-lg text-xs font-medium hover:bg-violet-700 disabled:opacity-60">评分</button>
+                      </div>
+                    )}
+
+                    {tab === 'assess' && plan.status === 'assessed' && (
+                      <div className="flex gap-2 shrink-0 items-center">
+                        <span className="text-xs text-violet-600 font-bold">{plan.score}分</span>
+                        <input type="number" min="0" placeholder="奖金 ¥"
+                          value={bonusInputs[plan.id] || ''} onChange={e => setBonusInputs({ ...bonusInputs, [plan.id]: e.target.value })}
+                          className="w-20 border border-slate-200 rounded-lg px-2 py-1.5 text-xs text-center focus:outline-none focus:ring-2 focus:ring-amber-300" />
+                        <button onClick={() => doAction(plan.id, 'reward', { bonus: Number(bonusInputs[plan.id]) })}
+                          disabled={working || !bonusInputs[plan.id]}
+                          className="px-3 py-1.5 bg-amber-600 text-white rounded-lg text-xs font-medium hover:bg-amber-700 disabled:opacity-60">发放</button>
+                      </div>
+                    )}
+                  </div>
                 </div>
-
-                {tab === 'pending' && plan.status === 'pending_review' && (
-                  <div className="flex gap-2 shrink-0">
-                    <button onClick={() => doAction(plan.id, 'approve')} disabled={working}
-                      className="px-3 py-1.5 bg-emerald-600 text-white rounded-lg text-xs font-medium hover:bg-emerald-700 disabled:opacity-60">通过</button>
-                    <button onClick={() => setRejectingId(plan.id)}
-                      className="px-3 py-1.5 bg-red-50 text-red-600 rounded-lg text-xs font-medium hover:bg-red-100">驳回</button>
-                  </div>
-                )}
-
-                {tab === 'assess' && plan.status === 'in_progress' && (
-                  <div className="flex gap-2 shrink-0 items-center">
-                    <input type="number" min="0" max="100" placeholder="分数"
-                      value={scoreInputs[plan.id] || ''} onChange={e => setScoreInputs({ ...scoreInputs, [plan.id]: e.target.value })}
-                      className="w-16 border border-slate-200 rounded-lg px-2 py-1.5 text-xs text-center focus:outline-none focus:ring-2 focus:ring-violet-300" />
-                    <button onClick={() => doAction(plan.id, 'assess', { score: Number(scoreInputs[plan.id]) })}
-                      disabled={working || !scoreInputs[plan.id]}
-                      className="px-3 py-1.5 bg-violet-600 text-white rounded-lg text-xs font-medium hover:bg-violet-700 disabled:opacity-60">评分</button>
-                  </div>
-                )}
-
-                {tab === 'assess' && plan.status === 'assessed' && (
-                  <div className="flex gap-2 shrink-0 items-center">
-                    <span className="text-xs text-violet-600 font-bold">{plan.score}分</span>
-                    <input type="number" min="0" placeholder="奖金 ¥"
-                      value={bonusInputs[plan.id] || ''} onChange={e => setBonusInputs({ ...bonusInputs, [plan.id]: e.target.value })}
-                      className="w-20 border border-slate-200 rounded-lg px-2 py-1.5 text-xs text-center focus:outline-none focus:ring-2 focus:ring-amber-300" />
-                    <button onClick={() => doAction(plan.id, 'reward', { bonus: Number(bonusInputs[plan.id]) })}
-                      disabled={working || !bonusInputs[plan.id]}
-                      className="px-3 py-1.5 bg-amber-600 text-white rounded-lg text-xs font-medium hover:bg-amber-700 disabled:opacity-60">发放</button>
-                  </div>
-                )}
               </div>
 
+              {expandedId === plan.id && (
+                <div className="px-5 pb-5 pt-0 border-t border-slate-100 bg-slate-50/50 mt-2">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
+                    <div>
+                      <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-1">
+                        <span className="material-symbols-outlined text-[14px]">description</span> 目标详情
+                      </h4>
+                      <p className="text-xs text-slate-700 whitespace-pre-wrap leading-relaxed bg-white p-3 rounded-lg border border-slate-100 shadow-sm">{plan.description || <span className="text-slate-400 italic">未提供详情描述</span>}</p>
+                    </div>
+                    <div className="space-y-4">
+                      <div>
+                        <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-1">
+                          <span className="material-symbols-outlined text-[14px]">flag</span> 预期目标值 (Target)
+                        </h4>
+                        <p className="text-xs text-slate-700 bg-white p-2.5 rounded-lg border border-slate-100 shadow-sm">{plan.target_value || '—'}</p>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="bg-white p-2.5 rounded-lg border border-slate-100 shadow-sm">
+                          <div className="text-[10px] font-bold text-slate-400 mb-1">对齐上层目标</div>
+                          <div className="text-xs text-slate-700 line-clamp-1">{plan.alignment || '无'}</div>
+                        </div>
+                        <div className="bg-white p-2.5 rounded-lg border border-slate-100 shadow-sm">
+                          <div className="text-[10px] font-bold text-slate-400 mb-1">评估难度</div>
+                          <div className="text-xs font-bold text-slate-600">{plan.difficulty || '正常'}</div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {rejectingId === plan.id && (
-                <div className="mt-3 flex gap-2">
-                  <input className="flex-1 border border-slate-200 rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-red-300"
+                <div className="p-4 bg-red-50/50 border-t border-red-100 flex gap-2">
+                  <input className="flex-1 bg-white border border-red-200 rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-red-300"
                     placeholder="驳回原因（必填）" value={rejectReason} onChange={e => setRejectReason(e.target.value)} />
                   <button onClick={() => { doAction(plan.id, 'reject', { reason: rejectReason }); setRejectingId(null); setRejectReason(''); }}
                     disabled={!rejectReason.trim() || working}
-                    className="px-3 py-1.5 bg-red-600 text-white rounded-lg text-xs font-medium hover:bg-red-700 disabled:opacity-60">确认驳回</button>
-                  <button onClick={() => { setRejectingId(null); setRejectReason(''); }} className="px-2 py-1.5 text-slate-400 hover:text-slate-600">
+                    className="px-3 py-1.5 bg-red-600 text-white rounded-lg text-xs font-medium hover:bg-red-700 disabled:opacity-60 shadow-sm">确认驳回</button>
+                  <button onClick={() => { setRejectingId(null); setRejectReason(''); }} className="px-2 py-1.5 text-slate-400 hover:text-slate-600 bg-white border border-slate-200 rounded-lg">
                     <span className="material-symbols-outlined text-[16px]">close</span>
                   </button>
                 </div>

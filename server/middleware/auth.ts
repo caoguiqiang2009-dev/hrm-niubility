@@ -7,8 +7,55 @@ const JWT_SECRET = process.env.JWT_SECRET || 'hrm_niubility_jwt_secret_2024';
 // 该用户始终拥有 admin 权限，无需数据库角色配置
 export const SUPER_ADMIN_ID = 'CaoGuiQiang';
 
+import { getDb } from '../config/database';
+
 export function isSuperAdmin(userId?: string): boolean {
   return userId?.toLowerCase() === SUPER_ADMIN_ID.toLowerCase();
+}
+
+/** 
+ * 检查是否为总经理 (GM) 
+ */
+export function isGM(userId?: string): boolean {
+  if (!userId) return false;
+  if (isSuperAdmin(userId)) return true;
+  try {
+    const db = getDb();
+    const tag = db.prepare("SELECT 1 FROM user_role_tags WHERE user_id = ? AND tag = 'gm'").get(userId);
+    return !!tag;
+  } catch (e) {
+    return false;
+  }
+}
+
+/** 
+ * 检查是否为 HRBP 
+ */
+export function isHRBP(userId?: string): boolean {
+  if (!userId) return false;
+  if (isSuperAdmin(userId)) return true; // 超管兼任所有高级职能
+  try {
+    const db = getDb();
+    const tag = db.prepare("SELECT 1 FROM user_role_tags WHERE user_id = ? AND tag = 'hrbp'").get(userId);
+    return !!tag;
+  } catch (e) {
+    return false;
+  }
+}
+
+/** 
+ * 检查是否为 副总 (VP) 
+ */
+export function isVP(userId?: string): boolean {
+  if (!userId) return false;
+  if (isSuperAdmin(userId)) return true;
+  try {
+    const db = getDb();
+    const tag = db.prepare("SELECT 1 FROM user_role_tags WHERE user_id = ? AND tag = 'vp'").get(userId);
+    return !!tag;
+  } catch (e) {
+    return false;
+  }
 }
 
 export interface AuthRequest extends Request {
@@ -64,11 +111,21 @@ export function requireRole(...roles: string[]) {
       next();
       return;
     }
-    if (!req.userRole || !roles.includes(req.userRole)) {
-      res.status(403).json({ code: 403, message: '权限不足' });
+
+    // 新的组织架构映射：GM 拥有原 admin 权限，HRBP 拥有原 hr 权限
+    const isUserGM = isGM(req.userId);
+    const isUserHRBP = isHRBP(req.userId);
+
+    const hasAdminAccess = roles.includes('admin') && isUserGM;
+    const hasHrAccess = roles.includes('hr') && isUserHRBP;
+    const hasLegacyRole = req.userRole && roles.includes(req.userRole);
+
+    if (hasAdminAccess || hasHrAccess || hasLegacyRole) {
+      next();
       return;
     }
-    next();
+
+    res.status(403).json({ code: 403, message: '权限不足' });
   };
 }
 

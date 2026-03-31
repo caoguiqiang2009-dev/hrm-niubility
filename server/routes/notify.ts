@@ -171,14 +171,16 @@ router.post('/card/callback', async (req: Request, res: Response) => {
     }
 
     // 权限校验
-    const user = db.prepare('SELECT role FROM users WHERE id = ?').get(userId) as any;
-    if (plan.approver_id !== userId && user?.role !== 'admin' && user?.role !== 'hr') {
+    const { isGM, isSuperAdmin } = await import('../middleware/auth');
+    const isAdminOrGM = isGM(userId) || isSuperAdmin(userId);
+
+    if (plan.approver_id !== userId && !isAdminOrGM) {
       try { await sendTextMessage([userId], `❌ 操作失败：您不是该计划的审批人，无权操作`); } catch {}
       return res.send('success');
     }
 
     // 禁止自审
-    if (plan.creator_id === userId && user?.role !== 'admin') {
+    if (plan.creator_id === userId && !isAdminOrGM) {
       try { await sendTextMessage([userId], `❌ 操作失败：发起人不能审批自己的计划`); } catch {}
       return res.send('success');
     }

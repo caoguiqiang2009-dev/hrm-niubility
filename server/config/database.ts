@@ -266,6 +266,39 @@ export function initDatabase(): void {
       PRIMARY KEY (manager_id, member_id)
     );
 
+    -- ============ 可配置高层角色与工作流引擎 ============
+    CREATE TABLE IF NOT EXISTS user_role_tags (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id TEXT NOT NULL,
+      tag TEXT NOT NULL,        -- 'vp' / 'gm' / 'hrbp'
+      label TEXT,               -- 显示名
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(user_id, tag)
+    );
+
+    CREATE TABLE IF NOT EXISTS workflow_templates (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      code TEXT UNIQUE NOT NULL,
+      name TEXT NOT NULL,
+      description TEXT,
+      is_active INTEGER DEFAULT 1,
+      version INTEGER DEFAULT 1,
+      updated_by TEXT,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS workflow_nodes (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      template_id INTEGER NOT NULL REFERENCES workflow_templates(id),
+      seq INTEGER NOT NULL,
+      node_name TEXT NOT NULL,
+      node_type TEXT NOT NULL,
+      resolver_type TEXT NOT NULL,
+      resolver_config TEXT DEFAULT '{}',
+      skip_rule TEXT,
+      is_required INTEGER DEFAULT 1
+    );
+
     -- ============ 审批流模板 ============
     CREATE TABLE IF NOT EXISTS approval_templates (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -389,6 +422,10 @@ export function initDatabase(): void {
   } catch (e) {}
   try {
     db.prepare('ALTER TABLE competency_dimensions ADD COLUMN target_score REAL DEFAULT 3.0').run();
+  } catch (e) {}
+  
+  try {
+    db.prepare('ALTER TABLE test_banks ADD COLUMN is_archived INTEGER DEFAULT 0').run();
   } catch (e) {}
 
   // ============ 数据库迁移：缺失表和列 ============

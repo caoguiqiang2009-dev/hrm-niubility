@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import TestResultsModal from '../components/TestResultsModal';
 
 interface Question {
   type: 'single' | 'multiple';
@@ -29,6 +30,8 @@ export default function TestBankManager({ navigate, isEmbedded }: { navigate?: (
   const [editingBank, setEditingBank] = useState<TestBank>({ title: '', description: '', questions: [] });
   const [selectedBankId, setSelectedBankId] = useState<number | null>(null);
   const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
+  
+  const [resultsBankId, setResultsBankId] = useState<number | null>(null);
   
   // AI Generation State
   const [showAiModal, setShowAiModal] = useState(false);
@@ -267,24 +270,34 @@ export default function TestBankManager({ navigate, isEmbedded }: { navigate?: (
           {banks.map((bank) => (
             <div key={bank.id} 
                  onClick={() => handleEditBank(bank.id!)}
-                 className="bg-surface rounded-2xl border border-outline-variant/20 p-6 flex flex-col cursor-pointer hover:border-primary/40 hover:shadow-md transition-all group">
-              <div className="flex justify-between items-start mb-4">
-                <h3 className="font-bold text-lg text-on-surface line-clamp-1 group-hover:text-primary transition-colors">{bank.title}</h3>
-                <span className="px-2 py-1 bg-blue-50 text-blue-600 rounded-lg text-xs font-medium whitespace-nowrap shrink-0 ml-2">
+                 className="bg-surface rounded-2xl border border-outline-variant/20 p-6 flex flex-col cursor-pointer hover:border-primary/40 hover:shadow-md transition-all group relative">
+                 
+              <div className="absolute top-0 right-0 px-3 py-1 bg-gradient-to-l from-indigo-500/10 to-transparent rounded-tr-2xl rounded-bl-xl text-[10px] font-mono text-indigo-600/70 font-bold pointer-events-none">
+                {String(bank.id).padStart(3, '0')}
+              </div>
+
+              <div className="flex justify-between items-start mb-4 pr-10">
+                <h3 className="font-bold text-lg text-on-surface line-clamp-1 group-hover:text-primary transition-colors pr-2">{bank.title}</h3>
+                <span className="px-2 py-1 bg-blue-50 text-blue-600 rounded-lg text-xs font-medium whitespace-nowrap shrink-0 ml-auto border border-blue-100">
                   {bank.question_count} 题
                 </span>
               </div>
               <p className="text-sm text-on-surface-variant line-clamp-2 mb-4 h-10">{bank.description}</p>
               
               <div className="mt-auto pt-4 border-t border-outline-variant/20 flex flex-col gap-3">
-                <div className="flex items-center gap-2 text-xs text-on-surface-variant">
+                <div className="flex items-center gap-2 text-xs text-on-surface-variant font-medium">
                   <span className="material-symbols-outlined text-[14px]">link</span>
                   关联维度: {bank.competency_name || '未关联'}
                 </div>
                 
                 <div className="flex gap-2">
+                  <button onClick={(e) => { e.stopPropagation(); setResultsBankId(bank.id!); }}
+                    className="flex-1 py-2 bg-slate-50 hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl text-sm font-bold transition-colors flex items-center justify-center gap-1 border border-slate-200 dark:border-slate-700 shadow-sm">
+                    <span className="material-symbols-outlined text-[16px]">bar_chart</span>
+                    查看结果
+                  </button>
                   <button onClick={(e) => { e.stopPropagation(); setSelectedBankId(bank.id!); setShowAssignModal(true); }}
-                    className="flex-1 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl text-sm font-bold transition-colors">
+                    className="flex-1 py-2 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-900/30 dark:hover:bg-indigo-900/50 text-indigo-700 dark:text-indigo-400 rounded-xl text-sm font-bold transition-colors shadow-sm">
                     派发测试
                   </button>
                 </div>
@@ -566,7 +579,14 @@ export default function TestBankManager({ navigate, isEmbedded }: { navigate?: (
           </div>
         </div>
       )}
-
+      
+      {/* 测评结果弹窗 */}
+      {resultsBankId && (
+        <TestResultsModal 
+          bankId={resultsBankId} 
+          onClose={() => setResultsBankId(null)} 
+        />
+      )}
     </div>
   );
 }

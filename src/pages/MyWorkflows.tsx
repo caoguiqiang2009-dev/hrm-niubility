@@ -236,7 +236,7 @@ export default function MyWorkflows({ navigate, initialTab }: MyWorkflowsProps) 
             <button key={tab.key}
               onClick={() => setActiveTab(tab.key)}
               className={`flex items-center justify-center gap-1.5 rounded-xl font-bold transition-all whitespace-nowrap ${
-                isMobile ? 'flex-1 min-w-0 px-2.5 py-2 text-xs' : 'flex-1 px-4 py-2.5 text-sm gap-2'
+                isMobile ? 'flex-none px-3 py-2 text-xs' : 'flex-1 px-4 py-2.5 text-sm gap-2'
               } ${
                 activeTab === tab.key
                   ? 'bg-gradient-to-r from-blue-500 to-indigo-500 text-white shadow-md shadow-blue-200/50'
@@ -503,6 +503,7 @@ export default function MyWorkflows({ navigate, initialTab }: MyWorkflowsProps) 
         };
 
         const handleDelete = async () => {
+          if (submittingApprovals) return; // 防止双击
           const typePath = selectedTask.type === 'pool_propose' ? 'pool/tasks' : 'perf/plans';
           try {
             setSubmittingApprovals(true);
@@ -513,7 +514,11 @@ export default function MyWorkflows({ navigate, initialTab }: MyWorkflowsProps) 
             });
             const data = await res.json();
             if (data.success || data.code === 0) {
+              // 先关 modal，再刷新列表，避免闪烁
               setSelectedTask(null);
+              // 从本地列表中即时移除，避免重画闪烁
+              setData(prev => prev.filter((item: any) => item.id !== selectedTask.data.id));
+              // 后台静默刷新拿最新数据
               fetchTab(activeTab);
             } else {
               alert(data.message || '删除失败');

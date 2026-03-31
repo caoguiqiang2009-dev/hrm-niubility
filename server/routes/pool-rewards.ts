@@ -243,12 +243,23 @@ router.post('/:id/hr-review', authMiddleware, async (req: AuthRequest, res) => {
   const db = getDb();
   const planId = parseInt(req.params.id);
   const userId = req.userId!;
-  const user = db.prepare('SELECT role, name FROM users WHERE id = ?').get(userId) as any;
-
-  if (!['hr', 'admin'].includes(user?.role)) return res.status(403).json({ code: 403, message: '仅 HR/Admin 可审核' });
 
   const plan = db.prepare('SELECT * FROM pool_reward_plans WHERE id = ?').get(planId) as any;
   if (!plan || plan.status !== 'pending_hr') return res.status(400).json({ code: 400, message: '状态不符' });
+
+  const { isGM, isSuperAdmin } = await import('../middleware/auth');
+  const isAdminOrGM = isGM(userId) || isSuperAdmin(userId);
+
+  const { WorkflowEngine, WORKFLOWS } = await import('../services/workflow-engine');
+  const nodes = WorkflowEngine.resolveAssignees(WORKFLOWS.REWARD_PLAN, { initiatorId: plan.initiator_id });
+  const node2 = nodes.find(n => n.seq === 2); // HRBP
+  const hrbpIds = node2?.assignees || [];
+
+  if (!hrbpIds.includes(userId) && !isAdminOrGM) {
+     return res.status(403).json({ code: 403, message: '仅分配的 HRBP 或高管可审核' });
+  }
+
+  const user = db.prepare('SELECT role, name FROM users WHERE id = ?').get(userId) as any;
 
   const { action, comment, distributions } = req.body;
   if (!['approve', 'reject'].includes(action)) return res.status(400).json({ code: 400, message: '无效操作' });
@@ -301,12 +312,23 @@ router.post('/:id/admin-confirm', authMiddleware, async (req: AuthRequest, res) 
   const db = getDb();
   const planId = parseInt(req.params.id);
   const userId = req.userId!;
-  const user = db.prepare('SELECT role, name FROM users WHERE id = ?').get(userId) as any;
-
-  if (user?.role !== 'admin') return res.status(403).json({ code: 403, message: '仅总经理可最终确认' });
 
   const plan = db.prepare('SELECT * FROM pool_reward_plans WHERE id = ?').get(planId) as any;
   if (!plan || plan.status !== 'pending_admin') return res.status(400).json({ code: 400, message: '状态不符' });
+
+  const { isGM, isSuperAdmin } = await import('../middleware/auth');
+  const isAdminOrGM = isGM(userId) || isSuperAdmin(userId);
+
+  const { WorkflowEngine, WORKFLOWS } = await import('../services/workflow-engine');
+  const nodes = WorkflowEngine.resolveAssignees(WORKFLOWS.REWARD_PLAN, { initiatorId: plan.initiator_id });
+  const node3 = nodes.find(n => n.seq === 3); // GM
+  const adminIds = node3?.assignees || [];
+
+  if (!adminIds.includes(userId) && !isAdminOrGM) {
+     return res.status(403).json({ code: 403, message: '仅分配的总经理/高管可最终确认' });
+  }
+
+  const user = db.prepare('SELECT role, name FROM users WHERE id = ?').get(userId) as any;
 
   const { action, comment } = req.body;
   if (!['approve', 'reject'].includes(action)) return res.status(400).json({ code: 400, message: '无效操作' });

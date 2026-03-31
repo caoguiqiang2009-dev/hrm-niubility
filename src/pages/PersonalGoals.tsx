@@ -7,7 +7,7 @@ import SmartTaskModal, { SmartTaskData } from '../components/SmartTaskModal';
 import { useIsMobile } from '../hooks/useIsMobile';
 
 interface PerfPlan {
-  id: number;
+  id: number | string;
   title: string;
   description: string;
   category: string;
@@ -134,10 +134,10 @@ export default function PersonalGoals({ navigate }: { navigate: (view: string) =
           category: data.taskType || '常规任务',
           target_value: targetValue,
           deadline: data.t,
-          collaborators: data.c,
-          // 向上申请
-          assignee_id: currentUser?.id,
-          approver_id: approverId
+          collaborators: [data.c, data.i].filter(Boolean).join(','),
+          assignee_id: data.r,
+          approver_id: data.a,
+          creator_id: currentUser?.id
         })
       });
       const createData = await createRes.json();
@@ -158,7 +158,7 @@ export default function PersonalGoals({ navigate }: { navigate: (view: string) =
     }
   };
 
-  const submitProgress = async (id: number, progress: number) => {
+  const submitProgress = async (id: number | string, progress: number) => {
     try {
       // Optimistic update to keep views perfectly in sync without deep re-fetching
       setPlans(prev => prev.map(p => p.id === id ? { ...p, progress } : p));
@@ -206,7 +206,10 @@ export default function PersonalGoals({ navigate }: { navigate: (view: string) =
         category: data.taskType || editingPlan.category,
         target_value: targetValue,
         deadline: data.t,
-        collaborators: data.c
+        collaborators: [data.c, data.i].filter(Boolean).join(','),
+        assignee_id: data.r,
+        approver_id: data.a,
+        creator_id: currentUser?.id,
       };
 
       if (editingPlan.status === 'draft') {
@@ -272,8 +275,8 @@ export default function PersonalGoals({ navigate }: { navigate: (view: string) =
           {/* Three Category Progress Bars */}
           {(() => {
             // 分类：季度 / 月度 / 专项
-            const quarterly = plans.filter(p => p.quarter && !p.category?.includes('专项') && !p.category?.includes('公坚'));
-            const monthly = plans.filter(p => !p.quarter && !p.category?.includes('专项') && !p.category?.includes('公坚'));
+            const quarterly = plans.filter(p => p.quarter?.includes('Q') && !p.category?.includes('专项') && !p.category?.includes('公坚'));
+            const monthly = plans.filter(p => (!p.quarter || p.quarter.includes('-')) && !p.category?.includes('专项') && !p.category?.includes('公坚'));
             const special = plans.filter(p => p.category?.includes('专项') || p.category?.includes('公坚'));
             const calcPct = (arr: typeof plans) => arr.length > 0 ? Math.round(arr.reduce((a, p) => a + (p.progress || 0), 0) / arr.length) : 0;
             const bars = [
@@ -338,7 +341,7 @@ export default function PersonalGoals({ navigate }: { navigate: (view: string) =
                   </div>
 
                   {/* Cards */}
-                  <div className="flex-1 overflow-y-auto p-3 space-y-3 h-[350px]">
+                  <div className={`flex-1 overflow-y-auto p-3 space-y-3 ${isMobile ? 'h-auto' : 'h-[350px]'}`}>
                     {colPlans.length === 0 && (
                       <div className="py-8 text-center text-slate-300 dark:text-slate-600 text-xs">暂无</div>
                     )}
@@ -414,10 +417,10 @@ export default function PersonalGoals({ navigate }: { navigate: (view: string) =
                               </span>
                             </div>
                             <div className="relative">
-                              <div className="w-full h-3 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                              <div className={`w-full rounded-full overflow-hidden bg-slate-200 dark:bg-slate-700 ${isMobile ? 'h-5' : 'h-3'}`}>
                                 <div data-pct-bar={plan.id} className="h-full rounded-full transition-all duration-300" style={{ width: `${pct}%`, backgroundColor: barColor }} />
                               </div>
-                              {plan.status === 'in_progress' && (
+                              {plan.status === 'in_progress' && !(plan as any).is_pool && (
                                 <input type="range" min="0" max="100" defaultValue={pct}
                                   className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                                   onInput={e => {
@@ -483,9 +486,10 @@ export default function PersonalGoals({ navigate }: { navigate: (view: string) =
                 category: data.taskType || '常规任务',
                 target_value: targetValue,
                 deadline: data.t,
-                collaborators: data.c,
-                assignee_id: currentUser?.id,
-                approver_id: approverId,
+                collaborators: [data.c, data.i].filter(Boolean).join(','),
+                assignee_id: data.r,
+                approver_id: data.a,
+                creator_id: currentUser?.id,
               })
             });
             const json = await res.json();
@@ -503,10 +507,10 @@ export default function PersonalGoals({ navigate }: { navigate: (view: string) =
           a_smart: '',
           r_smart: '',
           t: '',
-          taskType: '重点项目',
-          r: currentUser?.id,
-          a: currentUser?.id,
-          e: currentUser?.role === 'employee' ? 'zhangwei' : 'lifang'
+          r: currentUser?.id || '',
+          a: currentUser?.role === 'employee' ? 'zhangwei' : 'lifang',
+          c: '',
+          i: ''
         }}
       />
 
@@ -582,6 +586,9 @@ export default function PersonalGoals({ navigate }: { navigate: (view: string) =
             r_smart: decoded.relevance,
             taskType: editingPlan.category,
             c: editingPlan.collaborators || '',
+            i: '',
+            a: (editingPlan as any).approver_id,
+            r: editingPlan.assignee_id || editingPlan.creator_id,
             planTime: decoded.planTime,
             doTime: decoded.doTime,
             checkTime: decoded.checkTime,
@@ -624,8 +631,9 @@ export default function PersonalGoals({ navigate }: { navigate: (view: string) =
             r_smart: decoded.relevance,
             taskType: selectedPlan.category,
             c: selectedPlan.collaborators || '',
-            a: currentUser?.id,
-            r: currentUser?.id,
+            a: (selectedPlan as any).approver_id,
+            r: selectedPlan.assignee_id || selectedPlan.creator_id,
+            i: '',
             planTime: decoded.planTime,
             doTime: decoded.doTime,
             checkTime: decoded.checkTime,
@@ -714,7 +722,7 @@ export default function PersonalGoals({ navigate }: { navigate: (view: string) =
                   <div className="w-full h-3 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
                     <div data-pct-bar={`modal-${sp.id}`} className="h-full rounded-full transition-all duration-300" style={{ width: `${pct}%`, backgroundColor: accentColor }} />
                   </div>
-                  {sp.status === 'in_progress' && (
+                  {sp.status === 'in_progress' && !(sp as any).is_pool && (
                     <input type="range" min="0" max="100" defaultValue={pct}
                       className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                       onInput={e => {
@@ -762,8 +770,8 @@ export default function PersonalGoals({ navigate }: { navigate: (view: string) =
                     修改后重新提交
                   </button>
                 )}
-                {/* 进行中 + 上级下发：退回按钮 */}
-                {sp.status === 'in_progress' && isAssigned && (
+                {/* 进行中 + 上级下发 + 非只读：退回按钮 */}
+                {sp.status === 'in_progress' && isAssigned && !(sp as any).is_pool && (
                   <button onClick={handleReturn}
                     className="flex items-center gap-1.5 px-4 py-2.5 bg-orange-50 text-orange-600 text-sm font-bold rounded-lg border border-orange-200 hover:bg-orange-100 transition-colors">
                     <span className="material-symbols-outlined text-[16px]">reply</span>

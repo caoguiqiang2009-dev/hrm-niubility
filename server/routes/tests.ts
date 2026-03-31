@@ -10,15 +10,15 @@ const db = getDb();
 // 1. 获取所有题库 (包含题目数量)
 router.get('/bank', authMiddleware, (req: any, res) => {
   try {
-    const list = db.prepare(`
-      SELECT b.*, 
-             c.name as competency_name, 
-             (SELECT COUNT(*) FROM test_questions q WHERE q.bank_id = b.id) as question_count
+    const banks = db.prepare(`
+      SELECT b.*, l.name as competency_name,
+        (SELECT COUNT(*) FROM test_questions q WHERE q.bank_id = b.id) as question_count
       FROM test_banks b
-      LEFT JOIN competency_library c ON b.mapped_library_id = c.id
+      LEFT JOIN competency_library l ON b.mapped_library_id = l.id
+      WHERE ifnull(b.is_archived, 0) = 0
       ORDER BY b.created_at DESC
-    `).all();
-    res.json({ code: 0, data: list });
+    `).all() as any[];
+    res.json({ code: 0, data: banks });
   } catch (error: any) {
     res.status(500).json({ code: 500, message: error.message });
   }
@@ -54,17 +54,13 @@ router.post('/bank', authMiddleware, (req: any, res) => {
     const userId = req.userId || 'system';
 
     db.transaction(() => {
-      let bankId = id;
+      // Versioning Logic: If editing an existing bank, archive the old one and create a new one
       if (id) {
-        db.prepare(`UPDATE test_banks SET title = ?, description = ?, mapped_library_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`)
-          .run(title, description || '', mapped_library_id || null, id);
-        // 删除旧题重写以简化逻辑
-        db.prepare(`DELETE FROM test_questions WHERE bank_id = ?`).run(id);
-      } else {
-        const result = db.prepare(`INSERT INTO test_banks (title, description, mapped_library_id, created_by) VALUES (?, ?, ?, ?)`)
-          .run(title, description || '', mapped_library_id || null, userId);
-        bankId = result.lastInsertRowid;
+        db.prepare(`UPDATE test_banks SET is_archived = 1, updated_at = CURRENT_TIMESTAMP WHERE id = ?`).run(id);
       }
+      
+      const result = db.prepare(`INSERT INTO test_banks (title, description, mapped_library_id, created_by) VALUES (?, ?, ?, ?)`).run(title, description || '', mapped_library_id || null, userId);
+      const bankId = result.lastInsertRowid;
 
       const insertQ = db.prepare(`
         INSERT INTO test_questions (bank_id, type, question, options_json, correct_answer, score, sort_order)
@@ -85,6 +81,48 @@ router.post('/bank', authMiddleware, (req: any, res) => {
     })();
 
     res.json({ code: 0, message: 'Saved successfully' });
+  } catch (error: any) {
+    res.status(500).json({ code: 500, message: error.message });
+  }
+});
+
+// 新增：获取某个试卷的答题结果统计
+router.get('/bank/:id/results', authMiddleware, (req: any, res) => {
+  try {
+    const bankId = req.params.id;
+    
+    // 基础试卷信息
+    const bank = db.prepare('SELECT title, description FROM test_banks WHERE id = ?').get(bankId) as any;
+    if (!bank) return res.status(404).json({ code: 404, message: 'Bank not found' });
+    
+    // 查询被派发人及其成绩和状态
+    const results = db.prepare(`
+      SELECT 
+        a.id as assignment_id, a.user_id, a.status, a.final_score, a.assigned_by, a.created_at, a.completed_at,
+        u.name as user_name, u.avatar_url, d.name as department_name
+      FROM test_assignments a
+      JOIN users u ON a.user_id = u.id
+      LEFT JOIN departments d ON u.department_id = d.id
+      WHERE a.bank_id = ?
+      ORDER BY a.status DESC, a.final_score DESC, a.completed_at DESC
+    `).all(bankId) as any[];
+    
+    // 统计数据
+    const totalAssigned = results.length;
+    const completed = results.filter(r => r.status === 'completed');
+    const totalCompleted = completed.length;
+    const averageScore = totalCompleted > 0 
+      ? Math.round(completed.reduce((sum, r) => sum + (r.final_score || 0), 0) / totalCompleted) 
+      : 0;
+      
+    res.json({
+      code: 0,
+      data: {
+        bank,
+        stats: { totalAssigned, totalCompleted, averageScore },
+        results
+      }
+    });
   } catch (error: any) {
     res.status(500).json({ code: 500, message: error.message });
   }

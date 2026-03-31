@@ -210,57 +210,111 @@ export default function Sidebar({ currentView, navigate }: SidebarProps) {
           </button>
 
           {isInboxOpen && (
-            <div className="absolute right-0 top-12 w-80 bg-white dark:bg-slate-900 rounded-xl shadow-2xl border border-slate-200/60 dark:border-slate-800 z-50 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-150">
-              <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
-                <h3 className="font-bold text-sm text-slate-800 dark:text-slate-100 flex items-center gap-2">
-                  <span className="material-symbols-outlined text-[16px] text-blue-500">inbox</span>
-                  消息盒
-                  {unreadCount > 0 && <span className="text-[10px] bg-red-100 text-red-600 px-1.5 py-0.5 rounded-full font-bold">{unreadCount}</span>}
-                </h3>
-                {unreadCount > 0 && (
-                  <button onClick={markAllRead} className="text-[10px] text-blue-500 hover:text-blue-700 font-bold">全部已读</button>
-                )}
-              </div>
-              <div className="max-h-80 overflow-y-auto">
-                {inboxMessages.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-10 text-slate-400">
-                    <span className="material-symbols-outlined text-4xl mb-2 opacity-30">notifications_off</span>
-                    <p className="text-xs">暂无消息</p>
+            isMobile ? (
+              /* 移动端：底部全屏抽屉 */
+              <div className="fixed inset-0 z-[60]">
+                <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" onClick={() => setIsInboxOpen(false)} />
+                <div className="absolute bottom-[calc(3.5rem+env(safe-area-inset-bottom,0px))] left-0 right-0 bg-white dark:bg-slate-900 rounded-t-3xl shadow-2xl mobile-drawer-enter overflow-hidden max-h-[70vh] flex flex-col">
+                  <div className="flex justify-center pt-3 pb-1">
+                    <div className="w-10 h-1 bg-slate-200 dark:bg-slate-700 rounded-full" />
                   </div>
-                ) : inboxMessages.map((msg: any) => (
-                  <div key={msg.id}
-                    onClick={() => {
-                      markRead(msg.id);
-                      if (msg.link) {
-                        const view = msg.link.replace(/^\//, '').split('?')[0];
-                        navigate(view || 'dashboard');
-                      } else {
-                        navigate('dashboard');
-                      }
-                      setIsInboxOpen(false);
-                      setInboxMessages(prev => prev.filter(m => m.id !== msg.id));
-                      setUnreadCount(prev => Math.max(0, prev - 1));
-                    }}
-                    className={`px-4 py-3 border-b border-slate-50 dark:border-slate-800/50 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors bg-blue-50/50 dark:bg-blue-900/10`}>
-                    <div className="flex gap-3">
-                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${!msg.is_read ? 'bg-blue-100 dark:bg-blue-900/30' : 'bg-slate-100 dark:bg-slate-800'}`}>
-                        <span className={`material-symbols-outlined text-[16px] ${!msg.is_read ? 'text-blue-600' : 'text-slate-400'}`}>
-                          {NOTIF_ICON[msg.type] || 'notifications'}
-                        </span>
+                  <div className="px-5 pb-3 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                    <h3 className="font-bold text-base text-slate-800 dark:text-slate-100 flex items-center gap-2">
+                      <span className="material-symbols-outlined text-[18px] text-blue-500">inbox</span>
+                      消息盒
+                      {unreadCount > 0 && <span className="text-[11px] bg-red-100 text-red-600 px-1.5 py-0.5 rounded-full font-bold">{unreadCount}</span>}
+                    </h3>
+                    {unreadCount > 0 && (
+                      <button onClick={markAllRead} className="text-xs text-blue-500 hover:text-blue-700 font-bold px-3 py-1.5 rounded-lg bg-blue-50">全部已读</button>
+                    )}
+                  </div>
+                  <div className="flex-1 overflow-y-auto">
+                    {inboxMessages.length === 0 ? (
+                      <div className="flex flex-col items-center justify-center py-12 text-slate-400">
+                        <span className="material-symbols-outlined text-5xl mb-3 opacity-20">notifications_off</span>
+                        <p className="text-sm">暂无消息</p>
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between mb-0.5">
-                          <p className={`text-xs font-bold truncate ${!msg.is_read ? 'text-slate-800 dark:text-slate-100' : 'text-slate-500'}`}>{msg.title}</p>
-                          <span className="text-[10px] text-slate-400 flex-shrink-0 ml-2">{formatTime(msg.created_at)}</span>
+                    ) : inboxMessages.map((msg: any) => (
+                      <div key={msg.id}
+                        onClick={() => {
+                          markRead(msg.id);
+                          const view = msg.link ? msg.link.replace(/^\//, '').split('?')[0] : 'dashboard';
+                          navigate(view || 'dashboard');
+                          setIsInboxOpen(false);
+                          setInboxMessages(prev => prev.filter(m => m.id !== msg.id));
+                          setUnreadCount(prev => Math.max(0, prev - 1));
+                        }}
+                        className={`px-5 py-4 border-b border-slate-50 dark:border-slate-800/50 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors active:bg-slate-100 ${!msg.is_read ? 'bg-blue-50/40 dark:bg-blue-900/10' : ''}`}>
+                        <div className="flex gap-3">
+                          <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${!msg.is_read ? 'bg-blue-100 dark:bg-blue-900/30' : 'bg-slate-100 dark:bg-slate-800'}`}>
+                            <span className={`material-symbols-outlined text-[18px] ${!msg.is_read ? 'text-blue-600' : 'text-slate-400'}`}>
+                              {NOTIF_ICON[msg.type] || 'notifications'}
+                            </span>
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center justify-between mb-0.5">
+                              <p className={`text-sm font-bold truncate ${!msg.is_read ? 'text-slate-800 dark:text-slate-100' : 'text-slate-500'}`}>{msg.title}</p>
+                              <span className="text-[11px] text-slate-400 flex-shrink-0 ml-2">{formatTime(msg.created_at)}</span>
+                            </div>
+                            <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-2 leading-relaxed">{msg.content}</p>
+                          </div>
+                          {!msg.is_read && <div className="w-2 h-2 bg-blue-500 rounded-full flex-shrink-0 mt-2" />}
                         </div>
-                        <p className="text-[11px] text-slate-500 dark:text-slate-400 line-clamp-2 leading-relaxed">{msg.content}</p>
                       </div>
-                      {!msg.is_read && <div className="w-2 h-2 bg-blue-500 rounded-full flex-shrink-0 mt-1.5"></div>}
-                    </div>
+                    ))}
                   </div>
-                ))}
+                </div>
               </div>
-            </div>
+            ) : (
+              /* 桌面端：原有下拉 */
+              <div className="absolute right-0 top-12 w-80 bg-white dark:bg-slate-900 rounded-xl shadow-2xl border border-slate-200/60 dark:border-slate-800 z-50 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-150">
+                <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                  <h3 className="font-bold text-sm text-slate-800 dark:text-slate-100 flex items-center gap-2">
+                    <span className="material-symbols-outlined text-[16px] text-blue-500">inbox</span>
+                    消息盒
+                    {unreadCount > 0 && <span className="text-[10px] bg-red-100 text-red-600 px-1.5 py-0.5 rounded-full font-bold">{unreadCount}</span>}
+                  </h3>
+                  {unreadCount > 0 && (
+                    <button onClick={markAllRead} className="text-[10px] text-blue-500 hover:text-blue-700 font-bold">全部已读</button>
+                  )}
+                </div>
+                <div className="max-h-80 overflow-y-auto">
+                  {inboxMessages.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-10 text-slate-400">
+                      <span className="material-symbols-outlined text-4xl mb-2 opacity-30">notifications_off</span>
+                      <p className="text-xs">暂无消息</p>
+                    </div>
+                  ) : inboxMessages.map((msg: any) => (
+                    <div key={msg.id}
+                      onClick={() => {
+                        markRead(msg.id);
+                        const view = msg.link ? msg.link.replace(/^\//, '').split('?')[0] : 'dashboard';
+                        navigate(view || 'dashboard');
+                        setIsInboxOpen(false);
+                        setInboxMessages(prev => prev.filter(m => m.id !== msg.id));
+                        setUnreadCount(prev => Math.max(0, prev - 1));
+                      }}
+                      className="px-4 py-3 border-b border-slate-50 dark:border-slate-800/50 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors bg-blue-50/50 dark:bg-blue-900/10">
+                      <div className="flex gap-3">
+                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${!msg.is_read ? 'bg-blue-100 dark:bg-blue-900/30' : 'bg-slate-100 dark:bg-slate-800'}`}>
+                          <span className={`material-symbols-outlined text-[16px] ${!msg.is_read ? 'text-blue-600' : 'text-slate-400'}`}>
+                            {NOTIF_ICON[msg.type] || 'notifications'}
+                          </span>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between mb-0.5">
+                            <p className={`text-xs font-bold truncate ${!msg.is_read ? 'text-slate-800 dark:text-slate-100' : 'text-slate-500'}`}>{msg.title}</p>
+                            <span className="text-[10px] text-slate-400 flex-shrink-0 ml-2">{formatTime(msg.created_at)}</span>
+                          </div>
+                          <p className="text-[11px] text-slate-500 dark:text-slate-400 line-clamp-2 leading-relaxed">{msg.content}</p>
+                        </div>
+                        {!msg.is_read && <div className="w-2 h-2 bg-blue-500 rounded-full flex-shrink-0 mt-1.5" />}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )
           )}
         </div>
         <div className="h-6 w-px bg-slate-200/60 dark:bg-slate-800/60 mx-1"></div>

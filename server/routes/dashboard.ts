@@ -10,9 +10,9 @@ router.get('/personal', authMiddleware, (req: AuthRequest, res) => {
   const userId = req.userId;
 
   const user = db.prepare('SELECT id, name, title, avatar_url FROM users WHERE id = ?').get(userId);
-  const activeGoals = db.prepare("SELECT * FROM perf_plans WHERE assignee_id = ? AND status NOT IN ('draft', 'completed') ORDER BY deadline").all(userId);
-  const completedCount = (db.prepare("SELECT COUNT(*) as c FROM perf_plans WHERE assignee_id = ? AND status = 'completed'").get(userId) as any)?.c || 0;
-  const avgScore = (db.prepare("SELECT AVG(score) as avg FROM perf_plans WHERE assignee_id = ? AND score IS NOT NULL").get(userId) as any)?.avg;
+  const activeGoals = db.prepare("SELECT * FROM perf_plans WHERE (',' || assignee_id || ',' LIKE '%,' || ? || ',%') AND status NOT IN ('draft', 'completed') ORDER BY deadline").all(userId);
+  const completedCount = (db.prepare("SELECT COUNT(*) as c FROM perf_plans WHERE (',' || assignee_id || ',' LIKE '%,' || ? || ',%') AND status = 'completed'").get(userId) as any)?.c || 0;
+  const avgScore = (db.prepare("SELECT AVG(score) as avg FROM perf_plans WHERE (',' || assignee_id || ',' LIKE '%,' || ? || ',%') AND score IS NOT NULL").get(userId) as any)?.avg;
   const latestFeed = db.prepare('SELECT * FROM team_feeds ORDER BY created_at DESC LIMIT 5').all();
   const notifications = db.prepare("SELECT * FROM notifications WHERE user_id = ? AND is_read = 0 ORDER BY created_at DESC LIMIT 10").all(userId);
 
@@ -99,7 +99,7 @@ router.get('/panorama', authMiddleware, (_req, res) => {
       AVG(pp.score) as avg_score,
       COUNT(pp.id) as plan_count
     FROM users u
-    JOIN perf_plans pp ON pp.assignee_id = u.id AND pp.score IS NOT NULL
+    JOIN perf_plans pp ON ',' || pp.assignee_id || ',' LIKE '%,' || u.id || ',%' AND pp.score IS NOT NULL
     LEFT JOIN departments d ON u.department_id = d.id
     GROUP BY u.id
     HAVING plan_count >= 1

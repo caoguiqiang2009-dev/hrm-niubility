@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { getDb } from '../config/database';
-import { authMiddleware, AuthRequest, isSuperAdmin } from '../middleware/auth';
+import { authMiddleware, AuthRequest, isSuperAdmin, isGM, isHRBP } from '../middleware/auth';
 
 const router = Router();
 
@@ -40,7 +40,7 @@ router.get('/initiated', authMiddleware, (req: AuthRequest, res) => {
      FROM perf_plans pp
       LEFT JOIN users cu ON pp.creator_id = cu.id
      LEFT JOIN users u ON pp.approver_id = u.id
-     WHERE pp.assignee_id = ? AND pp.creator_id != ? AND pp.status != 'draft'
+     WHERE (',' || pp.assignee_id || ',' LIKE '%,' || ? || ',%') AND pp.creator_id != ? AND pp.status != 'draft'
      ORDER BY pp.created_at DESC`
   ).all(userId, userId);
   assignedToMe = attachLogs(assignedToMe, 'perf_plan');
@@ -73,9 +73,10 @@ router.get('/initiated', authMiddleware, (req: AuthRequest, res) => {
 router.get('/pending', authMiddleware, (req: AuthRequest, res) => {
   const db = getDb();
   const userId = req.userId;
-  const user = db.prepare('SELECT role, name FROM users WHERE id = ?').get(userId) as any;
-  const role = (isSuperAdmin(userId) ? 'admin' : user?.role) || 'employee';
+  const user = db.prepare('SELECT name FROM users WHERE id = ?').get(userId) as any;
   const currentUserName = user?.name || userId;
+  const isUserGM = isGM(userId);
+  const isUserHRBP = isHRBP(userId);
 
   const items: any[] = [];
 
@@ -105,7 +106,7 @@ router.get('/pending', authMiddleware, (req: AuthRequest, res) => {
   items.push(...perfPending);
 
   // 2. 待我审核的提案 (HR可审 pending_hr, Admin可审 pending_admin)【风隖7修复：过滤自己提交的提案】
-  if (['hr', 'admin'].includes(role)) {
+  if (isUserHRBP || isUserGM) {
     const hrPending = db.prepare(
       `SELECT pt.*, u.name as creator_name, 'proposal' as flow_type,
          hr_u.name as hr_reviewer_name, admin_u.name as admin_reviewer_name
@@ -120,7 +121,7 @@ router.get('/pending', authMiddleware, (req: AuthRequest, res) => {
     hrPending.forEach((p: any) => { p.pending_reviewer_name = currentUserName; });
     items.push(...hrPending);
   }
-  if (role === 'admin') {
+  if (isUserGM) {
     const adminPending = db.prepare(
       `SELECT pt.*, u.name as creator_name, 'proposal' as flow_type,
          hr_u.name as hr_reviewer_name, admin_u.name as admin_reviewer_name
@@ -137,7 +138,7 @@ router.get('/pending', authMiddleware, (req: AuthRequest, res) => {
   }
 
   // 3. 待我审核的加入申请 (HR/Admin)
-  if (['hr', 'admin'].includes(role)) {
+  if (isUserHRBP || isUserGM) {
     try {
       const joinPending = db.prepare(
         `SELECT jr.*, u.name as creator_name, pt.title as task_title, 'pool_join' as flow_type
@@ -159,7 +160,7 @@ router.get('/pending', authMiddleware, (req: AuthRequest, res) => {
 
     // 4. 奖励分配方案审核（HR审 pending_hr / Admin审 pending_admin）
     try {
-      if (role === 'hr' || role === 'admin') {
+      if (isUserHRBP || isUserGM) {
         const rewardHrPending = db.prepare(
           `SELECT prp.*, pt.title as task_title, u.name as creator_name, 'reward_plan' as flow_type
            FROM pool_reward_plans prp
@@ -175,7 +176,7 @@ router.get('/pending', authMiddleware, (req: AuthRequest, res) => {
         });
         items.push(...rewardHrPending);
       }
-      if (role === 'admin') {
+      if (isUserGM) {
         const rewardAdminPending = db.prepare(
           `SELECT prp.*, pt.title as task_title, u.name as creator_name, 'reward_plan' as flow_type
            FROM pool_reward_plans prp

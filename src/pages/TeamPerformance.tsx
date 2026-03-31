@@ -182,11 +182,11 @@ export default function TeamPerformance({ navigate }: { navigate: (view: string)
           category: data.taskType || '临时指派',
           target_value: targetValue,
           deadline: data.t,
-          collaborators: data.c,
-          assignee_id: data.a || subordinates[0]?.id || '',
+          collaborators: [data.c, data.i].filter(Boolean).join(','),
+          assignee_id: data.r || subordinates[0]?.id || '',
           quarter: data.quarter || undefined, 
           creator_id: currentUser?.id,
-          approver_id: currentUser?.id
+          approver_id: data.a || currentUser?.id
         })
       });
 
@@ -253,11 +253,11 @@ export default function TeamPerformance({ navigate }: { navigate: (view: string)
           category: data.taskType || '常规任务',
           target_value: targetValue,
           deadline: data.t,
-          collaborators: data.c,
-          assignee_id: currentUser?.id,
+          collaborators: [data.c, data.i].filter(Boolean).join(','),
+          assignee_id: data.r || currentUser?.id,
           quarter: data.quarter || undefined, 
           creator_id: currentUser?.id,
-          approver_id: approverId
+          approver_id: data.a || approverId
         })
       });
 
@@ -748,11 +748,11 @@ export default function TeamPerformance({ navigate }: { navigate: (view: string)
                 category: data.taskType || '临时指派',
                 target_value: targetValue,
                 deadline: data.t,
-                collaborators: data.c,
-                assignee_id: data.a || subordinates[0]?.id || '',
+                collaborators: [data.c, data.i].filter(Boolean).join(','),
+                assignee_id: data.r || subordinates[0]?.id || '',
                 quarter: data.quarter || undefined,
                 creator_id: currentUser?.id,
-                approver_id: currentUser?.id,
+                approver_id: data.a || currentUser?.id,
               })
             });
             if (res.status === 401) { alert('登录已过期，请重新登录后再试'); localStorage.removeItem('token'); window.location.reload(); return; }
@@ -801,7 +801,9 @@ export default function TeamPerformance({ navigate }: { navigate: (view: string)
             r_smart: decoded.relevance,
             taskType: selectedTask.category,
             c: selectedTask.collaborators || '',
-            r: currentUser?.id,
+            a: selectedTask.approver_id || currentUser?.id,
+            r: selectedTask.assignee_id || selectedTask.creator_id,
+            i: '',
             planTime: decoded.planTime,
             doTime: decoded.doTime,
             checkTime: decoded.checkTime,
@@ -839,11 +841,11 @@ export default function TeamPerformance({ navigate }: { navigate: (view: string)
                 category: data.taskType || '常规任务',
                 target_value: targetValue,
                 deadline: data.t,
-                collaborators: data.c,
-                assignee_id: currentUser?.id,
+                collaborators: [data.c, data.i].filter(Boolean).join(','),
+                assignee_id: data.r || currentUser?.id,
                 quarter: data.quarter || undefined,
                 creator_id: currentUser?.id,
-                approver_id: approverId
+                approver_id: data.a || approverId
               })
             });
             if (res.status === 401) { alert('登录已过期'); window.location.reload(); return; }

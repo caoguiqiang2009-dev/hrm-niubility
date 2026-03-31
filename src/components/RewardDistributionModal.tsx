@@ -3,6 +3,7 @@
  * 实时校验奖金总额，不超过奖金池
  */
 import React, { useState, useEffect } from 'react';
+import WorkflowTrajectory from './WorkflowTrajectory';
 
 interface Distribution {
   user_id: string;
@@ -258,6 +259,7 @@ export default function RewardDistributionModal({
               </div>
             </>
           )}
+          {plan && <WorkflowTrajectory businessType="reward_plan" businessId={plan.id} codePrefix="RP" className="!mb-0" />}
         </div>
 
         {/* Footer */}

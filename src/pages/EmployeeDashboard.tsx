@@ -674,22 +674,26 @@ export default function EmployeeDashboard({ navigate }: { navigate: (view: strin
                 <span className="material-symbols-outlined text-emerald-500">category</span>
                 管理专属
               </h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+              <div className={`grid gap-3 ${isMobile ? 'grid-cols-2' : 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5'}`}>
               {/* 绩效核算 (原月度考评) 放在第一位以保持一致性 - 全角色可见 */}
-              <div onClick={() => navigate('monthly-eval')} className="bg-white dark:bg-slate-900 rounded-3xl p-6 border border-slate-100 dark:border-slate-800 shadow-sm hover:shadow-xl transition-all cursor-pointer group flex flex-col hover:-translate-y-1 hover:border-blue-200 dark:hover:border-blue-800/50">
-                <div className="w-12 h-12 rounded-2xl bg-blue-50 dark:bg-blue-900/30 flex items-center justify-center mb-5 group-hover:bg-blue-100 transition-colors">
+              <div onClick={() => navigate('monthly-eval')} className={`bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 shadow-sm hover:shadow-xl transition-all cursor-pointer group flex flex-col hover:-translate-y-1 hover:border-blue-200 dark:hover:border-blue-800/50 ${isMobile ? 'rounded-2xl p-4' : 'rounded-3xl p-6'}`}>
+                <div className={`rounded-2xl bg-blue-50 dark:bg-blue-900/30 flex items-center justify-center group-hover:bg-blue-100 transition-colors ${isMobile ? 'w-10 h-10 mb-2' : 'w-12 h-12 mb-5'}`}>
                   <span className="material-symbols-outlined text-[24px] text-blue-600 font-bold" style={{ fontVariationSettings: "'wght' 600" }}>rule</span>
                 </div>
-                <h4 className="text-xl font-black text-slate-800 dark:text-slate-100 mb-3 tracking-tight">月度考评系统</h4>
-                <p className="text-sm text-slate-500 dark:text-slate-400 mb-6 font-medium">
-                  {currentUser?.role === 'supervisor' || currentUser?.role === 'manager'
-                    ? '查看与管理本部门员工的月度绩效考评'
-                    : '所有员工必须参与的月底绩效四大维度打分'}
-                </p>
-                <div className="flex gap-3 text-[12px] font-bold text-slate-400 mt-auto">
-                  <span className="flex items-center gap-1.5"><div className="w-1.5 h-1.5 rounded-full bg-slate-200 dark:bg-slate-700 group-hover:bg-blue-300"></div>待审阅打分</span>
-                  <span className="flex items-center gap-1.5"><div className="w-1.5 h-1.5 rounded-full bg-slate-200 dark:bg-slate-700 group-hover:bg-blue-300"></div>百分制测评</span>
-                </div>
+                <h4 className={`font-black text-slate-800 dark:text-slate-100 tracking-tight ${isMobile ? 'text-sm mb-0' : 'text-xl mb-3'}`}>月度考评系统</h4>
+                {!isMobile && (
+                  <>
+                    <p className="text-sm text-slate-500 dark:text-slate-400 mb-6 font-medium">
+                      {currentUser?.role === 'supervisor' || currentUser?.role === 'manager'
+                        ? '查看与管理本部门员工的月度绩效考评'
+                        : '所有员工必须参与的月底绩效四大维度打分'}
+                    </p>
+                    <div className="flex gap-3 text-[12px] font-bold text-slate-400 mt-auto">
+                      <span className="flex items-center gap-1.5"><div className="w-1.5 h-1.5 rounded-full bg-slate-200 dark:bg-slate-700 group-hover:bg-blue-300"></div>待审阅打分</span>
+                      <span className="flex items-center gap-1.5"><div className="w-1.5 h-1.5 rounded-full bg-slate-200 dark:bg-slate-700 group-hover:bg-blue-300"></div>百分制测评</span>
+                    </div>
+                  </>
+                )}
               </div>
 
               {(currentUser?.role === 'admin' || currentUser?.role === 'hr') && (<>

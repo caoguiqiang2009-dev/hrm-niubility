@@ -5,6 +5,7 @@ import MDEditor from '@uiw/react-md-editor';
 import { useAuth } from '../context/AuthContext';
 import { useRTASR } from '../hooks/useRTASR';
 import { useIsMobile } from '../hooks/useIsMobile';
+import WorkflowTrajectory from './WorkflowTrajectory';
 
 const SearchableUserDropdown = ({ 
   label, 
@@ -332,7 +333,7 @@ const TaskTypeDropdown = ({ value, onChange, readonly }: { value: string; onChan
 type SectionId = 's' | 'm' | 'a_smart' | 'r_smart' | 't' | 'attachments' | null;
 
 export interface SmartTaskData {
-  id?: number;
+  id?: number | string;
   title?: string;
   category?: string;
   assignee_id?: string;
@@ -342,7 +343,7 @@ export interface SmartTaskData {
   r: string;
   a: string;
   c: string;
-  e: string; // 验收人
+  i: string; // 知情人
   bonus: string;
   rewardType: 'money' | 'score';
   maxParticipants: string;
@@ -385,6 +386,7 @@ export interface SmartTaskModalProps {
 }
 
 export default function SmartTaskModal({ isOpen, onClose, onSubmit, title, type, users, initialData, submitting, readonly: propReadonly, customFooter, approverMode, onApprove, onReject, onDraft, onDelete }: SmartTaskModalProps) {
+  const { currentUser } = useAuth();
   const isMobile = useIsMobile();
   const [activeSection, setActiveSection] = useState<SectionId>(null);
   const [aiActivating, setAiActivating] = useState<'full' | null>(null);
@@ -492,9 +494,9 @@ export default function SmartTaskModal({ isOpen, onClose, onSubmit, title, type,
 
   const [headerSelections, setHeaderSelections] = useState({
     r: initialData?.r || '',
-    a: initialData?.a || '',
+    a: (title === '申请新任务' || type === 'personal') ? (initialData?.a || currentUser?.id || '') : (initialData?.a || ''),
     c: initialData?.c || '',
-    e: initialData?.e || '',
+    i: initialData?.i || '',
     bonus: initialData?.bonus || '0',
     rewardType: initialData?.rewardType || 'money',
     taskType: initialData?.taskType || '常规任务',
@@ -503,7 +505,7 @@ export default function SmartTaskModal({ isOpen, onClose, onSubmit, title, type,
   });
 
   // Safely parse attachments: handles JSON string, array, null, undefined
-  const safeParseAttachments = (val: any): { name: string; size: string; url?: string }[] => {
+  const safeParseAttachments = (val: any): { name: string; size: string; url?: string; uploader_id?: string; uploader_name?: string; is_new?: boolean }[] => {
     if (Array.isArray(val)) return val;
     if (typeof val === 'string' && val) {
       try { const parsed = JSON.parse(val); return Array.isArray(parsed) ? parsed : []; } catch { return []; }
@@ -528,7 +530,13 @@ export default function SmartTaskModal({ isOpen, onClose, onSubmit, title, type,
       });
       const data = await res.json();
       if (data.code === 0 && data.data) {
-        setFormData(prev => ({ ...prev, attachments: [...prev.attachments, ...data.data] }));
+        const newAttachments = data.data.map((file: any) => ({
+          ...file,
+          uploader_id: currentUser?.id,
+          uploader_name: currentUser?.name,
+          is_new: true
+        }));
+        setFormData(prev => ({ ...prev, attachments: [...prev.attachments, ...newAttachments] }));
       } else {
         alert(data.message || '上传失败');
       }
@@ -558,9 +566,9 @@ export default function SmartTaskModal({ isOpen, onClose, onSubmit, title, type,
     if (isOpen) {
       setHeaderSelections({
         r: initialData?.r || '',
-        a: initialData?.a || '',
+        a: (title === '申请新任务' || type === 'personal') ? (initialData?.a || currentUser?.id || '') : (initialData?.a || ''),
         c: initialData?.c || '',
-        e: initialData?.e || '',
+        i: initialData?.i || '',
         bonus: initialData?.bonus || '0',
         rewardType: initialData?.rewardType || 'money',
         taskType: initialData?.taskType || '常规任务',
@@ -724,14 +732,18 @@ export default function SmartTaskModal({ isOpen, onClose, onSubmit, title, type,
       }
       // 个人目标: 负责人+验收人+任务属性 必选; 执行人/咨询人 可选
       // 团队/绩效池: 全部必选
+      if (!headerSelections.r || !headerSelections.a) {
+        alert('请确保已分派至少一名【R 执行人】和唯一一名【A 负责/验收人】。');
+        return;
+      }
       if (type === 'personal') {
-        if (!headerSelections.r || !headerSelections.e || !headerSelections.taskType) {
-          alert(`请在顶部选择：负责人、验收人以及任务属性！`);
+        if (!headerSelections.taskType) {
+          alert(`请在顶部选择：任务属性！`);
           return;
         }
       } else {
-        if (!headerSelections.r || !headerSelections.a || !headerSelections.c || !headerSelections.e || !headerSelections.taskType) {
-          alert(`请在顶部完整选择配置：负责人、执行人、咨询人、验收人以及任务属性！`);
+        if (!headerSelections.c || !headerSelections.taskType) {
+          alert(`请在顶部完整选择配置：咨询人以及任务属性！`);
           return;
         }
       }
@@ -739,8 +751,27 @@ export default function SmartTaskModal({ isOpen, onClose, onSubmit, title, type,
 
     onSubmit({
       ...headerSelections,
-      ...formData
+      ...formData,
+      r: headerSelections.r,
+      a: headerSelections.a,
+      c: headerSelections.c,
+      i: headerSelections.i,
+      summary: formData.summary || formData.s?.substring(0, 30) || '新目标',
     });
+  };
+
+  const handleDraft = () => {
+    if (onDraft) {
+      onDraft({
+        ...headerSelections,
+        ...formData,
+        r: headerSelections.r,
+        a: headerSelections.a,
+        c: headerSelections.c,
+        i: headerSelections.i,
+        summary: formData.summary || formData.s?.substring(0, 30) || '新目标草稿',
+      });
+    }
   };
 
   return (
@@ -791,143 +822,209 @@ export default function SmartTaskModal({ isOpen, onClose, onSubmit, title, type,
             <div className="flex-1 overflow-y-auto custom-scrollbar flex flex-col items-stretch">
             
             {/* Dropdowns Row */}
-            <div className="bg-[#005ea4] p-4 sm:px-6 text-white shrink-0">
-              <div className="flex flex-wrap items-center gap-3">
-                {type !== 'pool_propose' && (
-                  <>
-                <SearchableUserDropdown 
-                  label="R" 
-                  value={headerSelections.r} 
-                  onChange={v => setHeaderSelections({...headerSelections, r: v})} 
-                  users={users} 
-                  placeholder="选择负责人"
-                  readonly={readonly}
-                />
-                <MultiSelectUserDropdown 
-                  label="A" 
-                  value={headerSelections.a} 
-                  onChange={v => setHeaderSelections({...headerSelections, a: v})} 
-                  users={users} 
-                  placeholder="选择执行人"
-                  readonly={readonly}
-                />
-                <MultiSelectUserDropdown 
-                  label="C" 
-                  value={headerSelections.c} 
-                  onChange={v => setHeaderSelections({...headerSelections, c: v})} 
-                  users={users} 
-                  placeholder="选择咨询人"
-                  readonly={readonly}
-                />
-                <MultiSelectUserDropdown 
-                  label="验收人" 
-                  value={headerSelections.e} 
-                  onChange={v => setHeaderSelections({...headerSelections, e: v})} 
-                  users={users} 
-                  placeholder="选择验收人"
-                  readonly={readonly}
-                />
-                  </>
-                )}
-
-                {/* 奖励机制 (奖金/积分) Dropdown & Input */}
-                {(type === 'pool_propose' || type === 'pool_publish' || type === 'team') && (
-                  <div className="flex items-center bg-white/10 rounded-md px-3 py-1.5 border border-white/20 transition-colors">
-                    <div className="relative flex items-center mr-2">
-                      {(readonly && !approverMode) ? (
-                        <span className="bg-transparent text-sm font-bold text-white/90 pr-2">
-                          {headerSelections.rewardType === 'money' ? '专项奖金' : '绩效分数'}
-                        </span>
-                      ) : (
-                        <>
-                          <select
-                            value={headerSelections.rewardType}
-                            onChange={e => setHeaderSelections({...headerSelections, rewardType: e.target.value as 'money' | 'score'})}
-                            className="bg-transparent text-sm font-bold text-white/90 outline-none cursor-pointer appearance-none pr-5 focus:text-white"
-                          >
-                            <option value="money" className="text-gray-900">专项奖金</option>
-                            <option value="score" className="text-gray-900">绩效分数</option>
-                          </select>
-                          <ChevronDown size={14} className="text-white/70 absolute right-0 pointer-events-none" />
-                        </>
-                      )}
+            {isMobile ? (
+              /* ── 移动端：超紧凑单行 RACI 摘要条 ── */
+              <div className="bg-[#005ea4] px-3 py-2 text-white shrink-0">
+                <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-hide">
+                  {type !== 'pool_propose' && (
+                    <>
+                      {/* R 执行人 */}
+                      <MultiSelectUserDropdown
+                        label="R"
+                        value={headerSelections.r}
+                        onChange={v => setHeaderSelections({...headerSelections, r: v})}
+                        users={users}
+                        placeholder="执行人"
+                        readonly={readonly}
+                      />
+                      {/* A 负责/验收人 */}
+                      <SearchableUserDropdown
+                        label="A"
+                        value={headerSelections.a}
+                        onChange={v => setHeaderSelections({...headerSelections, a: v})}
+                        users={users}
+                        placeholder="验收人"
+                        readonly={readonly || title === '申请新任务' || type === 'personal'}
+                      />
+                      {/* C 咨询人 */}
+                      <MultiSelectUserDropdown
+                        label="C"
+                        value={headerSelections.c}
+                        onChange={v => setHeaderSelections({...headerSelections, c: v})}
+                        users={users}
+                        placeholder="咨询人"
+                        readonly={readonly}
+                      />
+                    </>
+                  )}
+                  {/* 任务属性 */}
+                  <TaskTypeDropdown
+                    value={headerSelections.taskType}
+                    onChange={v => setHeaderSelections({...headerSelections, taskType: v})}
+                    readonly={readonly}
+                  />
+                  {/* 奖励机制 */}
+                  {(type === 'pool_propose' || type === 'pool_publish' || type === 'team') && (
+                    <div className="flex-none flex items-center bg-white/10 rounded-md px-2 py-1 border border-white/20 gap-1">
+                      <span className="text-[10px] font-black text-white/70 uppercase">奖</span>
+                      <span className="text-xs text-white font-semibold">{headerSelections.rewardType === 'money' ? '¥' : ''}{headerSelections.bonus || '0'}{headerSelections.rewardType === 'score' ? '分' : ''}</span>
                     </div>
-                    <div className="relative flex items-center">
-                      <span className="text-white text-sm mr-1">{headerSelections.rewardType === 'money' ? '¥' : ''}</span>
-                      {(readonly && !approverMode) ? (
-                        <span className="bg-transparent text-sm text-white font-medium">{headerSelections.bonus || '0'}</span>
-                      ) : (
-                        <input 
-                          type="number"
-                          value={headerSelections.bonus}
-                          onChange={e => setHeaderSelections({...headerSelections, bonus: e.target.value})}
-                          className="bg-transparent text-sm text-center text-white outline-none w-16 border-b border-transparent focus:border-white/30 font-medium placeholder:text-white/50 transition-colors"
-                          placeholder="0"
-                        />
-                      )}
-                      {headerSelections.rewardType === 'score' && <span className="text-white text-sm ml-1">分</span>}
+                  )}
+                  {/* 上限 */}
+                  {(type === 'pool_propose' || type === 'pool_publish') && (
+                    <div className="flex-none flex items-center bg-white/10 rounded-md px-2 py-1 border border-white/20 gap-1">
+                      <span className="text-[10px] font-black text-white/70 uppercase">限</span>
+                      <span className="text-xs text-white font-semibold">{headerSelections.maxParticipants || '5'}人</span>
                     </div>
-                  </div>
-                )}
-
-                {/* 参与人数上限 */}
-                {(type === 'pool_propose' || type === 'pool_publish') && (
-                  <div className="flex items-center bg-white/10 rounded-md px-3 py-1.5 border border-white/20 transition-colors">
-                    <span className="text-[11px] font-black text-white/70 mr-2 tracking-wider uppercase">上限</span>
-                    {(readonly && !approverMode) ? (
-                      <span className="text-sm text-white font-medium">{headerSelections.maxParticipants || '5'}人</span>
-                    ) : (
-                      <div className="flex items-center">
-                        <input 
-                          type="number"
-                          value={headerSelections.maxParticipants}
-                          onChange={e => setHeaderSelections({...headerSelections, maxParticipants: e.target.value})}
-                          className="bg-transparent text-sm text-center text-white outline-none w-10 border-b border-transparent focus:border-white/30 font-medium placeholder:text-white/50 transition-colors"
-                          placeholder="5"
-                          min="1"
-                          max="50"
-                        />
-                        <span className="text-white text-sm ml-0.5">人</span>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* 任务属性 Dropdown (custom styled) */}
-                <TaskTypeDropdown
-                  value={headerSelections.taskType}
-                  onChange={v => setHeaderSelections({...headerSelections, taskType: v})}
-                  readonly={readonly}
-                />
-
-                {/* 周期选择 */}
-                {!readonly ? (
-                  <div className="flex items-center bg-white/10 backdrop-blur-sm rounded-lg px-3.5 py-2 border border-white/20 hover:bg-white/20 transition-all">
-                    <span className="text-[11px] font-black text-white/70 mr-2 tracking-wider uppercase">周期</span>
-                    <select
-                      value={headerSelections.quarter}
-                      onChange={e => setHeaderSelections({...headerSelections, quarter: e.target.value})}
-                      className="bg-transparent text-sm text-white outline-none cursor-pointer font-semibold appearance-none pr-4"
-                      style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='white' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3E%3C/svg%3E")`, backgroundPosition: 'right 0 center', backgroundRepeat: 'no-repeat', backgroundSize: '16px' }}
-                    >
-                      <option value="" style={{color:'#333'}}>不限</option>
-                      <optgroup label="季度" style={{color:'#333'}}>
-                        {(() => { const y = new Date().getFullYear(); return [1,2,3,4].map(q => <option key={`q${q}`} value={`${y} Q${q}`} style={{color:'#333'}}>{y} Q{q}</option>); })()}
-                      </optgroup>
-                      <optgroup label="月度" style={{color:'#333'}}>
-                        {(() => { const y = new Date().getFullYear(); return Array.from({length:12},(_,i)=>i+1).map(m => <option key={`m${m}`} value={`${y}-${String(m).padStart(2,'0')}`} style={{color:'#333'}}>{y}-{String(m).padStart(2,'0')}</option>); })()}
-                      </optgroup>
-                    </select>
-                  </div>
-                ) : headerSelections.quarter ? (
-                  <div className="flex items-center bg-white/10 backdrop-blur-sm rounded-lg px-3.5 py-2 border border-white/20">
-                    <span className="text-[11px] font-black text-white/70 mr-2 tracking-wider uppercase">周期</span>
-                    <span className="text-sm text-white font-semibold">{headerSelections.quarter}</span>
-                  </div>
-                ) : null}
+                  )}
+                  {/* 周期 */}
+                  {headerSelections.quarter && (
+                    <div className="flex-none flex items-center bg-white/10 rounded-md px-2 py-1 border border-white/20 gap-1">
+                      <span className="text-[10px] font-black text-white/70 uppercase">期</span>
+                      <span className="text-xs text-white font-semibold">{headerSelections.quarter}</span>
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
+            ) : (
+              /* ── 桌面端：原有展开式 Dropdowns ── */
+              <div className="bg-[#005ea4] p-4 sm:px-6 text-white shrink-0">
+                <div className="flex flex-wrap items-center gap-3">
+                  {type !== 'pool_propose' && (
+                    <>
+                    <MultiSelectUserDropdown
+                      label="R 执行人"
+                      value={headerSelections.r}
+                      onChange={v => setHeaderSelections({...headerSelections, r: v})}
+                      users={users}
+                      placeholder="选择执行人"
+                      readonly={readonly}
+                    />
+                    <SearchableUserDropdown
+                      label="A 负责/验收人"
+                      value={headerSelections.a}
+                      onChange={v => setHeaderSelections({...headerSelections, a: v})}
+                      users={users}
+                      placeholder="选择负责/验收人"
+                      readonly={readonly || title === '申请新任务' || type === 'personal'}
+                    />
+                    <MultiSelectUserDropdown
+                      label="C 咨询人"
+                      value={headerSelections.c}
+                      onChange={v => setHeaderSelections({...headerSelections, c: v})}
+                      users={users}
+                      placeholder="选择咨询人"
+                      readonly={readonly}
+                    />
+                    <MultiSelectUserDropdown
+                      label="I 知情人"
+                      value={headerSelections.i}
+                      onChange={v => setHeaderSelections({...headerSelections, i: v})}
+                      users={users}
+                      placeholder="选择知情人"
+                      readonly={readonly}
+                    />
+                    </>
+                  )}
 
+                  {/* 奖励机制 (奖金/积分) Dropdown & Input */}
+                  {(type === 'pool_propose' || type === 'pool_publish' || type === 'team') && (
+                    <div className="flex items-center bg-white/10 rounded-md px-3 py-1.5 border border-white/20 transition-colors">
+                      <div className="relative flex items-center mr-2">
+                        {(readonly && !approverMode) ? (
+                          <span className="bg-transparent text-sm font-bold text-white/90 pr-2">
+                            {headerSelections.rewardType === 'money' ? '专项奖金' : '绩效分数'}
+                          </span>
+                        ) : (
+                          <>
+                            <select
+                              value={headerSelections.rewardType}
+                              onChange={e => setHeaderSelections({...headerSelections, rewardType: e.target.value as 'money' | 'score'})}
+                              className="bg-transparent text-sm font-bold text-white/90 outline-none cursor-pointer appearance-none pr-5 focus:text-white"
+                            >
+                              <option value="money" className="text-gray-900">专项奖金</option>
+                              <option value="score" className="text-gray-900">绩效分数</option>
+                            </select>
+                            <ChevronDown size={14} className="text-white/70 absolute right-0 pointer-events-none" />
+                          </>
+                        )}
+                      </div>
+                      <div className="relative flex items-center">
+                        <span className="text-white text-sm mr-1">{headerSelections.rewardType === 'money' ? '¥' : ''}</span>
+                        {(readonly && !approverMode) ? (
+                          <span className="bg-transparent text-sm text-white font-medium">{headerSelections.bonus || '0'}</span>
+                        ) : (
+                          <input
+                            type="number"
+                            value={headerSelections.bonus}
+                            onChange={e => setHeaderSelections({...headerSelections, bonus: e.target.value})}
+                            className="bg-transparent text-sm text-center text-white outline-none w-16 border-b border-transparent focus:border-white/30 font-medium placeholder:text-white/50 transition-colors"
+                            placeholder="0"
+                          />
+                        )}
+                        {headerSelections.rewardType === 'score' && <span className="text-white text-sm ml-1">分</span>}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 参与人数上限 */}
+                  {(type === 'pool_propose' || type === 'pool_publish') && (
+                    <div className="flex items-center bg-white/10 rounded-md px-3 py-1.5 border border-white/20 transition-colors">
+                      <span className="text-[11px] font-black text-white/70 mr-2 tracking-wider uppercase">上限</span>
+                      {(readonly && !approverMode) ? (
+                        <span className="text-sm text-white font-medium">{headerSelections.maxParticipants || '5'}人</span>
+                      ) : (
+                        <div className="flex items-center">
+                          <input
+                            type="number"
+                            value={headerSelections.maxParticipants}
+                            onChange={e => setHeaderSelections({...headerSelections, maxParticipants: e.target.value})}
+                            className="bg-transparent text-sm text-center text-white outline-none w-10 border-b border-transparent focus:border-white/30 font-medium placeholder:text-white/50 transition-colors"
+                            placeholder="5"
+                            min="1"
+                            max="50"
+                          />
+                          <span className="text-white text-sm ml-0.5">人</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* 任务属性 Dropdown (custom styled) */}
+                  <TaskTypeDropdown
+                    value={headerSelections.taskType}
+                    onChange={v => setHeaderSelections({...headerSelections, taskType: v})}
+                    readonly={readonly}
+                  />
+
+                  {/* 周期选择 */}
+                  {!readonly ? (
+                    <div className="flex items-center bg-white/10 backdrop-blur-sm rounded-lg px-3.5 py-2 border border-white/20 hover:bg-white/20 transition-all">
+                      <span className="text-[11px] font-black text-white/70 mr-2 tracking-wider uppercase">周期</span>
+                      <select
+                        value={headerSelections.quarter}
+                        onChange={e => setHeaderSelections({...headerSelections, quarter: e.target.value})}
+                        className="bg-transparent text-sm text-white outline-none cursor-pointer font-semibold appearance-none pr-4"
+                        style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='white' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3E%3C/svg%3E")`, backgroundPosition: 'right 0 center', backgroundRepeat: 'no-repeat', backgroundSize: '16px' }}
+                      >
+                        <option value="" style={{color:'#333'}}>不限</option>
+                        <optgroup label="季度" style={{color:'#333'}}>
+                          {(() => { const y = new Date().getFullYear(); return [1,2,3,4].map(q => <option key={`q${q}`} value={`${y} Q${q}`} style={{color:'#333'}}>{y} Q{q}</option>); })()}
+                        </optgroup>
+                        <optgroup label="月度" style={{color:'#333'}}>
+                          {(() => { const y = new Date().getFullYear(); return Array.from({length:12},(_,i)=>i+1).map(m => <option key={`m${m}`} value={`${y}-${String(m).padStart(2,'0')}`} style={{color:'#333'}}>{y}-{String(m).padStart(2,'0')}</option>); })()}
+                        </optgroup>
+                      </select>
+                    </div>
+                  ) : headerSelections.quarter ? (
+                    <div className="flex items-center bg-white/10 backdrop-blur-sm rounded-lg px-3.5 py-2 border border-white/20">
+                      <span className="text-[11px] font-black text-white/70 mr-2 tracking-wider uppercase">周期</span>
+                      <span className="text-sm text-white font-semibold">{headerSelections.quarter}</span>
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            )}
             <div className="flex-1 overflow-y-auto p-4 sm:p-5 bg-[#f8f9fb]">
               <div className={`w-full ${approverMode ? 'max-w-5xl' : 'max-w-4xl'} mx-auto space-y-3`}>
                 
@@ -1190,7 +1287,7 @@ export default function SmartTaskModal({ isOpen, onClose, onSubmit, title, type,
                         transition={{ duration: 0.2 }}
                         className="px-4 pb-4"
                       >
-                        {!readonly && (
+                        {(!propReadonly || approverMode) && (
                           <div 
                             className="border border-dashed border-gray-300 rounded-lg p-5 flex flex-col items-center justify-center text-center bg-[#f8f9fb] hover:bg-gray-50 transition-colors cursor-pointer group"
                             onClick={() => document.getElementById('smart-task-file-input')?.click()}
@@ -1225,7 +1322,9 @@ export default function SmartTaskModal({ isOpen, onClose, onSubmit, title, type,
 
                         {formData.attachments.length > 0 && (
                           <div className="mt-3 space-y-2">
-                            {formData.attachments.map((file, idx) => (
+                            {formData.attachments.map((file, idx) => {
+                              const canDelete = file.is_new || (file.uploader_id === currentUser?.id && !propReadonly);
+                              return (
                               <div key={idx} className="flex items-center justify-between p-2.5 bg-white border border-gray-200 rounded-md shadow-sm hover:border-blue-300 transition-colors">
                                 <a 
                                   href={file.url || '#'}
@@ -1239,10 +1338,14 @@ export default function SmartTaskModal({ isOpen, onClose, onSubmit, title, type,
                                   </div>
                                   <div className="min-w-0">
                                     <p className={`text-xs font-bold truncate ${file.url ? 'text-blue-700 hover:underline' : 'text-gray-900'}`}>{file.name}</p>
-                                    <p className="text-[10px] text-gray-500">{file.size}{file.url ? ' · 点击下载' : ''}</p>
+                                    <p className="text-[10px] text-gray-500">
+                                      {file.size}
+                                      {file.uploader_name && ` ·由 ${file.uploader_name} 上传`}
+                                      {file.url ? ' · 点击下载' : ''}
+                                    </p>
                                   </div>
                                 </a>
-                                {!readonly && (
+                                {canDelete && (
                                   <button 
                                     onClick={() => {
                                       const newAttachments = [...formData.attachments];
@@ -1255,7 +1358,7 @@ export default function SmartTaskModal({ isOpen, onClose, onSubmit, title, type,
                                   </button>
                                 )}
                               </div>
-                            ))}
+                            );})}
                           </div>
                         )}
                       </motion.div>
@@ -1265,209 +1368,10 @@ export default function SmartTaskModal({ isOpen, onClose, onSubmit, title, type,
               </div>
             </div>
             
-            {/* Detail Logs Approval Path */}
+            {/* Detail Logs Approval Path — compact */}
             {initialData?.id && (
-              <div className="px-5 py-4 bg-slate-50 border-t border-slate-200 shrink-0 mx-4 mb-4 rounded-xl border">
-                <h4 className="text-[11px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1 mb-3">
-                  <span className="material-symbols-outlined text-[14px]">route</span>
-                  审批路径节点
-                  <span className="text-[10px] font-mono text-slate-400 ml-1">
-                    {codePrefix}-{String(initialData.id).padStart(6, '0')}
-                  </span>
-                </h4>
-                <div className="flex flex-wrap items-center gap-2 text-[12px]">
-                  {(() => {
-                    const allLogs = initialData?.logs || fetchedLogs;
-                    const statusLogs = allLogs.filter((log: any) => log.action !== 'progress_update');
-                    const progressLogs = allLogs.filter((log: any) => log.action === 'progress_update');
-                    const latestProgress = progressLogs.length > 0 ? progressLogs[progressLogs.length - 1] : null;
-
-                    // 把 action 转为友好标签
-                    const actionLabel = (log: any) => {
-                      const isReject = log.new_value === 'rejected' || log.action === 'reject';
-                      const isApprove = log.new_value === 'approved' || log.action === 'approve';
-                      const isWithdraw = log.action === 'withdraw';
-                      const isReturn = log.new_value === 'returned' || log.action === 'return';
-                      if (log.action === 'pending' || log.action === 'future') return log.new_value;
-                      if (log.action === 'submit') return '发起申请';
-                      if (log.action === 'resubmit') return '重新提交';
-                      if (isWithdraw) return '已撤回';
-                      if (isReject) return '已驳回';
-                      if (isApprove) return '已通过';
-                      if (isReturn) return '已退回';
-                      if (log.action === 'status_change') {
-                        const v = log.new_value;
-                        if (v === 'pending_review') return '发起申请';
-                        if (v === 'in_progress') return '已通过';
-                        if (v === 'rejected') return '已驳回';
-                        if (v === 'returned') return '已退回';
-                        if (v === 'assessed') return '已评分';
-                        if (v === 'completed') return '已完成';
-                        return '状态变更';
-                      }
-                      return log.action || '审阅中';
-                    };
-
-                    const actionStyle = (log: any) => {
-                      const isReject = log.new_value === 'rejected' || log.action === 'reject';
-                      const isApprove = log.new_value === 'approved' || log.action === 'approve' || log.new_value === 'in_progress';
-                      const isWithdraw = log.action === 'withdraw';
-                      const isReturn = log.new_value === 'returned' || log.action === 'return';
-                      if (log.action === 'future') return 'bg-amber-50 border-amber-300 border-dashed text-amber-600';
-                      if (log.action === 'pending') return 'bg-blue-50 border-blue-300 text-blue-600 shadow-sm shadow-blue-100 animate-pulse';
-                      if (isReject) return 'bg-red-50 border-red-100 text-red-700';
-                      if (isReturn) return 'bg-orange-50 border-orange-100 text-orange-700';
-                      if (isApprove) return 'bg-emerald-50 border-emerald-100 text-emerald-700';
-                      if (isWithdraw) return 'bg-amber-50 border-amber-100 text-amber-700';
-                      return 'bg-white border-slate-200 text-slate-700 shadow-sm';
-                    };
-
-                    // 解析 approver 名称
-                    const approverName = (initialData as any).approver_name 
-                      || ((initialData as any).approver_id ? (users.find(u => u.id === (initialData as any).approver_id)?.name || (initialData as any).approver_id) : null);
-                    // 解析 assignee 名称
-                    const assigneeName = (initialData as any).assignee_name 
-                      || ((initialData as any).assignee_id ? (users.find(u => u.id === (initialData as any).assignee_id)?.name || (initialData as any).assignee_id) : null);
-                    // 解析 creator 名称
-                    const creatorName = (initialData as any).creator_name 
-                      || ((initialData as any).creator_id ? (users.find(u => u.id === (initialData as any).creator_id)?.name || (initialData as any).creator_id) : null);
-
-                    // 构建完整流程节点
-                    const currentStatus = initialData.status || 'draft';
-                    const flowSteps: { role?: string; name: string; label: string; style: string; future?: boolean }[] = [];
-
-                    if (statusLogs.length > 0) {
-                      // 已有日志 → 显示历史节点
-                      statusLogs.forEach((log: any) => {
-                        let stepRole = log.role;
-                        if (!stepRole && log.user_id) {
-                          const uInfo = users.find(u => u.id === log.user_id);
-                          if (uInfo) {
-                             if (log.action === 'submit') stepRole = '发起人';
-                             else if (uInfo.role === 'admin') stepRole = '总经理';
-                             else if (uInfo.role === 'hr') stepRole = '人事专员';
-                             else if (uInfo.role === 'supervisor') stepRole = '部门负责人';
-                             else stepRole = uInfo.position || '员工';
-                          }
-                        }
-                        if (!stepRole && log.action === 'submit') stepRole = '发起人';
-                        if (!stepRole) stepRole = '节点处理人';
-
-                        flowSteps.push({
-                          role: stepRole,
-                          name: log.user_name || (log.user_id ? (users.find(u => u.id === log.user_id)?.name || log.user_id) : ''),
-                          label: actionLabel(log),
-                          style: actionStyle(log)
-                        });
-                      });
-                      // 进度汇总
-                      if (latestProgress) {
-                        flowSteps.push({
-                          role: '更新人',
-                          name: latestProgress.user_name || latestProgress.user_id,
-                          label: `进度${latestProgress.new_value}% (${progressLogs.length}次更新)`,
-                          style: 'bg-blue-50 border-blue-100 text-blue-700'
-                        });
-                      }
-                    } else {
-                      // 无日志（草稿）→ 显示创建人节点
-                      flowSteps.push({
-                        role: '发起人',
-                        name: creatorName || '创建人',
-                        label: currentStatus === 'draft' ? '草稿' : '已创建',
-                        style: 'bg-slate-100 border-slate-200 text-slate-500'
-                      });
-                    }
-
-                    // 根据当前状态添加未来节点
-                    const futureSteps: { role: string; name: string; label: string; isError?: boolean }[] = [];
-                    const hrUsers = users.filter(u => u.role === 'hr').map(u => u.name).join(' 或 ') || '缺失';
-                    const adminUsers = users.filter(u => u.role === 'admin' || (u as any).is_super_admin).map(u => u.name).join(' 或 ') || '缺失';
-
-                    if (type === 'personal' || type === 'team') {
-                      const finalNodeName = assigneeName || creatorName || '';
-                      
-                      // In draft and pending_review, dept_head_id is not yet stamped by the backend. It will be determined at routing time.
-                      const deptHeadDraftName = initialData.dept_head_id ? (users.find(u => u.id === initialData.dept_head_id)?.name || '异常') : '待流转匹配';
-                      const deptHeadActualName = initialData.dept_head_id ? (users.find(u => u.id === initialData.dept_head_id)?.name || '异常') : '缺失';
-
-                      if (currentStatus === 'draft') {
-                        futureSteps.push({ role: '直属上级', name: approverName || '缺失', label: '待一审', isError: !approverName || approverName === '缺失' });
-                        futureSteps.push({ role: '负责领导', name: deptHeadDraftName, label: '待二审', isError: deptHeadDraftName === '异常' });
-                        futureSteps.push({ role: '人事专员', name: hrUsers, label: '抄送人事', isError: hrUsers === '缺失' });
-                        futureSteps.push({ role: '执行人', name: finalNodeName, label: '待执行', isError: !finalNodeName });
-                      } else if (currentStatus === 'pending_review') {
-                        futureSteps.push({ role: '直属上级', name: approverName || '缺失', label: '待一审', isError: !approverName || approverName === '缺失' });
-                        futureSteps.push({ role: '负责领导', name: deptHeadDraftName, label: '待二审', isError: deptHeadDraftName === '异常' });
-                        futureSteps.push({ role: '人事专员', name: hrUsers, label: '抄送人事', isError: hrUsers === '缺失' });
-                        futureSteps.push({ role: '执行人', name: finalNodeName, label: '待执行', isError: !finalNodeName });
-                      } else if (currentStatus === 'pending_dept_review') {
-                        futureSteps.push({ role: '负责领导', name: deptHeadActualName, label: '待二审', isError: deptHeadActualName === '缺失' || deptHeadActualName === '异常' });
-                        futureSteps.push({ role: '人事专员', name: hrUsers, label: '抄送人事', isError: hrUsers === '缺失' });
-                        futureSteps.push({ role: '执行人', name: finalNodeName, label: '待执行', isError: !finalNodeName });
-                      } else if (currentStatus === 'in_progress') {
-                        futureSteps.push({ role: '直属上级', name: approverName || '缺失', label: '待考核', isError: !approverName || approverName === '缺失' });
-                      } else if (currentStatus === 'pending_assessment') {
-                        futureSteps.push({ role: '直属上级', name: approverName || '缺失', label: '待评分', isError: !approverName || approverName === '缺失' });
-                      } else if (currentStatus === 'assessed') {
-                        futureSteps.push({ role: '人事专员', name: hrUsers, label: '待发放奖励', isError: hrUsers === '缺失' });
-                      }
-                    } else if (resolvedFlowType !== 'proposal') {
-                      // 非提案类型的其他流程才添加 futureSteps
-                      // 提案类型的流程路径已在合成日志中完整生成（发起人→人事初审→总经理复核）
-                      if (currentStatus === 'draft') {
-                        futureSteps.push({ role: '人事考评', name: hrUsers, label: '待初始核准', isError: hrUsers === '缺失' });
-                        futureSteps.push({ role: '总经理', name: adminUsers, label: '待终审批复', isError: adminUsers === '缺失' });
-                      } else if (currentStatus === 'pending_hr') {
-                        futureSteps.push({ role: '人事考评', name: hrUsers, label: '待初始核准', isError: hrUsers === '缺失' });
-                        futureSteps.push({ role: '总经理', name: adminUsers, label: '待终审批复', isError: adminUsers === '缺失' });
-                      } else if (currentStatus === 'pending_admin') {
-                        futureSteps.push({ role: '总经理', name: adminUsers, label: '待终审批复', isError: adminUsers === '缺失' });
-                      }
-                    }
-
-                    const hasMissingNodes = futureSteps.some(s => s.isError);
-
-                    return (
-                      <>
-                        {flowSteps.map((step, i) => (
-                          <React.Fragment key={`log-${i}`}>
-                            <div className={`flex flex-col rounded-lg px-3 py-1.5 border min-w-[70px] ${step.style}`}>
-                              <span className="text-[10px] opacity-60 mb-[2px]">{step.role}</span>
-                              <span className="font-bold leading-tight">{step.name || '-'}</span>
-                              <span className="text-[10px] opacity-80 mt-1">{step.label}</span>
-                            </div>
-                            {(i < flowSteps.length - 1 || futureSteps.length > 0) && (
-                              <span className="material-symbols-outlined text-[16px] text-slate-300">arrow_right_alt</span>
-                            )}
-                          </React.Fragment>
-                        ))}
-                        {futureSteps.map((step, i) => (
-                          <React.Fragment key={`future-${i}`}>
-                            <div className={`flex flex-col rounded-lg px-3 py-1.5 border min-w-[70px] ${step.isError ? 'border-red-300 bg-red-50 text-red-600 border-dashed' : 'border-dashed border-amber-300 bg-amber-50 text-amber-600'}`}>
-                              <span className="text-[10px] opacity-60 mb-[2px]">{step.role}</span>
-                              <span className="font-bold leading-tight">{step.name || '-'}</span>
-                              <span className="text-[10px] opacity-80 mt-1">{step.label}</span>
-                            </div>
-                            {i < futureSteps.length - 1 && (
-                              <span className="material-symbols-outlined text-[16px] text-slate-300">arrow_right_alt</span>
-                            )}
-                          </React.Fragment>
-                        ))}
-                        
-                        {hasMissingNodes && (
-                          <div className="ml-3 flex items-center gap-1.5 px-3 py-1.5 bg-red-50 border border-red-200 text-red-600 rounded-lg animate-pulse">
-                            <span className="material-symbols-outlined text-[14px]">error</span>
-                            <span className="text-xs font-bold">流程未生效或断裂，请联系人事配置节点人员</span>
-                          </div>
-                        )}
-                      </>
-                    );
-                  })()}
-                </div>
-              </div>
+              <WorkflowTrajectory businessType={resolvedFlowType as any} businessId={initialData.id} codePrefix={codePrefix} />
             )}
-
         {/* Original Footer */}
         {!approverMode && (
           <div className="p-4 sm:px-5 sm:py-3 bg-white border-t border-gray-200 flex items-center justify-end gap-2.5 shrink-0 z-20 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">

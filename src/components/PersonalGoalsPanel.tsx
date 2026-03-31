@@ -228,8 +228,8 @@ export default function PersonalGoalsPanel() {
           {/* Three Category Progress Bars */}
           {(() => {
             // 分类：季度 / 月度 / 专项
-            const quarterly = plans.filter(p => p.quarter && !p.category?.includes('专项') && !p.category?.includes('公坚'));
-            const monthly = plans.filter(p => !p.quarter && !p.category?.includes('专项') && !p.category?.includes('公坚'));
+            const quarterly = plans.filter(p => p.quarter?.includes('Q') && !p.category?.includes('专项') && !p.category?.includes('公坚'));
+            const monthly = plans.filter(p => (!p.quarter || p.quarter.includes('-')) && !p.category?.includes('专项') && !p.category?.includes('公坚'));
             const special = plans.filter(p => p.category?.includes('专项') || p.category?.includes('公坚'));
             const calcPct = (arr: typeof plans) => arr.length > 0 ? Math.round(arr.reduce((a, p) => a + (p.progress || 0), 0) / arr.length) : 0;
             const bars = [
@@ -379,7 +379,7 @@ export default function PersonalGoalsPanel() {
                               <div className="w-full h-3 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
                                 <div data-pct-bar={plan.id} className="h-full rounded-full transition-all duration-300" style={{ width: `${pct}%`, backgroundColor: barColor }} />
                               </div>
-                              {plan.status === 'in_progress' && (
+                              {plan.status === 'in_progress' && !(plan as any).is_pool && (
                                 <input type="range" min="0" max="100" defaultValue={pct}
                                   className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                                   onInput={e => {
@@ -648,7 +648,7 @@ export default function PersonalGoalsPanel() {
                     <div className="w-full h-3 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
                       <div data-pct-bar={`modal-${sp.id}`} className="h-full rounded-full transition-all duration-300" style={{ width: `${pct}%`, backgroundColor: accentColor }} />
                     </div>
-                    {sp.status === 'in_progress' && (
+                    {sp.status === 'in_progress' && !(sp as any).is_pool && (
                       <input type="range" min="0" max="100" defaultValue={pct}
                         className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                         onInput={e => {
@@ -696,8 +696,8 @@ export default function PersonalGoalsPanel() {
                       修改后重新提交
                     </button>
                   )}
-                  {/* 进行中 + 上级下发的 → 退回按钮 */}
-                  {sp.status === 'in_progress' && isAssigned && (
+                  {/* 进行中 + 上级下发的 + 非只读 → 退回按钮 */}
+                  {sp.status === 'in_progress' && isAssigned && !(sp as any).is_pool && (
                     <button onClick={handleReturn}
                       className="flex items-center gap-1.5 px-4 py-2.5 bg-orange-50 text-orange-600 text-sm font-bold rounded-lg border border-orange-200 hover:bg-orange-100 transition-colors">
                       <span className="material-symbols-outlined text-[16px]">reply</span>

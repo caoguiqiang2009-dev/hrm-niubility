@@ -1,0 +1,1082 @@
+{
+  "users": [
+    {
+      "id": "CaoGuiQiang",
+      "name": "曹贵强",
+      "role": "admin",
+      "title": "总经理"
+    },
+    {
+      "id": "LinSen",
+      "name": "林森（个人号）",
+      "role": "manager",
+      "title": "直播间设计师"
+    },
+    {
+      "id": "530",
+      "name": "麦志恒",
+      "role": "manager",
+      "title": "直播间设计师"
+    },
+    {
+      "id": "YiXiSheJiShi-LongLong",
+      "name": "易希设计师",
+      "role": "employee",
+      "title": "直播间设计师"
+    },
+    {
+      "id": "WangShanEr",
+      "name": "梁高瑞（个人号）",
+      "role": "employee",
+      "title": "直播间设计师"
+    },
+    {
+      "id": "WangYuKun01",
+      "name": "王雨堃",
+      "role": "employee",
+      "title": "直播间设计师"
+    },
+    {
+      "id": "LingXiaoHuiGongZuoHao",
+      "name": "凌晓辉",
+      "role": "employee",
+      "title": "直播间设计师"
+    },
+    {
+      "id": "XuBoSheng",
+      "name": "许博盛（个人号）",
+      "role": "employee",
+      "title": "直播间设计师"
+    },
+    {
+      "id": "378b10475a7d0bf9596b1e61a5ed846c",
+      "name": "徐子健",
+      "role": "employee",
+      "title": "直播间设计师"
+    },
+    {
+      "id": "LingXiaoHui",
+      "name": "凌晓辉（个人号）",
+      "role": "employee",
+      "title": "直播间设计师"
+    },
+    {
+      "id": "YiXiSheJiShi-ZhiHeng",
+      "name": "易希设计师-志恒（个人号）",
+      "role": "employee",
+      "title": "直播间设计师"
+    },
+    {
+      "id": "YiXiSheJiShi-ZhangHeng",
+      "name": "张恒",
+      "role": "employee",
+      "title": "直播间设计师"
+    },
+    {
+      "id": "YiXiSheJiShi-HuYang",
+      "name": "刘斌",
+      "role": "employee",
+      "title": "直播间设计师"
+    },
+    {
+      "id": "YiXiSheJiShi-WenDai",
+      "name": "麦文岱",
+      "role": "manager",
+      "title": "直播间设计师"
+    },
+    {
+      "id": "o.o",
+      "name": "麦文岱（个人号）",
+      "role": "employee",
+      "title": "直播间设计师"
+    },
+    {
+      "id": "YiXiSheJiShiGaoRui",
+      "name": "梁高瑞",
+      "role": "employee",
+      "title": "直播间设计师"
+    },
+    {
+      "id": "WangYuKun",
+      "name": "王雨堃（个人号）",
+      "role": "employee",
+      "title": "直播间设计师"
+    },
+    {
+      "id": "XuBoShengGongZuoHao",
+      "name": "许博盛",
+      "role": "employee",
+      "title": "直播间设计师"
+    },
+    {
+      "id": "LuoSongLin",
+      "name": "罗松霖",
+      "role": "employee",
+      "title": "直播间设计师"
+    },
+    {
+      "id": "LiuBin",
+      "name": "刘斌",
+      "role": "employee",
+      "title": "直播间设计师"
+    },
+    {
+      "id": "Gen",
+      "name": "张恒",
+      "role": "employee",
+      "title": "直播间设计师"
+    },
+    {
+      "id": "YiXiSheYing-ZiJian",
+      "name": "徐子健",
+      "role": "employee",
+      "title": "直播间设计师"
+    },
+    {
+      "id": "LiTianSheng",
+      "name": "李天生",
+      "role": "employee",
+      "title": "直播间设计师"
+    },
+    {
+      "id": "YiXiSheJiShi--YuanYu",
+      "name": "袁煜",
+      "role": "manager",
+      "title": "直播间设计师"
+    },
+    {
+      "id": "859b9249502eba7122a70294d9404b4f",
+      "name": "袁煜(直播间搭建)",
+      "role": "manager",
+      "title": "直播间设计师"
+    },
+    {
+      "id": "YiXiSheJiShi-LinSen",
+      "name": "林森",
+      "role": "manager",
+      "title": "直播间设计师"
+    },
+    {
+      "id": "999f37ea-0e1b-48cd-b484-204e9d3ccc34",
+      "name": "劳鹏程",
+      "role": "employee",
+      "title": "直播间设计师"
+    },
+    {
+      "id": "f1a78c90-969b-4a9d-9a48-ef3b3f987fce",
+      "name": "刘子仪",
+      "role": "employee",
+      "title": "直播间设计师"
+    },
+    {
+      "id": "a61f5696-6b37-43a0-895c-a95fb04a55b6",
+      "name": "黄万周",
+      "role": "employee",
+      "title": "直播间设计师"
+    },
+    {
+      "id": "5a718797-f475-4b6b-8dfc-d67b90647e62",
+      "name": "刘宇",
+      "role": "employee",
+      "title": "直播间设计师"
+    },
+    {
+      "id": "8b3edf61-569e-42ef-85ba-8ecd59e3d9be",
+      "name": "廖良帅",
+      "role": "employee",
+      "title": "直播间设计师"
+    },
+    {
+      "id": "e91d37e4-c2b1-48f4-b28d-221de0e11439",
+      "name": "邓兆聪",
+      "role": "employee",
+      "title": "直播间设计师"
+    },
+    {
+      "id": "b54f1dbb-a27e-4664-b992-8d6141763a60",
+      "name": "孔维一",
+      "role": "employee",
+      "title": "直播间设计师"
+    },
+    {
+      "id": "80330d7d-3a03-46e4-b90e-f37b9f6b292e",
+      "name": "冯超（个人号）",
+      "role": "employee",
+      "title": "直播间设计师"
+    },
+    {
+      "id": "LiuYuGongZuoHao",
+      "name": "刘宇",
+      "role": "employee",
+      "title": "直播间设计师"
+    },
+    {
+      "id": "LiaoLiangShuai",
+      "name": "廖良帅",
+      "role": "employee",
+      "title": "直播间设计师"
+    },
+    {
+      "id": "FengChao",
+      "name": "冯超",
+      "role": "employee",
+      "title": "直播间设计师"
+    },
+    {
+      "id": "HuangWanZhou",
+      "name": "黄万周",
+      "role": "employee",
+      "title": "直播间设计师"
+    },
+    {
+      "id": "FuSheng",
+      "name": "吕柏弦",
+      "role": "employee",
+      "title": ""
+    },
+    {
+      "id": "YiXiJiShuGuWen-XiaoXi",
+      "name": "技术顾问-小希",
+      "role": "employee",
+      "title": ""
+    },
+    {
+      "id": "LiangJingJingGongZuoHao",
+      "name": "梁晶晶",
+      "role": "employee",
+      "title": "直播间设计师"
+    },
+    {
+      "id": "YiXiShouHouGuWen-XiaoXianZhouRiX",
+      "name": "易希售后顾问-小弦（周日休息）",
+      "role": "employee",
+      "title": "直播间设计师"
+    },
+    {
+      "id": "HuaHaoYueYuan",
+      "name": "蒋中和",
+      "role": "manager",
+      "title": "直播间设计师"
+    },
+    {
+      "id": "YiXiSheJiShi-Jun",
+      "name": "易希售后顾问-易",
+      "role": "employee",
+      "title": "直播间设计师"
+    },
+    {
+      "id": "YiXiSheJiShi-MuZi",
+      "name": "李军",
+      "role": "employee",
+      "title": "直播间设计师"
+    },
+    {
+      "id": "YiXiShouHouGuWen-XiaoYi",
+      "name": "易希售后顾问-小易",
+      "role": "employee",
+      "title": "直播间设计师"
+    },
+    {
+      "id": "LuoJiaYun01",
+      "name": "罗嘉韵",
+      "role": "employee",
+      "title": "直播间设计师"
+    },
+    {
+      "id": "YueWu-",
+      "name": "王雨露(个人号)",
+      "role": "employee",
+      "title": "直播间设计师"
+    },
+    {
+      "id": "MaiLaJiTuiBao",
+      "name": "李军（个人号）",
+      "role": "employee",
+      "title": "直播间设计师"
+    },
+    {
+      "id": "HuaChenYueXi",
+      "name": "蒋中和（个人号）",
+      "role": "employee",
+      "title": "直播间设计师"
+    },
+    {
+      "id": "LiangJingJing",
+      "name": "梁晶晶（个人号）",
+      "role": "employee",
+      "title": "直播间设计师"
+    },
+    {
+      "id": "LuoJiaYun",
+      "name": "罗嘉韵",
+      "role": "employee",
+      "title": "直播间设计师"
+    },
+    {
+      "id": "184949d7-dcfc-482c-a734-fa3685bb38e6",
+      "name": "黄志沣",
+      "role": "employee",
+      "title": "直播间设计师"
+    },
+    {
+      "id": "YueJiaLiang",
+      "name": "乐加亮",
+      "role": "employee",
+      "title": "入库管理专员"
+    },
+    {
+      "id": "LiuHaiLiu01",
+      "name": "易希退货支持-小刘",
+      "role": "employee",
+      "title": ""
+    },
+    {
+      "id": "GeLong",
+      "name": "曹小龙",
+      "role": "employee",
+      "title": "供应链专员"
+    },
+    {
+      "id": "XuJie",
+      "name": "徐杰",
+      "role": "employee",
+      "title": "入库管理专员"
+    },
+    {
+      "id": "jiyihongtan",
+      "name": "黄宏潭",
+      "role": "employee",
+      "title": ""
+    },
+    {
+      "id": "GuJie",
+      "name": "王超（古街）",
+      "role": "employee",
+      "title": "出库管理专员"
+    },
+    {
+      "id": "HuangHongTan",
+      "name": "黄宏潭（工作号）",
+      "role": "manager",
+      "title": "仓储主管"
+    },
+    {
+      "id": "25e4d0f3-82da-41b0-aa98-a843a2f67a84",
+      "name": "汪毅",
+      "role": "employee",
+      "title": "出库管理专员"
+    },
+    {
+      "id": "59e83857-3c63-453e-b092-944b1e10cceb",
+      "name": "刘楠",
+      "role": "employee",
+      "title": "入库管理专员"
+    },
+    {
+      "id": "8df658a3-281d-4778-841a-50467b0400d1",
+      "name": "曹育弗",
+      "role": "employee",
+      "title": "入库管理专员"
+    },
+    {
+      "id": "93b0e984-b710-4f01-9e96-c188e2425943",
+      "name": "李金泉",
+      "role": "manager",
+      "title": "供应链主管"
+    },
+    {
+      "id": "a138f24b-b252-49ed-8cf5-abdcfc81634a",
+      "name": "佘检峰",
+      "role": "employee",
+      "title": "数据分析师"
+    },
+    {
+      "id": "235767fa-cb4d-471c-b846-9de8278541e4",
+      "name": "谢晓东",
+      "role": "employee",
+      "title": "营销策划"
+    },
+    {
+      "id": "0b273bcca48cbb893dafbd8df1820f1f",
+      "name": "陈妙玲",
+      "role": "manager",
+      "title": "商务主管"
+    },
+    {
+      "id": "YiXiSheJiShiXiaoMiao",
+      "name": "陈妙玲",
+      "role": "employee",
+      "title": "大客户商务经理"
+    },
+    {
+      "id": "YanWen",
+      "name": "晏稳",
+      "role": "employee",
+      "title": ""
+    },
+    {
+      "id": "ZhangXinHao",
+      "name": "张新好（个人号）",
+      "role": "employee",
+      "title": "商务经理"
+    },
+    {
+      "id": "YiXiDaKeHuJingLiLiZhi",
+      "name": "易希大客户经理 小钊",
+      "role": "employee",
+      "title": "商务经理"
+    },
+    {
+      "id": "YiXiShangWu-ChenYangLiuZhouRiXiu",
+      "name": "易希商务- 杨柳（周日休）",
+      "role": "employee",
+      "title": "商务经理"
+    },
+    {
+      "id": "e3224fbcc0da308ce3b76fad086650aa",
+      "name": "易希客户经理小居",
+      "role": "employee",
+      "title": "商务经理"
+    },
+    {
+      "id": "bf36700e-3587-457d-a856-22a4bb636140",
+      "name": "晏稳",
+      "role": "employee",
+      "title": "见习商务"
+    },
+    {
+      "id": "XinHao",
+      "name": "新好",
+      "role": "employee",
+      "title": "商务经理"
+    },
+    {
+      "id": "ad81580a-a5c1-4bd0-b39f-8a275217b385",
+      "name": "陈杨柳（个人号）",
+      "role": "employee",
+      "title": "商务经理"
+    },
+    {
+      "id": "cc45ca92-dd96-46f6-9215-e57d48b9f457",
+      "name": "李垚钊",
+      "role": "employee",
+      "title": "商务助理"
+    },
+    {
+      "id": "e2c7da8d-e8f7-4f33-91af-88b62cdee757",
+      "name": "张家怡（个人号）",
+      "role": "employee",
+      "title": "管培生"
+    },
+    {
+      "id": "ZhuYanYi",
+      "name": "小居",
+      "role": "employee",
+      "title": ""
+    },
+    {
+      "id": "YiXi-KeHuJingLi-LiLiZhouRiXiu",
+      "name": "易希客户经理（周日休）",
+      "role": "employee",
+      "title": "商务经理"
+    },
+    {
+      "id": "YiXiKeHuJingLiJiaYi",
+      "name": "易希客户经理－家怡",
+      "role": "employee",
+      "title": "商务经理"
+    },
+    {
+      "id": "YiXiKeHuJingLi-XiaoXieZhouRiXiu",
+      "name": "易希客户经理",
+      "role": "employee",
+      "title": ""
+    },
+    {
+      "id": "LiuHaiLiu",
+      "name": "刘海柳",
+      "role": "employee",
+      "title": "跟单专员"
+    },
+    {
+      "id": "3a9af306-8cc1-4a0f-91b8-63b492d795a2",
+      "name": "陈月萍",
+      "role": "employee",
+      "title": "跟单专员"
+    },
+    {
+      "id": "WuLiYin",
+      "name": "吴丽吟",
+      "role": "employee",
+      "title": "跟单专员"
+    },
+    {
+      "id": "LiYaoZhao",
+      "name": "李垚钊",
+      "role": "employee",
+      "title": ""
+    },
+    {
+      "id": "hui",
+      "name": "曹小惠",
+      "role": "manager",
+      "title": "电商主管"
+    },
+    {
+      "id": "wan",
+      "name": "陈小婉",
+      "role": "employee",
+      "title": "电商客服"
+    },
+    {
+      "id": "ZhaoCanJie",
+      "name": "赵灿杰",
+      "role": "employee",
+      "title": ""
+    },
+    {
+      "id": "bd3b337b-10b8-4bd6-b0a0-9ac8d8d4b1f4",
+      "name": "张家伟",
+      "role": "employee",
+      "title": "运营助理"
+    },
+    {
+      "id": "YiNing",
+      "name": "唐蓉",
+      "role": "hr",
+      "title": "人事行政专员"
+    },
+    {
+      "id": "ZhaoYun",
+      "name": "赵云",
+      "role": "hr",
+      "title": "人事行政助理"
+    },
+    {
+      "id": "NaiLuo",
+      "name": "Jayson 小泉",
+      "role": "employee",
+      "title": "直播间设计师"
+    },
+    {
+      "id": "MoJueWei",
+      "name": "莫爵威",
+      "role": "employee",
+      "title": ""
+    },
+    {
+      "id": "9bb47be2455afbda319bea2a89366535",
+      "name": "专业上门拆装~直播设备 小泉",
+      "role": "employee",
+      "title": ""
+    },
+    {
+      "id": "QiuJing",
+      "name": "邱璟",
+      "role": "employee",
+      "title": ""
+    },
+    {
+      "id": "LiJinJia",
+      "name": "李金佳",
+      "role": "employee",
+      "title": ""
+    },
+    {
+      "id": "CaoXiaoHua",
+      "name": "曹小华",
+      "role": "employee",
+      "title": ""
+    },
+    {
+      "id": "MaXiaoLi",
+      "name": "马小莉",
+      "role": "employee",
+      "title": ""
+    },
+    {
+      "id": "ZhiBoJianDaJianKeHuJingLi-FanXin",
+      "name": "曹繁兴",
+      "role": "employee",
+      "title": "客户经理"
+    },
+    {
+      "id": "ZhiBoSheBeiDaJian-YuFan",
+      "name": "曹嘉镇",
+      "role": "employee",
+      "title": "客户经理"
+    },
+    {
+      "id": "YiXi-KeHuJingLiYueYue",
+      "name": "曹亚伟",
+      "role": "employee",
+      "title": "客户经理"
+    },
+    {
+      "id": "YiXiKeHuJingLi-JiaJia",
+      "name": "郭诗婷",
+      "role": "employee",
+      "title": "客户经理"
+    },
+    {
+      "id": "LiuJieFeng01",
+      "name": "刘杰峰",
+      "role": "employee",
+      "title": "客户经理"
+    },
+    {
+      "id": "ZuBoJieKeHuJingLiQingYan",
+      "name": "龙华敏",
+      "role": "employee",
+      "title": "客户经理"
+    },
+    {
+      "id": "ZhiBoDaJianKeHuJingLi-YinYin",
+      "name": "曾晓银",
+      "role": "employee",
+      "title": "客户经理"
+    },
+    {
+      "id": "ZhiBoDaJianKeHuJingLi-FengShunZhouTianXiu",
+      "name": "谢腾（此号不用）",
+      "role": "employee",
+      "title": "客户经理"
+    },
+    {
+      "id": "ZhiBoJianDaJianKeHuJingLi-ChenXi",
+      "name": "陈小玄",
+      "role": "employee",
+      "title": "客户经理"
+    },
+    {
+      "id": "ZuBoJieDaKeHuJingLiXiXi",
+      "name": "邱嘉骏（直播间大客户经理-嘉骏）",
+      "role": "employee",
+      "title": "客户经理"
+    },
+    {
+      "id": "ZhiBoSheBeiDaJianYaoYaoZao10Wan8",
+      "name": "覃结兰",
+      "role": "employee",
+      "title": "客户经理"
+    },
+    {
+      "id": "YiXiDaKeHuJingLi-ShiGuang",
+      "name": "易希大客户经理-时光",
+      "role": "employee",
+      "title": "客户经理"
+    },
+    {
+      "id": "YiXiKeHuJingLi-YuFei",
+      "name": "李萍萍",
+      "role": "employee",
+      "title": "客户经理"
+    },
+    {
+      "id": "CaoJiaZhen",
+      "name": "曹嘉镇（个人号）",
+      "role": "employee",
+      "title": "客户经理"
+    },
+    {
+      "id": "ChenXiaoXuan",
+      "name": "陈小玄（个人号）",
+      "role": "employee",
+      "title": "客户经理"
+    },
+    {
+      "id": "BaoZi",
+      "name": "刘光岳（个人号）",
+      "role": "manager",
+      "title": "客户经理"
+    },
+    {
+      "id": "87825914d7e7431d4aef85c6f2e36e2c",
+      "name": "租播界大客户经理小佳(免押租相机)",
+      "role": "employee",
+      "title": "客户经理"
+    },
+    {
+      "id": "YiXiSheJiShi-XiaoYi",
+      "name": "刘光岳",
+      "role": "employee",
+      "title": "客户经理"
+    },
+    {
+      "id": "CaoYaWei",
+      "name": "曹亚伟（个人号）",
+      "role": "employee",
+      "title": "客户经理"
+    },
+    {
+      "id": "LongHuaMin",
+      "name": "龙华敏（个人号）",
+      "role": "employee",
+      "title": "客户经理"
+    },
+    {
+      "id": "TanJieLan",
+      "name": "覃结兰（个人号）",
+      "role": "employee",
+      "title": "客户经理"
+    },
+    {
+      "id": "QiuJiaJun",
+      "name": "邱嘉骏（个人号）",
+      "role": "employee",
+      "title": "客户经理"
+    },
+    {
+      "id": "ZengXiaoYin",
+      "name": "曾晓银（个人号）",
+      "role": "employee",
+      "title": "客户经理"
+    },
+    {
+      "id": "CaoFanXing",
+      "name": "曹繁兴(个人号)",
+      "role": "employee",
+      "title": "客户经理"
+    },
+    {
+      "id": "LiuJieFeng",
+      "name": "刘杰峰（个人号）",
+      "role": "employee",
+      "title": "客户经理"
+    },
+    {
+      "id": "beb293cd-c758-4704-abd8-da025a8fbe24",
+      "name": "李卿华",
+      "role": "employee",
+      "title": "客户经理"
+    },
+    {
+      "id": "c2acdf0e-5a83-4c9b-8170-eb17aa099d15",
+      "name": "谢腾",
+      "role": "employee",
+      "title": "客户经理"
+    },
+    {
+      "id": "8c18e11a-2aa5-41fb-8227-fe9be33a912f",
+      "name": "曾宣穆",
+      "role": "employee",
+      "title": "客户经理"
+    },
+    {
+      "id": "ZengXuanMu",
+      "name": "直播搭建客户经理-柒七",
+      "role": "employee",
+      "title": "客户经理"
+    },
+    {
+      "id": "ZhangWei",
+      "name": "张维",
+      "role": "employee",
+      "title": "客户经理"
+    },
+    {
+      "id": "63e073b8-daf1-4fd4-b76f-76cd961f7f50",
+      "name": "陈美燕",
+      "role": "employee",
+      "title": "客户经理"
+    },
+    {
+      "id": "40a2efdd-a72b-45b9-a3f7-ec98036293e0",
+      "name": "张维",
+      "role": "employee",
+      "title": "客户经理"
+    },
+    {
+      "id": "ChenMeiYan",
+      "name": "陈美燕",
+      "role": "employee",
+      "title": "客户经理"
+    },
+    {
+      "id": "YiXiZhiBoJianSheJiZongJian-ck",
+      "name": "邓博文",
+      "role": "manager",
+      "title": "主创"
+    },
+    {
+      "id": "Kaiconun",
+      "name": "易希主创设计师-CK(个人号)",
+      "role": "employee",
+      "title": "主创"
+    },
+    {
+      "id": "YiXiChangJingSheJiZongJian",
+      "name": "易希场景设计总监",
+      "role": "employee",
+      "title": ""
+    },
+    {
+      "id": "109fd0be-4e92-41b8-8257-da2f655fa94a",
+      "name": "易希主创-曾亮",
+      "role": "employee",
+      "title": "主创"
+    },
+    {
+      "id": "46cdb824-eda2-4d87-ade5-1588291b734c",
+      "name": "李子灵",
+      "role": "employee",
+      "title": "平面设计师"
+    },
+    {
+      "id": "YiXiSheJiShi-ZhuDaPei",
+      "name": "易希设计师-朱达培",
+      "role": "employee",
+      "title": "空间设计师"
+    },
+    {
+      "id": "ktelly",
+      "name": "陈活（个人号）",
+      "role": "employee",
+      "title": "空间设计师"
+    },
+    {
+      "id": "YiXiSheJiShi-ChenHuo",
+      "name": "易希设计师-陈活",
+      "role": "employee",
+      "title": ""
+    },
+    {
+      "id": "ChenYanFang",
+      "name": "陈炎芳（个人号）",
+      "role": "employee",
+      "title": "直播间设计师"
+    },
+    {
+      "id": "ChenXiaoDong",
+      "name": "陈晓东（个人号）",
+      "role": "employee",
+      "title": "直播间设计师"
+    },
+    {
+      "id": "ChenXiaoDong_1",
+      "name": "陈晓东",
+      "role": "manager",
+      "title": "直播间设计师"
+    },
+    {
+      "id": "ChenYu",
+      "name": "陈昱（个人号）",
+      "role": "employee",
+      "title": "直播间设计师"
+    },
+    {
+      "id": "ChenYu_1",
+      "name": "陈昱",
+      "role": "employee",
+      "title": "直播间设计师"
+    },
+    {
+      "id": "ChenYanFang_1",
+      "name": "陈炎芳",
+      "role": "employee",
+      "title": "直播间设计师"
+    },
+    {
+      "id": "AHui",
+      "name": "唐锦辉",
+      "role": "employee",
+      "title": "摄影师"
+    },
+    {
+      "id": "ShaoChiFan",
+      "name": "杨国栋",
+      "role": "employee",
+      "title": "编导"
+    },
+    {
+      "id": "YiXiSheJiShiAHui",
+      "name": "易希摄影 唐锦辉",
+      "role": "employee",
+      "title": "直播间设计师"
+    },
+    {
+      "id": "FengZiRui",
+      "name": "冯济政",
+      "role": "employee",
+      "title": "运营主管"
+    },
+    {
+      "id": "YiXi-AYue",
+      "name": "陈月诗",
+      "role": "employee",
+      "title": "财务"
+    },
+    {
+      "id": "8c589093-8dd3-4bcf-93e4-c170c0b4fe78",
+      "name": "李媛媛",
+      "role": "manager",
+      "title": "财务"
+    },
+    {
+      "id": "58e5de5c-147a-46b6-8ce5-f32e95c9c80f",
+      "name": "徐凡程",
+      "role": "employee",
+      "title": "出纳"
+    },
+    {
+      "id": "64d7bf93-eb40-484b-8aec-80c9a3250b54",
+      "name": "张思容",
+      "role": "employee",
+      "title": "出纳"
+    },
+    {
+      "id": "HaoXiangShuiJiao",
+      "name": "武婉欣",
+      "role": "employee",
+      "title": "主播"
+    },
+    {
+      "id": "AZe",
+      "name": "黄伟强（阿泽）",
+      "role": "manager",
+      "title": "直播运营"
+    },
+    {
+      "id": "510713d9-2366-4c45-be8e-4da024a4a973",
+      "name": "彭彩霞",
+      "role": "employee",
+      "title": "主播"
+    },
+    {
+      "id": "57a400a5-9c92-4912-aae9-3b9205029bdd",
+      "name": "江丽婷",
+      "role": "employee",
+      "title": "主播"
+    },
+    {
+      "id": "HuangYongZhou",
+      "name": "黄永周",
+      "role": "employee",
+      "title": ""
+    },
+    {
+      "id": "HuangShan",
+      "name": "黄山",
+      "role": "employee",
+      "title": ""
+    },
+    {
+      "id": "ba722b0aab814cc3c3b1934e8734b4e3",
+      "name": "客服陈",
+      "role": "employee",
+      "title": ""
+    },
+    {
+      "id": "LinRuYuan",
+      "name": "林儒渊",
+      "role": "employee",
+      "title": ""
+    },
+    {
+      "id": "YanJiaMi",
+      "name": "颜嘉密",
+      "role": "employee",
+      "title": ""
+    },
+    {
+      "id": "YanWeiLv",
+      "name": "颜伟旅",
+      "role": "employee",
+      "title": ""
+    },
+    {
+      "id": "LiYaoKai",
+      "name": "李尧凯",
+      "role": "employee",
+      "title": ""
+    },
+    {
+      "id": "KeFu-Li",
+      "name": "客服李（商家客服）",
+      "role": "employee",
+      "title": ""
+    },
+    {
+      "id": "XiaoTian",
+      "name": "小天",
+      "role": "employee",
+      "title": ""
+    },
+    {
+      "id": "shylie",
+      "name": "审核",
+      "role": "employee",
+      "title": ""
+    },
+    {
+      "id": "LiShun",
+      "name": "李顺",
+      "role": "employee",
+      "title": ""
+    },
+    {
+      "id": "MoXiaoJu",
+      "name": "莫小菊",
+      "role": "employee",
+      "title": ""
+    },
+    {
+      "id": "HuangTengKui",
+      "name": "黄腾葵",
+      "role": "employee",
+      "title": ""
+    },
+    {
+      "id": "LiYaoShun",
+      "name": "李顺",
+      "role": "employee",
+      "title": ""
+    },
+    {
+      "id": "oo",
+      "name": "林儒渊",
+      "role": "employee",
+      "title": ""
+    },
+    {
+      "id": "7c34bd4d-6353-485c-85a4-7548260aa1b3",
+      "name": "孙贵阳",
+      "role": "employee",
+      "title": "采购助理"
+    },
+    {
+      "id": "alex",
+      "name": "邱蕾",
+      "role": "manager",
+      "title": "产品供应链&跟单"
+    },
+    {
+      "id": "02279f7c-23cc-4403-8870-9293b747acb5",
+      "name": "龙凯娜",
+      "role": "employee",
+      "title": "采购助理"
+    },
+    {
+      "id": "44259219-b2c2-457c-a2fd-3b0e6e569d3b",
+      "name": "许嘉元",
+      "role": "employee",
+      "title": "采购助理"
+    },
+    {
+      "id": "123456",
+      "name": "锺明",
+      "role": "employee",
+      "title": ""
+    }
+  ],
+  "tags": [
+    {
+      "user_id": "YiNing",
+      "tag": "hrbp"
+    },
+    {
+      "user_id": "YiXiSheJiShi-XiaoYi",
+      "tag": "vp"
+    }
+  ]
+}

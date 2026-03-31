@@ -121,9 +121,15 @@
     -webkit-tap-highlight-color: transparent;
   }
   
-  /* Ensure touch targets are at least 44px */
+  /* Ensure touch targets are at least 44px (iOS HIG standard) */
   button, a, [role="button"] {
-    min-height: 36px;
+    min-height: 44px;
+  }
+
+  /* Range slider: enlarge touch track */
+  input[type="range"] {
+    height: 28px;
+    cursor: pointer;
   }
 
   /* Hide desktop scrollbars on mobile */
@@ -171,6 +177,22 @@
 
   .dark .mobile-bottom-bar {
     background: rgba(15, 23, 42, 0.92);
+  }
+
+  /* Page transition animation */
+  @keyframes mobile-page-enter {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .mobile-page-enter {
+    animation: mobile-page-enter 0.22s cubic-bezier(0.25, 0.46, 0.45, 0.94) both;
   }
 }
 

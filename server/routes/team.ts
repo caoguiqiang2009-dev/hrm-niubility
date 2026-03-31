@@ -10,10 +10,10 @@ router.get('/:managerId/overview', authMiddleware, (req, res) => {
   const members = db.prepare('SELECT id, name, title, avatar_url FROM users WHERE department_id IN (SELECT department_id FROM users WHERE id = ?)').all(req.params.managerId) as any[];
 
   const overview = members.map((m) => {
-    const activePlans = db.prepare("SELECT COUNT(*) as count FROM perf_plans WHERE assignee_id = ? AND status NOT IN ('draft', 'completed')").get(m.id) as any;
-    const completedPlans = db.prepare("SELECT COUNT(*) as count FROM perf_plans WHERE assignee_id = ? AND status = 'completed'").get(m.id) as any;
-    const avgScore = db.prepare("SELECT AVG(score) as avg FROM perf_plans WHERE assignee_id = ? AND score IS NOT NULL").get(m.id) as any;
-    const overduePlans = db.prepare("SELECT COUNT(*) as count FROM perf_plans WHERE assignee_id = ? AND deadline < date('now') AND status NOT IN ('completed')").get(m.id) as any;
+    const activePlans = db.prepare("SELECT COUNT(*) as count FROM perf_plans WHERE (',' || assignee_id || ',' LIKE '%,' || ? || ',%') AND status NOT IN ('draft', 'completed')").get(m.id) as any;
+    const completedPlans = db.prepare("SELECT COUNT(*) as count FROM perf_plans WHERE (',' || assignee_id || ',' LIKE '%,' || ? || ',%') AND status = 'completed'").get(m.id) as any;
+    const avgScore = db.prepare("SELECT AVG(score) as avg FROM perf_plans WHERE (',' || assignee_id || ',' LIKE '%,' || ? || ',%') AND score IS NOT NULL").get(m.id) as any;
+    const overduePlans = db.prepare("SELECT COUNT(*) as count FROM perf_plans WHERE (',' || assignee_id || ',' LIKE '%,' || ? || ',%') AND deadline < date('now') AND status NOT IN ('completed')").get(m.id) as any;
 
     return {
       ...m,

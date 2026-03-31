@@ -30,8 +30,6 @@ interface PoolTask {
 
 type StatusFilter = 'all' | 'published' | 'claiming' | 'in_progress' | 'rewarded';
 type BonusFilter = 'all' | 'low' | 'mid' | 'high';
-const DEPTS = ['全部部门', '研发部', '市场部', '产品部', '人事部'];
-
 const DIFFICULTY_MAP: Record<string, string> = { low: '低', normal: '中', high: '高', expert: '专家' };
 const DIFFICULTY_COLOR: Record<string, string> = {
   low: 'bg-green-100 text-green-700',
@@ -73,6 +71,7 @@ export default function CompanyPerformance({ navigate }: { navigate: (view: stri
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [bonusFilter, setBonusFilter] = useState<BonusFilter>('all');
   const [deptFilter, setDeptFilter] = useState('全部部门');
+  const [topDepts, setTopDepts] = useState<string[]>(['全部部门']);
   const [sortByBonus, setSortByBonus] = useState(false);
   const [users, setUsers] = useState<{id: string, name: string}[]>([]);
 
@@ -162,7 +161,22 @@ export default function CompanyPerformance({ navigate }: { navigate: (view: stri
     } catch {}
   };
 
-  useEffect(() => { fetchTasks(); fetchMyProposals(); fetchMyClaims(); fetchLeaderboard(); fetchUsers(); fetchTrash(); }, []);
+  const fetchTopDepts = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch('/api/org/departments', { headers: { Authorization: `Bearer ${token}` } });
+      const json = await res.json();
+      if (json.code === 0 && Array.isArray(json.data)) {
+        // Collect A-level departments (usually parent_id 0 or 1)
+        const aLevel = json.data.filter((d: any) => d.parent_id === 1 || d.parent_id === 0);
+        // We only map name, ensure uniqueness
+        const names = Array.from(new Set(aLevel.map((d: any) => d.name))) as string[];
+        setTopDepts(['全部部门', ...names]);
+      }
+    } catch {}
+  };
+
+  useEffect(() => { fetchTasks(); fetchTopDepts(); fetchMyProposals(); fetchMyClaims(); fetchLeaderboard(); fetchUsers(); fetchTrash(); }, []);
 
   const handleProposeSmart = async (data: SmartTaskData) => {
     if (!data.summary.trim()) return;
@@ -555,7 +569,7 @@ export default function CompanyPerformance({ navigate }: { navigate: (view: stri
                 <div className={`flex items-center ${isMobile ? 'w-full justify-between' : 'gap-2'}`}>
                   <select value={deptFilter} onChange={e => setDeptFilter(e.target.value)}
                     className={`bg-surface-container border-none ring-1 ring-outline-variant/30 rounded-lg focus:ring-2 focus:ring-primary outline-none text-on-surface font-medium ${isMobile ? 'text-[11px] px-2 py-1' : 'text-xs px-3 py-2 rounded-xl'}`}>
-                    {DEPTS.map(d => <option key={d}>{d}</option>)}
+                    {topDepts.map(d => <option key={d}>{d}</option>)}
                   </select>
                   <div className="flex items-center gap-1.5">
                     {!isMobile && <span className="text-xs text-on-surface-variant">奖金排序</span>}
@@ -891,6 +905,46 @@ export default function CompanyPerformance({ navigate }: { navigate: (view: stri
                       );
                     })}
                   </div>
+                </div>
+              );
+            })()}
+
+            {/* ── 我的认领审批状态 ── */}
+            {(() => {
+              const myClaimsList = (selectedTask?.role_claims || []).filter((c: any) => c.user_id === currentUser?.id);
+              if (myClaimsList.length === 0) return null;
+              return (
+                <div className="w-full mb-3 space-y-2">
+                  {myClaimsList.map((myClaim: any) => {
+                    const isPending = myClaim.status === 'pending';
+                    const isApproved = myClaim.status === 'approved';
+                    const isRejected = myClaim.status === 'rejected';
+                    
+                    return (
+                      <div key={myClaim.id} className={`w-full p-3 rounded-xl border ${isPending ? 'bg-amber-50 border-amber-200' : isApproved ? 'bg-emerald-50 border-emerald-200' : 'bg-rose-50 border-rose-200'}`}>
+                        <div className="flex items-center gap-2 mb-1.5">
+                          <span className={`material-symbols-outlined text-[16px] ${isPending ? 'text-amber-600' : isApproved ? 'text-emerald-600' : 'text-rose-600'}`}>
+                            {isPending ? 'pending_actions' : isApproved ? 'check_circle' : 'cancel'}
+                          </span>
+                          <span className="text-xs font-bold text-slate-700">我申请的 [{myClaim.role_name}] 角色审批进度</span>
+                          <span className={`ml-auto text-[10px] font-bold px-2 py-0.5 rounded-full ${isPending ? 'bg-amber-100 text-amber-700' : isApproved ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
+                            {isPending ? 'HR / 管理员审核中' : isApproved ? '已批准' : '已驳回'}
+                          </span>
+                        </div>
+                        {isPending && (
+                           <div className="text-[11px] text-amber-700 ml-6 flex items-center gap-1">
+                             <span className="material-symbols-outlined text-[12px] animate-pulse">schedule</span>
+                             该认领申请已提交，等待人事(HR)或总经办审批。
+                           </div>
+                        )}
+                        {myClaim.review_comment && (
+                          <div className={`text-[11px] ml-6 mt-1.5 p-1.5 rounded-md ${isApproved ? 'bg-emerald-100/50 text-emerald-700' : 'bg-rose-100/50 text-rose-700'}`}>
+                            <span className="font-bold">审批人批注：</span>{myClaim.review_comment}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               );
             })()}
@@ -1305,24 +1359,47 @@ export default function CompanyPerformance({ navigate }: { navigate: (view: stri
                       )}
                     </div>
                     {p.proposal_status === 'rejected' && (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setShowMyProposals(false);
-                          setProposeForm({
-                            title: p.title || '',
-                            description: p.description || '',
-                            department: p.department || '',
-                            difficulty: p.difficulty || '中',
-                            bonus: String(p.bonus || ''),
-                            max_participants: String(p.max_participants || '5'),
-                          });
-                          setShowPropose(true);
-                        }}
-                        className="w-full mt-3 py-2 bg-violet-500 text-white rounded-xl text-xs font-bold hover:bg-violet-600 transition-colors"
-                      >
-                        ✏️ 修改后重新提案
-                      </button>
+                      <div className="flex gap-2 mt-3 w-full">
+                        <button
+                          onClick={async (e) => {
+                            e.stopPropagation();
+                            if (!window.confirm('确认永久删除该被驳回的提案？操作将不可撤销。')) return;
+                            try {
+                              const token = localStorage.getItem('token');
+                              const res = await fetch(`/api/pool/tasks/${p.id}`, {
+                                method: 'DELETE',
+                                headers: { Authorization: `Bearer ${token}` }
+                              });
+                              const data = await res.json();
+                              if (data.code === 0 || data.success) {
+                                fetchMyProposals();
+                              } else { alert(data.message || '删除失败'); }
+                            } catch { alert('删除失败'); }
+                          }}
+                          className="px-3 py-2 bg-rose-50 text-rose-500 rounded-xl text-[12px] font-bold border border-rose-200 hover:bg-rose-100 transition-colors shrink-0 flex items-center justify-center group"
+                          title="删除被驳回提案"
+                        >
+                          <span className="material-symbols-outlined text-[16px] group-active:scale-95 transition-transform">delete</span>
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setShowMyProposals(false);
+                            setProposeForm({
+                              title: p.title || '',
+                              description: p.description || '',
+                              department: p.department || '',
+                              difficulty: p.difficulty || '中',
+                              bonus: String(p.bonus || ''),
+                              max_participants: String(p.max_participants || '5'),
+                            });
+                            setShowPropose(true);
+                          }}
+                          className="flex-1 py-2 bg-violet-500 text-white rounded-xl text-xs font-bold hover:bg-violet-600 transition-colors flex justify-center items-center"
+                        >
+                          ✏️ 修改后重新提案
+                        </button>
+                      </div>
                     )}
                   </div>
                 );

@@ -22,7 +22,7 @@ export async function transitionPlan(
   planId: number,
   targetStatus: string,
   operatorId: string,
-  extra?: { comment?: string; score?: number; bonus?: number }
+  extra?: { comment?: string; score?: number; bonus?: number; attachments?: any }
 ): Promise<{ success: boolean; message: string }> {
   const db = getDb();
   const plan = db.prepare('SELECT * FROM perf_plans WHERE id = ?').get(planId) as any;
@@ -79,6 +79,11 @@ export async function transitionPlan(
       break;
   }
 
+  if (extra?.attachments !== undefined) {
+    const attStr = typeof extra.attachments === 'string' ? extra.attachments : JSON.stringify(extra.attachments);
+    updates.push(`attachments = '${attStr.replace(/'/g, "''")}'`);
+  }
+
   db.prepare(`UPDATE perf_plans SET ${updates.join(', ')} WHERE id = ?`).run(planId);
 
   // 记录状态变更日志
@@ -114,12 +119,16 @@ export async function transitionPlan(
     }
 
     if (issues.length > 0) {
-      const hrAdmins = db.prepare("SELECT id FROM users WHERE role IN ('hr', 'admin')").all() as any[];
-      const hrAdminIds = hrAdmins.map((u: any) => u.id);
+      const { WorkflowEngine } = await import('./workflow-engine');
+      const hrbpIds = WorkflowEngine.getUsersByRoleTag('hrbp');
+      const gmIds = WorkflowEngine.getUsersByRoleTag('gm');
+      // If no HRBP/GM tags, fallback to super admin specifically handled in notify
+      const adminIds = Array.from(new Set([...hrbpIds, ...gmIds]));
+      
       const creatorName = (db.prepare('SELECT name FROM users WHERE id = ?').get(updatedPlan.creator_id) as any)?.name || updatedPlan.creator_id;
-      if (hrAdminIds.length > 0) {
+      if (adminIds.length > 0) {
         createNotification(
-          hrAdminIds,
+          adminIds,
           'workflow_error',
           '⚠️ 流程节点异常',
           `${creatorName} 的绩效计划「${updatedPlan.title}」存在流程异常：${issues.join('、')}，请前往流程异常管理修复`,

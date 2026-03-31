@@ -64,8 +64,8 @@ router.get('/models', authMiddleware, (req: any, res) => {
 // 2. Create/Update Model
 router.post('/models', authMiddleware, (req: any, res) => {
   const { id, name, department_id, description, dimensions } = req.body;
-  if (!name || !dimensions || !Array.isArray(dimensions)) {
-    return res.status(400).json({ code: 400, message: 'Missing required fields' });
+  if (!name || !dimensions || !Array.isArray(dimensions) || dimensions.length === 0) {
+    return res.status(400).json({ code: 400, message: '模型名称和能力维度(至少一项)必填，不允许建立空壳模型。' });
   }
   
   try {
@@ -182,7 +182,7 @@ router.post('/evaluations', authMiddleware, (req: any, res) => {
   try {
     const dimensions = db.prepare('SELECT id FROM competency_dimensions WHERE model_id = ?').all(model_id);
     if (dimensions.length === 0) {
-      return res.status(400).json({ code: 400, message: '模型下无维度配置' });
+      return res.status(400).json({ code: 400, message: '您选择的「考核标准(模型)」是一个没有考核指标的残缺模型，无法生成有效问卷。' });
     }
     
     const insertEval = db.prepare(`

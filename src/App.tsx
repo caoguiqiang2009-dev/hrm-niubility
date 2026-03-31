@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useIsMobile } from './hooks/useIsMobile';
 import EmployeeDashboard from './pages/EmployeeDashboard';
 import PersonalGoals from './pages/PersonalGoals';
 import TeamPerformance from './pages/TeamPerformance';
@@ -23,6 +24,7 @@ import { useAuth } from './context/AuthContext';
 export default function App() {
   const [currentView, setCurrentView] = useState(() => localStorage.getItem('hrm_current_view') || 'company');
   const { isAuthenticating, currentUser } = useAuth();
+  const isMobile = useIsMobile();
 
   const navigate = (view: string) => {
     setCurrentView(view);
@@ -137,7 +139,9 @@ export default function App() {
 
   return (
     <>
-      {renderView()}
+      <div key={currentView} className={isMobile ? 'mobile-page-enter' : ''}>
+        {renderView()}
+      </div>
       <DevRoleSwitcher />
       <Watermark text={currentUser.name} />
       <FloatingAiChat />

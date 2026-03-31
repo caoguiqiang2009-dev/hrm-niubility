@@ -43,6 +43,7 @@ import teamScopeRoutes from './routes/team-scope';
 import poolStarRoutes from './routes/pool-star';
 import poolRewardsRoutes from './routes/pool-rewards';
 import salaryRoutes from './routes/salary';
+import workflowTrajectoryRoutes from './routes/workflow-trajectory';
 
 const app = express();
 const PORT = process.env.SERVER_PORT || 3001;
@@ -84,6 +85,7 @@ app.use('/api/team-scope', teamScopeRoutes);
 app.use('/api/pool/star', poolStarRoutes);
 app.use('/api/pool/rewards', poolRewardsRoutes);
 app.use('/api/salary', salaryRoutes);
+app.use('/api/workflow/trajectory', workflowTrajectoryRoutes);
 
 // 健康检查
 app.get('/api/health', (_req, res) => {
@@ -114,9 +116,12 @@ if (!fs.existsSync(dataDir)) {
   fs.mkdirSync(dataDir, { recursive: true });
 }
 
+import { bootstrapWorkflows } from './services/workflow-engine';
+
 // 初始化数据库 & 种子数据
 initDatabase();
 seedData();
+bootstrapWorkflows();
 
 // 启动服务器
 app.listen(PORT, () => {

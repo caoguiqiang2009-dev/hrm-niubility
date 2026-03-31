@@ -142,7 +142,16 @@ export default function CompetencyManager({ navigate, initialTestId, initialTab 
 
   const saveModel = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!editingModel.name || !editingModel.dimensions?.length) return alert('名称和至少一个维度必填');
+    if (!editingModel.name) return alert('模型保存失败：名称必填。');
+    if (!editingModel.dimensions || editingModel.dimensions.length === 0) {
+      return alert('模型保存失败：能力模型必须包含至少 1 个考核维度。请点击下方“手动追加维度”或“导入能力库”，否则空壳模型将无法发起评估。');
+    }
+    // Verify each dimension has a name and max_score
+    for (const d of editingModel.dimensions) {
+      if (!d.name || d.name.trim() === '') return alert('模型保存失败：存在空白维度的名称。请填写或移除该维度。');
+      if (!d.max_score || d.max_score <= 0) return alert('模型保存失败：所有维度的满分必须大于 0。');
+    }
+
     try {
       const res = await fetch('/api/competency/models', {
         method: 'POST',
@@ -190,8 +199,12 @@ export default function CompetencyManager({ navigate, initialTestId, initialTab 
         setEvalUserSearch('');
         fetchEvaluations();
         setActiveTab('evaluations');
-      } else alert(json.message);
-    } catch (err) {}
+      } else {
+        alert(`下发失败：${json.message}\n如果提示“无维度配置”，说明您挑选的这个模型是空的，请先前往“能力模型配置”编辑该模型并添加评估维度。`);
+      }
+    } catch (err) {
+      alert('下发失败：网络或服务器错误');
+    }
   };
 
   const openScoreModal = async (ev: any) => {
