@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import SmartTaskModal from '../components/SmartTaskModal';
 import { useIsMobile } from '../hooks/useIsMobile';
 import { PoolModule } from './AdminPanel';
+import AuditTimeline from '../components/AuditTimeline';
 
 interface MyWorkflowsProps {
   navigate: (view: string) => void;
@@ -24,15 +25,18 @@ const STATUS_MAP: Record<string, { label: string; color: string; bg: string }> =
   submitted:     { label: '审批中',     color: 'text-blue-600',  bg: 'bg-blue-50' },
   approved:      { label: '已通过',     color: 'text-emerald-600', bg: 'bg-emerald-50' },
   rejected:      { label: '已驳回',     color: 'text-red-500',   bg: 'bg-red-50' },
-  assessed:      { label: '已评分',     color: 'text-purple-600', bg: 'bg-purple-50' },
+  assessed:      { label: '已结案',     color: 'text-purple-600', bg: 'bg-purple-50' },
   pending_review:{ label: '待审核',     color: 'text-amber-600',  bg: 'bg-amber-50' },
   pending_dept_review:{ label: '待部门审批', color: 'text-orange-600',  bg: 'bg-orange-50' },
   pending_hr:    { label: '待人事审核', color: 'text-amber-600', bg: 'bg-amber-50' },
+  pending_dt:    { label: '待金主验收', color: 'text-purple-600', bg: 'bg-purple-50' },
   pending_admin: { label: '待总经理审批', color: 'text-orange-600', bg: 'bg-orange-50' },
   open:          { label: '进行中',     color: 'text-blue-600',  bg: 'bg-blue-50' },
   completed:     { label: '已完成',     color: 'text-emerald-600', bg: 'bg-emerald-50' },
   in_progress:   { label: '进行中',     color: 'text-blue-600',   bg: 'bg-blue-50' },
   returned:      { label: '已退回',     color: 'text-orange-600', bg: 'bg-orange-50' },
+  pending_receipt:{ label: '待签收',    color: 'text-cyan-600',   bg: 'bg-cyan-50' },
+  pending_assessment:{ label: '待评级', color: 'text-purple-600', bg: 'bg-purple-50' },
 };
 
 function StatusBadge({ status }: { status: string }) {
@@ -145,7 +149,7 @@ export default function MyWorkflows({ navigate, initialTab }: MyWorkflowsProps) 
 
   useEffect(() => { fetchTab(activeTab); }, [activeTab]);
 
-  const handleApproveReject = async (id: number, flowType: string, action: 'approve'|'reject', comment: string, updatedData?: any) => {
+  const handleApproveReject = async (id: number, flowType: string, action: 'approve'|'reject'|'transfer', comment: string, updatedData?: any, transfer_to?: string) => {
     setSubmittingApprovals(true);
     try {
       const isPerf = flowType === 'perf_plan';
@@ -156,22 +160,24 @@ export default function MyWorkflows({ navigate, initialTab }: MyWorkflowsProps) 
       let payload: any;
 
       if (isPerf) {
-        realEndpoint = `/api/perf/plans/${id}/${action}`;
-        payload = { reason: comment };
+        realEndpoint = action === 'transfer' ? `/api/perf/plans/${id}/review` : `/api/perf/plans/${id}/${action}`;
+        payload = { action, reason: comment, transfer_to };
       } else if (isJoin) {
         realEndpoint = `/api/pool/join-requests/${id}/review`;
         payload = { action, comment };
       } else if (isRewardPlan) {
-        // 根据当前状态判断走 hr-review 还是 admin-confirm
+        // 根据当前状态判断审核端点
         const item = data.find((d: any) => d.id === id);
-        const endpoint = item?.status === 'pending_admin' ? 'admin-confirm' : 'hr-review';
+        const endpoint = item?.status === 'pending_admin' ? 'admin-confirm' : 
+                         item?.status === 'pending_dt' ? 'dt-review' : 'hr-review';
         realEndpoint = `/api/pool/rewards/${id}/${endpoint}`;
-        payload = { action, comment };
+        payload = { action, comment, transfer_to };
       } else {
         realEndpoint = `/api/pool/proposals/${id}/review`;
         payload = {
           action,
           reason: comment,
+          transfer_to,
           ...(updatedData?.bonus !== undefined ? { bonus: updatedData.bonus } : {}),
           ...(updatedData?.rewardType ? { reward_type: updatedData.rewardType } : {}),
           ...(updatedData?.maxParticipants ? { max_participants: updatedData.maxParticipants } : {}),
@@ -424,7 +430,7 @@ export default function MyWorkflows({ navigate, initialTab }: MyWorkflowsProps) 
       {/* Task Modal Integration */}
       {selectedTask && (() => {
         const isEditableByCreator = activeTab === 'initiated' && ['draft', 'rejected'].includes(selectedTask.originalStatus);
-        const canWithdraw = activeTab === 'initiated' && ['pending_review', 'pending_hr', 'pending_admin', 'submitted'].includes(selectedTask.originalStatus);
+        const canWithdraw = activeTab === 'initiated' && ['pending_review', 'pending_dept_review', 'pending_dt', 'pending_hr', 'pending_admin', 'submitted'].includes(selectedTask.originalStatus);
         
         const handleWithdraw = async (e: React.MouseEvent) => {
           e.preventDefault();
@@ -600,14 +606,14 @@ export default function MyWorkflows({ navigate, initialTab }: MyWorkflowsProps) 
                     <span className="material-symbols-outlined text-amber-500">info</span>
                     <div>
                       <p className="text-xs font-bold text-amber-700 dark:text-amber-400">
-                        {plan.status === 'pending_admin' ? '总经理最终确认' : 'HR 审核中'}
+                        {plan.status === 'pending_admin' ? '总经理最终确认' : plan.status === 'pending_dt' ? '金主验收确认中' : 'HR 审核中'}
                       </p>
                       <p className="text-xs text-amber-600/70">发起人：{plan.creator_name} · 发起时间：{plan.created_at?.slice(0, 10)}</p>
                     </div>
                   </div>
 
-                  {/* 奖金总额 */}
-                  <div className="grid grid-cols-2 gap-3 text-sm">
+                  {/* 奖金总额 + DT */}
+                  <div className={`grid gap-3 text-sm ${plan.delivery_target_name ? 'grid-cols-3' : 'grid-cols-2'}`}>
                     <div className="bg-slate-50 dark:bg-slate-800 rounded-xl p-3">
                       <p className="text-xs text-slate-400 mb-1">奖金总额</p>
                       <p className="font-black text-rose-500 text-lg">¥{plan.total_bonus_awarded?.toLocaleString() || 0}</p>
@@ -616,6 +622,12 @@ export default function MyWorkflows({ navigate, initialTab }: MyWorkflowsProps) 
                       <p className="text-xs text-slate-400 mb-1">预计发放月</p>
                       <p className="font-black text-slate-700 dark:text-slate-200">{plan.pay_period || '待定'}</p>
                     </div>
+                    {plan.delivery_target_name && (
+                      <div className="bg-purple-50 dark:bg-purple-900/20 rounded-xl p-3 border border-purple-100">
+                        <p className="text-xs text-purple-400 mb-1">交付对象(金主)</p>
+                        <p className="font-black text-purple-700 dark:text-purple-300 text-sm">{plan.delivery_target_name}</p>
+                      </div>
+                    )}
                   </div>
 
                   {/* STAR 材料附件提示 */}
@@ -654,6 +666,11 @@ export default function MyWorkflows({ navigate, initialTab }: MyWorkflowsProps) 
                       {approvalError}
                     </div>
                   )}
+
+                  {/* 审计轨迹 */}
+                  {plan.id && (
+                    <AuditTimeline businessType="reward_plan" businessId={plan.id} className="mt-2 border-t border-slate-100 pt-3" />
+                  )}
                 </div>
 
                 {/* Footer */}
@@ -670,7 +687,7 @@ export default function MyWorkflows({ navigate, initialTab }: MyWorkflowsProps) 
                       </button>
                       <button onClick={() => doRewardAction('approve')} disabled={submittingReward}
                         className="px-6 py-2 text-sm font-bold text-white bg-gradient-to-r from-amber-500 to-orange-500 rounded-xl hover:from-amber-600 hover:to-orange-600 disabled:opacity-50 shadow-sm">
-                        {submittingReward ? '处理中...' : plan.status === 'pending_admin' ? '✅ 总经理确认' : '✅ HR 通过'}
+                        {submittingReward ? '处理中...' : plan.status === 'pending_admin' ? '✅ 总经理确认' : plan.status === 'pending_dt' ? '✅ 金主验收通过' : '✅ HR 通过'}
                       </button>
                     </>
                   )}
@@ -689,7 +706,7 @@ export default function MyWorkflows({ navigate, initialTab }: MyWorkflowsProps) 
             readonly={!isEditableByCreator}
             approverMode={selectedTask.isPending}
             customFooter={withdrawFooter}
-            onApprove={(comment, updatedData) => { setApprovalError(null); handleApproveReject(selectedTask.data.id, selectedTask.data.flow_type || (selectedTask.type === 'pool_propose' ? 'proposal' : 'perf_plan'), 'approve', comment, updatedData); }}
+            onApprove={(comment, updatedData, customAction, targetUser) => { setApprovalError(null); handleApproveReject(selectedTask.data.id, selectedTask.data.flow_type || (selectedTask.type === 'pool_propose' ? 'proposal' : 'perf_plan'), customAction || 'approve', comment, updatedData, targetUser); }}
             onReject={(comment) => { setApprovalError(null); handleApproveReject(selectedTask.data.id, selectedTask.data.flow_type || (selectedTask.type === 'pool_propose' ? 'proposal' : 'perf_plan'), 'reject', comment); }}
             onDelete={isEditableByCreator ? handleDelete : undefined}
             submitting={submittingApprovals}
@@ -894,7 +911,8 @@ function WorkflowCard({ item, tab, onClick }: { item: any; tab: TabKey; onClick:
                 <span className="font-bold">
                   {item.pending_reviewer_name || approver || 
                     (status === 'pending_admin' ? '总经理' : 
-                     status === 'pending_hr' ? 'HR' : 
+                   status === 'pending_dt' ? '金主' :
+                   status === 'pending_hr' ? 'HR' : 
                      status === 'pending_review' ? '审批人' : '待指定')}
                 </span>
                 <span className="text-[9px] opacity-80">
@@ -962,8 +980,11 @@ function NodeFixPanel() {
     pending_review: ['待一审', 'bg-amber-100 text-amber-700'],
     pending_dept_review: ['待二审', 'bg-orange-100 text-orange-700'],
     in_progress: ['进行中', 'bg-blue-100 text-blue-700'],
-    pending_assessment: ['待评分', 'bg-purple-100 text-purple-700'],
+    pending_assessment: ['待评级', 'bg-purple-100 text-purple-700'],
     approved: ['已通过', 'bg-emerald-100 text-emerald-700'],
+    assessed: ['已结案', 'bg-violet-100 text-violet-700'],
+    completed: ['已完成', 'bg-blue-100 text-blue-700'],
+    pending_receipt: ['待签收', 'bg-cyan-100 text-cyan-700'],
   };
 
   if (loading) return <div className="flex justify-center py-16"><div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" /></div>;

@@ -58,9 +58,9 @@ function StatusBadge({ status }: { status: string }) {
     pending: ['待处理', 'bg-amber-100 text-amber-700'],
     sent: ['已发送', 'bg-green-100 text-green-700'],
     failed: ['发送失败', 'bg-red-100 text-red-600'],
-    assessed: ['已评分', 'bg-violet-100 text-violet-700'],
-    pending_assessment: ['待评分', 'bg-purple-100 text-purple-700'],
-    pending_reward: ['待发奖', 'bg-orange-100 text-orange-700'],
+    assessed: ['已结案', 'bg-violet-100 text-violet-700'],
+    pending_assessment: ['待评级', 'bg-purple-100 text-purple-700'],
+    pending_receipt: ['待签收', 'bg-cyan-100 text-cyan-700'],
   };
   const [label, cls] = map[status] || [status, 'bg-slate-100 text-slate-500'];
   return <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${cls}`}>{label}</span>;
@@ -499,6 +499,7 @@ export function PoolModule() {
   const REWARD_STATUS: Record<string, [string, string]> = {
     draft:         ['草稿', 'bg-slate-100 text-slate-500'],
     pending_hr:    ['待HR审核', 'bg-amber-100 text-amber-700'],
+    pending_dt:    ['待金主验收', 'bg-purple-100 text-purple-700'],
     pending_admin: ['待总经理确认', 'bg-orange-100 text-orange-700'],
     approved:      ['已批准/待发放', 'bg-blue-100 text-blue-700'],
     paid:          ['✅ 已发放', 'bg-emerald-100 text-emerald-700'],

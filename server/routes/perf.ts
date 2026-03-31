@@ -1,8 +1,9 @@
 import { Router } from 'express';
 import { getDb } from '../config/database';
 import { authMiddleware, AuthRequest, isSuperAdmin, isGM } from '../middleware/auth';
-import { transitionPlan } from '../services/workflow';
+import { transitionPlan, getAssessmentJudge } from '../services/workflow';
 import { getUserEffectivePerms } from './permissions';
+import { logAudit } from '../services/audit-logger';
 
 const router = Router();
 
@@ -17,9 +18,14 @@ router.post('/plans', authMiddleware, async (req: AuthRequest, res) => {
 
   const attachmentsStr = attachments ? (typeof attachments === 'string' ? attachments : JSON.stringify(attachments)) : '[]';
 
+  // 流程2: 员工自主申报时，本人必须是A（负责人）
+  // 判断逻辑：当 assignee_id 为空或等于创建者时，视为个人目标
+  const isPersonalGoal = !assignee_id || assignee_id === req.userId;
+  const finalApproverId = isPersonalGoal ? req.userId : (approver_id || req.userId);
+
   const result = db.prepare(
     `INSERT INTO perf_plans (title, description, category, creator_id, assignee_id, approver_id, department_id, difficulty, deadline, quarter, alignment, target_value, collaborators, attachments) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-  ).run(title, description, category, req.userId, assignee_id || req.userId, approver_id, department_id, difficulty, deadline, quarter, alignment, target_value, collaborators || null, attachmentsStr);
+  ).run(title, description, category, req.userId, assignee_id || req.userId, finalApproverId, department_id, difficulty, deadline, quarter, alignment, target_value, collaborators || null, attachmentsStr);
 
   // 流程异常检测：创建时缺少审批人则通知HR
   const issues: string[] = [];
@@ -118,8 +124,22 @@ router.get('/plans/:id', authMiddleware, (req, res) => {
     LEFT JOIN users ua ON ua.id = p.approver_id
     LEFT JOIN users us ON us.id = p.assignee_id
     WHERE p.id = ?
-  `).get(req.params.id);
+  `).get(req.params.id) as any;
   if (!plan) return res.status(404).json({ code: 404, message: '绩效计划不存在' });
+
+  // GAP-4: Compute and attach judge info for assessed/in_progress plans
+  if (plan.approver_id && ['in_progress', 'pending_assessment'].includes(plan.status)) {
+    try {
+      const { judgeId, reason } = getAssessmentJudge(plan.approver_id);
+      if (judgeId) {
+        const judge = db.prepare('SELECT name FROM users WHERE id = ?').get(judgeId) as any;
+        plan.judge_id = judgeId;
+        plan.judge_name = judge?.name || judgeId;
+        plan.judge_reason = reason;
+      }
+    } catch { /* ignore */ }
+  }
+
   return res.json({ code: 0, data: plan });
 });
 
@@ -196,6 +216,7 @@ router.post('/plans/:id/resubmit', authMiddleware, async (req: AuthRequest, res)
   db.prepare('INSERT INTO perf_logs (plan_id, user_id, action, old_value, new_value, comment) VALUES (?, ?, ?, ?, ?, ?)').run(
     req.params.id, req.userId, 'resubmit', plan.status, nextStatus, '修改后重新提交审批'
   );
+  logAudit({ businessType: 'perf_plan', businessId: Number(req.params.id), actorId: req.userId!, action: 'resubmit', fromStatus: plan.status, toStatus: nextStatus });
 
   return res.json({ code: 0, message: nextStatus === 'approved' ? '免审通过' : '已重新提交审批' });
 });
@@ -212,6 +233,7 @@ router.post('/plans/:id/withdraw', authMiddleware, (req: AuthRequest, res) => {
   db.prepare('INSERT INTO perf_logs (plan_id, user_id, action, old_value, new_value, comment) VALUES (?, ?, ?, ?, ?, ?)').run(
     req.params.id, req.userId, 'withdraw', 'pending_review', 'draft', '发起人主动撤回'
   );
+  logAudit({ businessType: 'perf_plan', businessId: Number(req.params.id), actorId: req.userId!, action: 'withdraw', fromStatus: 'pending_review', toStatus: 'draft' });
 
   return res.json({ code: 0, message: '已撤回，可重新编辑后提交' });
 });
@@ -397,8 +419,41 @@ router.post('/plans/:id/reject', authMiddleware, async (req: AuthRequest, res) =
 
 // 统一审批操作 (approve / reject / assess / reward)
 router.post('/plans/:id/review', authMiddleware, async (req: AuthRequest, res) => {
-  const { action, reason, score, bonus, attachments } = req.body;
+  const { action, reason, score, bonus, attachments, transfer_to } = req.body;
   const planId = Number(req.params.id);
+
+  if (action === 'transfer' && transfer_to) {
+    const db = (await import('../config/database')).getDb();
+    const plan = db.prepare('SELECT status FROM perf_plans WHERE id = ?').get(planId) as any;
+    if (!plan) return res.status(404).json({ code: 404, message: '计划不存在' });
+
+    let updateSql = '';
+    if (plan.status === 'pending_review' || plan.status === 'published') {
+      updateSql = 'UPDATE perf_plans SET approver_id = ? WHERE id = ?';
+    } else if (plan.status === 'pending_dept_review') {
+      updateSql = 'UPDATE perf_plans SET dept_head_id = ? WHERE id = ?';
+    } else {
+      return res.status(400).json({ code: 400, message: '当前阶段不可转办' });
+    }
+
+    db.prepare(updateSql).run(transfer_to, planId);
+
+    const { createNotification } = await import('./notifications');
+    const transferUser = db.prepare('SELECT name FROM users WHERE id = ?').get(transfer_to) as any;
+    const operatorUser = db.prepare('SELECT name FROM users WHERE id = ?').get(req.userId) as any;
+    
+    if (transferUser) {
+      createNotification([transfer_to], 'workflow_transfer', '🔄 绩效考核转办', `${operatorUser?.name || '管理员'} 将一个目标考评流程转交给了您，请核实。`, '/my-workflows');
+      try { 
+        const { sendCardMessage } = await import('../services/message');
+        const p = db.prepare('SELECT title FROM perf_plans WHERE id = ?').get(planId) as any;
+        sendCardMessage([transfer_to], '🔄 审批节点转办通知', `${operatorUser?.name || '管理员'} 把考核任务「${p?.title}」移交给了您\n> 留言附注: ${reason || '请阅审'}`, `${process.env.APP_URL || 'http://localhost:3000'}/my-workflows`); 
+      } catch(e) {}
+    }
+    return res.json({ code: 0, message: `任务考核已顺利移交至 ${transferUser?.name}` });
+  }
+
+  const db = getDb();
 
   switch (action) {
     case 'approve': {
@@ -410,17 +465,41 @@ router.post('/plans/:id/review', authMiddleware, async (req: AuthRequest, res) =
       return res.json({ code: result.success ? 0 : 400, message: result.message });
     }
     case 'assess': {
-      // pending_assessment → assessed
-      const step1 = await transitionPlan(planId, 'pending_assessment', req.userId!);
-      if (!step1.success) return res.json({ code: 400, message: step1.message });
-      const result = await transitionPlan(planId, 'assessed', req.userId!, { score, attachments });
-      return res.json({ code: result.success ? 0 : 400, message: result.message });
+      // 流程5核心防腐：评级官避嫌溯源
+      const plan4assess = db.prepare('SELECT * FROM perf_plans WHERE id = ?').get(planId) as any;
+      if (!plan4assess) return res.status(404).json({ code: 404, message: '计划不存在' });
+
+      // 仅负责人A可发起验收（但评分操作是上级做的）
+      if (plan4assess.status === 'in_progress') {
+        // 发起验收总结 → 仅限A
+        if (req.userId !== plan4assess.approver_id && !isGM(req.userId) && !isSuperAdmin(req.userId)) {
+          return res.status(403).json({ code: 403, message: '仅责任人(A)可发起验收总结' });
+        }
+        const step1 = await transitionPlan(planId, 'pending_assessment', req.userId!);
+        return res.json({ code: step1.success ? 0 : 400, message: step1.success ? '已发起验收总结，等待上级评级' : step1.message });
+      }
+
+      if (plan4assess.status === 'pending_assessment') {
+        // 打分操作 → 必须是评级官（A的上级）
+        const { judgeId, reason } = getAssessmentJudge(plan4assess.approver_id);
+        const isAdminOrGM = isGM(req.userId) || isSuperAdmin(req.userId);
+        if (!isAdminOrGM && req.userId !== judgeId) {
+          const judgeName = judgeId ? (db.prepare('SELECT name FROM users WHERE id = ?').get(judgeId) as any)?.name || judgeId : '未找到';
+          return res.status(403).json({ code: 403, message: `您无权评分。本单评级官为：${judgeName}(${reason})` });
+        }
+        const result = await transitionPlan(planId, 'assessed', req.userId!, { score, attachments });
+        if (result.success) {
+          // 流程5：评级后直接结案，不走发钱环节
+          await transitionPlan(planId, 'completed', req.userId!);
+        }
+        return res.json({ code: result.success ? 0 : 400, message: result.success ? '评级完成，任务已结案' : result.message });
+      }
+
+      return res.status(400).json({ code: 400, message: `当前状态 (${plan4assess.status}) 不支持评分操作` });
     }
     case 'reward': {
-      const step1 = await transitionPlan(planId, 'pending_reward', req.userId!, { bonus });
-      if (!step1.success) return res.json({ code: 400, message: step1.message });
-      const result = await transitionPlan(planId, 'completed', req.userId!, { attachments });
-      return res.json({ code: result.success ? 0 : 400, message: result.message });
+      // 注意：日常绩效不再走此环节（流程5已取消），保留兼容但返回提示
+      return res.status(400).json({ code: 400, message: '日常绩效评级后直接结案，无需经过发钱环节。悬赏任务请使用 /pool/rewards 流程' });
     }
     case 'return': {
       // Allow returning to returned status, passing attachments too (custom logic if needed)
@@ -432,6 +511,160 @@ router.post('/plans/:id/review', authMiddleware, async (req: AuthRequest, res) =
   }
 });
 
+// ═══════════════════════════════════════════════════════
+// 流程1: 团队内派发任务 — 签收机制
+// ═══════════════════════════════════════════════════════
+
+// 主管下发任务 → pending_receipt
+router.post('/plans/:id/dispatch', authMiddleware, async (req: AuthRequest, res) => {
+  const db = getDb();
+  const planId = Number(req.params.id);
+  const plan = db.prepare('SELECT * FROM perf_plans WHERE id = ?').get(planId) as any;
+  if (!plan) return res.status(404).json({ code: 404, message: '计划不存在' });
+  if (plan.creator_id !== req.userId && !isGM(req.userId) && !isSuperAdmin(req.userId)) {
+    return res.status(403).json({ code: 403, message: '仅任务创建人可下发任务' });
+  }
+  if (plan.status !== 'draft') return res.status(400).json({ code: 400, message: '仅草稿可下发' });
+
+  // 收集需要签收的人员名单 (R + A)
+  const pendingUsers: string[] = [];
+  if (plan.assignee_id) {
+    const assigneeIds = plan.assignee_id.split(',').filter(Boolean);
+    pendingUsers.push(...assigneeIds);
+  }
+  if (plan.approver_id && !pendingUsers.includes(plan.approver_id)) {
+    pendingUsers.push(plan.approver_id);
+  }
+
+  if (pendingUsers.length === 0) {
+    return res.status(400).json({ code: 400, message: '请先设置执行人(R)和负责人(A)' });
+  }
+
+  // 初始化签收状态
+  const receiptStatus: Record<string, string> = {};
+  for (const uid of pendingUsers) {
+    receiptStatus[uid] = 'pending';
+  }
+
+  db.prepare(`UPDATE perf_plans SET status = 'pending_receipt', receipt_status = ?, updated_at = ? WHERE id = ?`)
+    .run(JSON.stringify(receiptStatus), new Date().toISOString(), planId);
+
+  // 记录日志
+  db.prepare('INSERT INTO perf_logs (plan_id, user_id, action, old_value, new_value, comment) VALUES (?, ?, ?, ?, ?, ?)')
+    .run(planId, req.userId, 'dispatch', 'draft', 'pending_receipt', `下发至 ${pendingUsers.length} 人`);
+
+  // 推送待签收通知
+  const { createNotification } = await import('./notifications');
+  const creatorName = (db.prepare('SELECT name FROM users WHERE id = ?').get(req.userId) as any)?.name || req.userId;
+  createNotification(pendingUsers, 'workflow_pending', '📥 新任务待查收', `${creatorName} 给您下发了任务「${plan.title}」，请确认查收`, '/my-goals');
+
+  return res.json({ code: 0, message: `任务已下发，等待 ${pendingUsers.length} 人签收` });
+});
+
+// R/A 签收确认
+router.post('/plans/:id/confirm-receipt', authMiddleware, async (req: AuthRequest, res) => {
+  const db = getDb();
+  const planId = Number(req.params.id);
+  const plan = db.prepare('SELECT * FROM perf_plans WHERE id = ?').get(planId) as any;
+  if (!plan) return res.status(404).json({ code: 404, message: '计划不存在' });
+  if (plan.status !== 'pending_receipt') return res.status(400).json({ code: 400, message: '当前状态非待签收' });
+
+  let receiptStatus: Record<string, string> = {};
+  try { receiptStatus = JSON.parse(plan.receipt_status || '{}'); } catch {}
+
+  if (!receiptStatus[req.userId!]) {
+    return res.status(403).json({ code: 403, message: '您不在签收名单中' });
+  }
+  if (receiptStatus[req.userId!] === 'confirmed') {
+    return res.json({ code: 0, message: '您已签收过' });
+  }
+
+  receiptStatus[req.userId!] = 'confirmed';
+  db.prepare(`UPDATE perf_plans SET receipt_status = ?, updated_at = ? WHERE id = ?`)
+    .run(JSON.stringify(receiptStatus), new Date().toISOString(), planId);
+
+  db.prepare('INSERT INTO perf_logs (plan_id, user_id, action, old_value, new_value, comment) VALUES (?, ?, ?, ?, ?, ?)')
+    .run(planId, req.userId, 'confirm_receipt', 'pending', 'confirmed', '已确认查收');
+
+  // 检查是否全部签收
+  const allConfirmed = Object.values(receiptStatus).every(s => s === 'confirmed');
+  if (allConfirmed) {
+    const { createNotification } = await import('./notifications');
+    // 通知 A 可以发车了
+    if (plan.approver_id) {
+      createNotification([plan.approver_id], 'workflow_pending', '🟢 全员已签收', `任务「${plan.title}」所有成员已确认签收，您可以发起任务了`, '/my-goals');
+    }
+  }
+
+  return res.json({ code: 0, message: '签收成功' + (allConfirmed ? '，全员已到齐' : '') });
+});
+
+// R/A 拒签
+router.post('/plans/:id/reject-receipt', authMiddleware, async (req: AuthRequest, res) => {
+  const db = getDb();
+  const planId = Number(req.params.id);
+  const { reason } = req.body;
+  const plan = db.prepare('SELECT * FROM perf_plans WHERE id = ?').get(planId) as any;
+  if (!plan) return res.status(404).json({ code: 404, message: '计划不存在' });
+  if (plan.status !== 'pending_receipt') return res.status(400).json({ code: 400, message: '当前状态非待签收' });
+
+  let receiptStatus: Record<string, string> = {};
+  try { receiptStatus = JSON.parse(plan.receipt_status || '{}'); } catch {}
+
+  if (!receiptStatus[req.userId!]) {
+    return res.status(403).json({ code: 403, message: '您不在签收名单中' });
+  }
+
+  receiptStatus[req.userId!] = 'rejected';
+  // 拒签 → 退回给发派主管重新编辑
+  db.prepare(`UPDATE perf_plans SET status = 'draft', receipt_status = ?, reject_reason = ?, updated_at = ? WHERE id = ?`)
+    .run(JSON.stringify(receiptStatus), reason || '成员拒签', new Date().toISOString(), planId);
+
+  db.prepare('INSERT INTO perf_logs (plan_id, user_id, action, old_value, new_value, comment) VALUES (?, ?, ?, ?, ?, ?)')
+    .run(planId, req.userId, 'reject_receipt', 'pending_receipt', 'draft', reason || '拒绝签收');
+
+  // 通知主管
+  const { createNotification } = await import('./notifications');
+  const rejecterName = (db.prepare('SELECT name FROM users WHERE id = ?').get(req.userId) as any)?.name || req.userId;
+  createNotification([plan.creator_id], 'workflow_error', '🔴 任务签收被拒', `${rejecterName} 拒绝签收任务「${plan.title}」，原因：${reason || '未说明'}`, '/my-goals');
+
+  return res.json({ code: 0, message: '已拒签，任务退回给主管重新编辑' });
+});
+
+// A 独占发车权：全员签收后，仅 A 可将 pending_receipt → in_progress
+router.post('/plans/:id/start-task', authMiddleware, async (req: AuthRequest, res) => {
+  const db = getDb();
+  const planId = Number(req.params.id);
+  const plan = db.prepare('SELECT * FROM perf_plans WHERE id = ?').get(planId) as any;
+  if (!plan) return res.status(404).json({ code: 404, message: '计划不存在' });
+  if (plan.status !== 'pending_receipt') return res.status(400).json({ code: 400, message: '当前状态非待签收' });
+
+  // 仅负责人A可发车
+  if (req.userId !== plan.approver_id && !isGM(req.userId) && !isSuperAdmin(req.userId)) {
+    return res.status(403).json({ code: 403, message: '仅负责人(A)可发起任务' });
+  }
+
+  // 检查全员签收
+  let receiptStatus: Record<string, string> = {};
+  try { receiptStatus = JSON.parse(plan.receipt_status || '{}'); } catch {}
+  const pendingUsers = Object.entries(receiptStatus).filter(([_, s]) => s !== 'confirmed');
+  if (pendingUsers.length > 0) {
+    const names = pendingUsers.map(([uid]) => {
+      const u = db.prepare('SELECT name FROM users WHERE id = ?').get(uid) as any;
+      return u?.name || uid;
+    });
+    return res.status(400).json({ code: 400, message: `以下成员尚未签收: ${names.join('、')}` });
+  }
+
+  const result = await transitionPlan(planId, 'in_progress', req.userId!);
+  if (result.success) {
+    db.prepare('INSERT INTO perf_logs (plan_id, user_id, action, old_value, new_value, comment) VALUES (?, ?, ?, ?, ?, ?)')
+      .run(planId, req.userId, 'start_task', 'pending_receipt', 'in_progress', 'A发车，任务启动');
+  }
+
+  return res.json({ code: result.success ? 0 : 400, message: result.success ? '🚀 任务已启动！' : result.message });
+});
+
 // 更新进度
 router.put('/plans/:id/progress', authMiddleware, (req: AuthRequest, res) => {
   const { progress, comment } = req.body;
@@ -441,6 +674,7 @@ router.put('/plans/:id/progress', authMiddleware, (req: AuthRequest, res) => {
 
   db.prepare('UPDATE perf_plans SET progress = ?, updated_at = ? WHERE id = ?').run(progress, new Date().toISOString(), req.params.id);
   db.prepare('INSERT INTO perf_logs (plan_id, user_id, action, old_value, new_value, comment) VALUES (?, ?, ?, ?, ?, ?)').run(req.params.id, req.userId, 'progress_update', String(plan.progress), String(progress), comment);
+  logAudit({ businessType: 'perf_plan', businessId: Number(req.params.id), actorId: req.userId!, action: 'progress_update', extra: { from: plan.progress, to: progress } });
 
   return res.json({ code: 0, message: '进度已更新' });
 });

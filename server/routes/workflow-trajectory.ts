@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { getDb } from '../config/database';
 import { authMiddleware, AuthRequest } from '../middleware/auth';
 import { WorkflowEngine, WORKFLOWS } from '../services/workflow-engine';
+import { getAuditLogs } from '../services/audit-logger';
 
 const router = Router();
 
@@ -101,6 +102,20 @@ router.get('/:type/:id', authMiddleware, (req: AuthRequest, res) => {
         assignees: []
       });
       
+      // Inject timestamps from audit logs
+      const auditLogs = getAuditLogs('proposal', id) as any[];
+      trajectory.forEach((node: any) => {
+        if (node.timestamp) return; // already has timestamp from direct log
+        const log = auditLogs.find((l: any) => {
+          if (node.seq === 1) return l.action === 'create' || l.action === 'submit';
+          if (node.seq === 2) return l.from_status === 'pending_hr';
+          if (node.seq === 3) return l.from_status === 'pending_admin';
+          if (node.seq === 4) return l.action === 'publish' || l.to_status === 'approved';
+          return false;
+        });
+        if (log) node.timestamp = log.created_at;
+      });
+
       return res.json({ code: 0, data: trajectory });
     }
 
@@ -175,6 +190,20 @@ router.get('/:type/:id', authMiddleware, (req: AuthRequest, res) => {
         name: '资金下发并结案',
         status: currentStatus === 'completed' ? 'past' : 'future',
         assignees: []
+      });
+
+      // Inject timestamps from audit logs
+      const rewardAuditLogs = getAuditLogs('reward_plan', id) as any[];
+      trajectory.forEach((node: any) => {
+        if (node.timestamp) return;
+        const log = rewardAuditLogs.find((l: any) => {
+          if (node.seq === 1) return l.action === 'create' || l.action === 'submit';
+          if (node.seq === 2) return l.from_status === 'pending_hr';
+          if (node.seq === 3) return l.from_status === 'pending_admin';
+          if (node.seq === 4) return l.action === 'mark_paid' || l.to_status === 'completed';
+          return false;
+        });
+        if (log) node.timestamp = log.created_at;
       });
 
       return res.json({ code: 0, data: trajectory });
@@ -273,6 +302,18 @@ router.get('/:type/:id', authMiddleware, (req: AuthRequest, res) => {
 
   } catch (error: any) {
     console.error('[Trajectory Error]', error);
+    return res.status(500).json({ code: 500, message: error.message });
+  }
+});
+
+// ── 完整审计日志 API ──
+router.get('/audit-log/:type/:id', authMiddleware, (req: AuthRequest, res) => {
+  const { type, id } = req.params;
+  try {
+    const logs = getAuditLogs(type, id);
+    return res.json({ code: 0, data: logs });
+  } catch (error: any) {
+    console.error('[AuditLog Error]', error);
     return res.status(500).json({ code: 500, message: error.message });
   }
 });

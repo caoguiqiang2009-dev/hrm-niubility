@@ -1,8 +1,9 @@
 import { Router } from 'express';
 import { getDb } from '../config/database';
-import { authMiddleware, AuthRequest, isSuperAdmin } from '../middleware/auth';
+import { authMiddleware, AuthRequest, isSuperAdmin, isGM } from '../middleware/auth';
 import { createNotification } from './notifications';
 import { sendCardMessage } from '../services/message';
+import { logAudit } from '../services/audit-logger';
 
 const router = Router();
 
@@ -18,7 +19,7 @@ router.get('/tasks', authMiddleware, (req: AuthRequest, res) => {
   const db = getDb();
   const { status, department } = req.query;
   const user = db.prepare('SELECT role FROM users WHERE id = ?').get(req.userId) as any;
-  const isHrAdmin = user && ['hr', 'admin'].includes(user.role);
+  const isHrAdmin = user && ['hr', 'admin'].includes(user.role) || isGM(req.userId) || isSuperAdmin(req.userId);
 
   let sql = `SELECT pt.*, u.name as creator_name FROM pool_tasks pt LEFT JOIN users u ON pt.created_by = u.id WHERE pt.deleted_at IS NULL AND pt.proposal_status != 'rejected'`;
   const params: any[] = [];
@@ -60,7 +61,7 @@ router.get('/tasks', authMiddleware, (req: AuthRequest, res) => {
 router.get('/tasks/trash', authMiddleware, (req: AuthRequest, res) => {
   const db = getDb();
   const user = db.prepare('SELECT role FROM users WHERE id = ?').get(req.userId) as any;
-  if (!user || !['admin', 'hr'].includes(user.role)) {
+  if (!user || (!['admin', 'hr'].includes(user.role) && !isGM(req.userId) && !isSuperAdmin(req.userId))) {
     return res.status(403).json({ code: 403, message: '仅管理员或HR可查看回收站' });
   }
   const tasks = db.prepare(
@@ -147,6 +148,14 @@ router.post('/tasks/propose', authMiddleware, async (req: AuthRequest, res) => {
 
   // 引擎解析
   const { WorkflowEngine, WORKFLOWS } = await import('../services/workflow-engine');
+
+  if (!is_draft && !isAdminOrGM) {
+    const rawHrbps = WorkflowEngine.getUsersByRoleTag('hrbp');
+    if (rawHrbps.length === 0) {
+      return res.status(400).json({ code: 400, message: '系统中尚未配置任何 HRBP 管理员，提交通道暂时锁死，请联系超级管理员配置' });
+    }
+  }
+
   const nodes = WorkflowEngine.resolveAssignees(WORKFLOWS.PROPOSAL_CREATE, { initiatorId: req.userId });
   const node2 = nodes.find(n => n.seq === 2); // HRBP
   const node3 = nodes.find(n => n.seq === 3); // GM
@@ -204,6 +213,8 @@ router.post('/tasks/propose', authMiddleware, async (req: AuthRequest, res) => {
     } else {
     }
   }
+
+  logAudit({ businessType: 'proposal', businessId: Number(result.lastInsertRowid), actorId: req.userId!, action: is_draft ? 'create' : 'submit', toStatus: proposalStatus, extra: { title, bonus } });
 
   return res.json({ code: 0, message: is_draft ? '草稿已保存' : (isAdminOrGM ? '总经理直发，已通知全员并抄送人事备案' : '提案已提交，等待人事审核'), data: { id: result.lastInsertRowid } });
 });
@@ -314,6 +325,7 @@ router.post('/proposals/:id/withdraw', authMiddleware, (req: AuthRequest, res) =
   }
 
   db.prepare("UPDATE pool_tasks SET proposal_status = 'draft' WHERE id = ?").run(req.params.id);
+  logAudit({ businessType: 'proposal', businessId: Number(req.params.id), actorId: req.userId!, action: 'withdraw', fromStatus: proposal.proposal_status, toStatus: 'draft' });
   return res.json({ code: 0, message: '提案已撤回，可重新编辑后提交' });
 });
 
@@ -393,6 +405,33 @@ router.post('/proposals/:id/review', authMiddleware, async (req: AuthRequest, re
   const { createNotification } = await import('./notifications');
   const { sendCardMessage } = await import('../services/message');
 
+  // -- 🚀 特权转办/转交处理 (Transfer) 🚀 --
+  if (action === 'transfer' && req.body.transfer_to) {
+    const transferUserId = req.body.transfer_to;
+    let updateAssigneeSql = "";
+    if (proposal.proposal_status === 'pending_hr') {
+      updateAssigneeSql = "UPDATE pool_tasks SET hr_reviewer_id = ? WHERE id = ?";
+    } else if (proposal.proposal_status === 'pending_admin') {
+      updateAssigneeSql = "UPDATE pool_tasks SET admin_reviewer_id = ? WHERE id = ?";
+    } else {
+      return res.status(400).json({ code: 400, message: '当前评审阶段不可转办' });
+    }
+    
+    // 执行转移
+    db.prepare(updateAssigneeSql).run(transferUserId, proposal.id);
+    
+    const transferUser = db.prepare('SELECT name FROM users WHERE id = ?').get(transferUserId) as any;
+    const operatorUser = db.prepare('SELECT name FROM users WHERE id = ?').get(req.userId) as any;
+    
+    if (transferUser) {
+      createNotification([transferUserId], 'workflow_transfer', '🔄 悬赏审批转办单', `${operatorUser?.name || '管理员'} 将一个悬赏提案的审批流转交给了您，请在工作台中查看。`, '/pool');
+      try { 
+        sendCardMessage([transferUserId], '🔄 审批节点转办通知', `${operatorUser?.name || '管理员'} 将提案「${proposal.title}」的审核工作转交给了您\n> 留言附注: ${reason || '请协助处理该环节审批'}`, `${process.env.APP_URL || 'http://localhost:3000'}/pool`); 
+      } catch(e) {}
+    }
+    return res.json({ code: 0, message: `任务审批流已成功转办给 ${transferUser?.name}` });
+  }
+
   if (action === 'approve') {
     if (proposal.proposal_status === 'pending_hr') {
       const hrbpIds = node2?.assignees || [];
@@ -413,18 +452,37 @@ router.post('/proposals/:id/review', authMiddleware, async (req: AuthRequest, re
       if (max_participants) { updateSql += ', max_participants = ?'; params.push(Number(max_participants) || 5); }
       if (department) { updateSql += ', department = ?'; params.push(department); }
       if (attachments !== undefined) { updateSql += ', attachments = ?'; params.push(typeof attachments === 'string' ? attachments : JSON.stringify(attachments)); }
-      if (req.body.a) {
-        const aUser = db.prepare('SELECT name FROM users WHERE id = ?').get(req.body.a) as any;
-        if (aUser) {
-          const defaultRolesConfig = [
-            { name: 'R', max: 0, users: [] },
-            { name: 'A', max: 1, users: [{ id: req.body.a, name: aUser.name }] },
-            { name: 'C', max: 0, users: [] },
-            { name: 'I', max: 0, users: [] }
-          ];
-          updateSql += ', roles_config = ?';
-          params.push(JSON.stringify(defaultRolesConfig));
-        }
+      if (req.body.dt || req.body.a || req.body.r || req.body.c || req.body.i) {
+        const buildRole = (name: string, idsStr: string | undefined, max: number = 0) => {
+          if (!idsStr) return { name, max, users: [] };
+          const ids = idsStr.split(',').filter(Boolean);
+          if (ids.length === 0) return { name, max, users: [] };
+          const placeholders = ids.map(() => '?').join(',');
+          const users = db.prepare(`SELECT id, name, avatar_url, department_id, status, role FROM users WHERE id IN (${placeholders})`).all(...ids).map((u: any) => ({
+            id: u.id,
+            name: u.name,
+            avatar: u.avatar_url,
+            department: u.department_id,
+            type: u.role,
+            status: u.status
+          }));
+          return { name, max, users };
+        };
+
+        const defaultRolesConfig = [
+          buildRole('R', req.body.r, 0),
+          buildRole('A', req.body.a, 1),
+          buildRole('C', req.body.c, 0),
+          buildRole('I', req.body.i, 0),
+          buildRole('交付对象', req.body.dt, 0)
+        ];
+        updateSql += ', roles_config = ?';
+        params.push(JSON.stringify(defaultRolesConfig));
+      }
+      // 流程3: HR审批时强制持久化交付对象金主ID
+      if (req.body.dt) {
+        updateSql += ', delivery_target_id = ?';
+        params.push(req.body.dt);
       }
       if (req.body.s) { 
         const pdca = proposal.description?.match(/【PDCA】\\n(.*)/s)?.[1] || 'Plan:  | Do:  | Check:  | Act: ';
@@ -439,6 +497,7 @@ router.post('/proposals/:id/review', authMiddleware, async (req: AuthRequest, re
       updateSql += ' WHERE id = ?';
       params.push(proposal.id);
       db.prepare(updateSql).run(...params);
+      logAudit({ businessType: 'proposal', businessId: proposal.id, actorId: req.userId!, action: 'approve', fromStatus: 'pending_hr', toStatus: nextStatus, comment: reason });
 
       if (nextStatus === 'pending_admin') {
         const adminIds = Array.from(new Set(nextApprovers));
@@ -464,6 +523,11 @@ router.post('/proposals/:id/review', authMiddleware, async (req: AuthRequest, re
       if (!adminIds.includes(req.userId) && !isAdminOrGM) {
         return res.status(403).json({ code: 403, message: '仅分配的高管可复核' });
       }
+      // 流程3: 发布前校验交付对象
+      if (!proposal.delivery_target_id && !req.body.dt) {
+        // 软性警告：允许管理员在审批时补充
+        console.warn(`[流程3警告] 提案 ${proposal.id} 发布时无交付对象(delivery_target_id)，建议HR在审核时指定`);
+      }
       let updateSql = "UPDATE pool_tasks SET proposal_status = 'approved', status = 'published', admin_reviewer_id = ?";
       const params: any[] = [req.userId];
       if (bonus !== undefined) { updateSql += ', bonus = ?'; params.push(Number(bonus) || 0); }
@@ -482,6 +546,7 @@ router.post('/proposals/:id/review', authMiddleware, async (req: AuthRequest, re
       updateSql += ' WHERE id = ?';
       params.push(proposal.id);
       db.prepare(updateSql).run(...params);
+      logAudit({ businessType: 'proposal', businessId: proposal.id, actorId: req.userId!, action: 'approve', fromStatus: 'pending_admin', toStatus: 'approved', comment: reason });
 
       // 通知提案人已通过
       createNotification([proposal.created_by], 'proposal', '🎉 提案已通过', `您的提案「${proposal.title}」已通过总经理复核，全员可见`, '/company');
@@ -515,6 +580,7 @@ router.post('/proposals/:id/review', authMiddleware, async (req: AuthRequest, re
     updateSql += ' WHERE id = ?';
     params.push(proposal.id);
     db.prepare(updateSql).run(...params);
+    logAudit({ businessType: 'proposal', businessId: proposal.id, actorId: req.userId!, action: 'reject', fromStatus: proposal.proposal_status, toStatus: 'rejected', comment: reason || '未说明' });
     
     // 通知提案人被驳回
     createNotification([proposal.created_by], 'proposal', '❌ 提案被驳回', `您的提案「${proposal.title}」被驳回，原因：${reason || '未说明'}`, '/company');
@@ -963,7 +1029,7 @@ router.post('/tasks/:id/start-project', authMiddleware, (req: AuthRequest, res) 
   // 验证：当前用户必须是该任务的 A 角色且已通过审批
   const isA = db.prepare("SELECT id FROM pool_role_claims WHERE pool_task_id = ? AND user_id = ? AND role_name = 'A' AND status = 'approved'").get(taskId, req.userId) as any;
   const user = db.prepare('SELECT role FROM users WHERE id = ?').get(req.userId) as any;
-  if (!isA && (!user || !['admin', 'hr'].includes(user.role))) {
+  if (!isA && (!user || (!['admin', 'hr'].includes(user.role) && !isGM(req.userId) && !isSuperAdmin(req.userId)))) {
     return res.status(403).json({ code: 403, message: '仅责任验收者(A)或HR可启动项目' });
   }
 
@@ -972,13 +1038,22 @@ router.post('/tasks/:id/start-project', authMiddleware, (req: AuthRequest, res) 
   try { rolesConfig = JSON.parse(task.roles_config || '[]'); } catch {}
   const missingRoles: string[] = [];
   const ROLE_LABELS: Record<string, string> = { R: '执行者', A: '责任验收者', C: '被咨询者', I: '被告知者' };
-  for (const rc of rolesConfig) {
-    if (['R', 'A'].includes(rc.name)) {
-      const approvedCount = (db.prepare("SELECT COUNT(*) as c FROM pool_role_claims WHERE pool_task_id = ? AND role_name = ? AND status = 'approved'").get(taskId, rc.name) as any)?.c || 0;
-      if (approvedCount < (rc.required || 1)) {
-        missingRoles.push(`${ROLE_LABELS[rc.name] || rc.name}(需${rc.required || 1}人, 已${approvedCount}人)`);
+
+  if (rolesConfig.length > 0) {
+    for (const rc of rolesConfig) {
+      if (['R', 'A'].includes(rc.name)) {
+        const approvedCount = (db.prepare("SELECT COUNT(*) as c FROM pool_role_claims WHERE pool_task_id = ? AND role_name = ? AND status = 'approved'").get(taskId, rc.name) as any)?.c || 0;
+        if (approvedCount < (rc.required || 1)) {
+          missingRoles.push(`${ROLE_LABELS[rc.name] || rc.name}(需${rc.required || 1}人, 已${approvedCount}人)`);
+        }
       }
     }
+  } else {
+    // 流程4: 无 rolesConfig 时兜底硬校验
+    const hasApprovedA = (db.prepare("SELECT COUNT(*) as c FROM pool_role_claims WHERE pool_task_id = ? AND role_name = 'A' AND status = 'approved'").get(taskId) as any)?.c || 0;
+    const hasApprovedR = (db.prepare("SELECT COUNT(*) as c FROM pool_role_claims WHERE pool_task_id = ? AND role_name = 'R' AND status = 'approved'").get(taskId) as any)?.c || 0;
+    if (hasApprovedA === 0) missingRoles.push('责任验收者(A) 未到位');
+    if (hasApprovedR === 0) missingRoles.push('执行者(R) 未到位');
   }
   if (missingRoles.length > 0) {
     return res.json({ code: 400, message: `以下必填角色未满员: ${missingRoles.join('、')}` });

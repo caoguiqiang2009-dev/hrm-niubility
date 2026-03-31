@@ -90,6 +90,21 @@ export function initDatabase(): void {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
+    -- ============ 统一审计日志 ============
+    CREATE TABLE IF NOT EXISTS workflow_audit_logs (
+      id            INTEGER PRIMARY KEY AUTOINCREMENT,
+      business_type TEXT NOT NULL,
+      business_id   INTEGER NOT NULL,
+      actor_id      TEXT NOT NULL,
+      action        TEXT NOT NULL,
+      from_status   TEXT,
+      to_status     TEXT,
+      comment       TEXT,
+      extra_json    TEXT,
+      created_at    DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX IF NOT EXISTS idx_wal_biz ON workflow_audit_logs(business_type, business_id);
+
     -- ============ 绩效池 ============
 
     CREATE TABLE IF NOT EXISTS pool_tasks (
@@ -458,6 +473,8 @@ export function initDatabase(): void {
     'ALTER TABLE pool_tasks ADD COLUMN terminated_by TEXT',
     'ALTER TABLE pool_tasks ADD COLUMN terminated_at DATETIME',
     'ALTER TABLE pool_tasks ADD COLUMN star_phase_started_at DATETIME',
+    // 流程3&6: 交付对象金主物理字段
+    'ALTER TABLE pool_tasks ADD COLUMN delivery_target_id TEXT',
   ];
   for (const sql of poolMigrations) {
     try { db.prepare(sql).run(); } catch (e) {}
@@ -540,6 +557,8 @@ export function initDatabase(): void {
     'ALTER TABLE perf_plans ADD COLUMN dept_head_id TEXT',
     'ALTER TABLE perf_plans ADD COLUMN resource TEXT',
     'ALTER TABLE perf_plans ADD COLUMN relevance TEXT',
+    // 流程1: 团队签收状态JSON
+    'ALTER TABLE perf_plans ADD COLUMN receipt_status TEXT',
   ];
   for (const sql of perfMigrations) {
     try { db.prepare(sql).run(); } catch (e) {}

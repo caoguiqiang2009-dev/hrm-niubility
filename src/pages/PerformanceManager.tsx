@@ -76,9 +76,11 @@ export default function PerformanceManager({ navigate }: { navigate: (v: string)
     'pending_review': { label: '待审批', color: 'bg-amber-100 text-amber-700' },
     'approved': { label: '执行中', color: 'bg-blue-100 text-blue-700' },
     'rejected': { label: '已驳回', color: 'bg-red-100 text-red-700' },
-    'pending_assessment': { label: '待自评', color: 'bg-purple-100 text-purple-700' },
-    'assessed': { label: '待评分', color: 'bg-indigo-100 text-indigo-700' },
+    'in_progress': { label: '进行中', color: 'bg-blue-100 text-blue-700' },
+    'pending_assessment': { label: '待评级', color: 'bg-purple-100 text-purple-700' },
+    'assessed': { label: '已结案', color: 'bg-indigo-100 text-indigo-700' },
     'completed': { label: '已完成', color: 'bg-emerald-100 text-emerald-700' },
+    'pending_receipt': { label: '待签收', color: 'bg-cyan-100 text-cyan-700' },
   };
 
   const handleReview = async (planId: number, action: 'approve' | 'reject', reason?: string) => {
@@ -152,7 +154,7 @@ export default function PerformanceManager({ navigate }: { navigate: (v: string)
             <button onClick={() => setFilterStatus('')} className={`px-4 py-1.5 rounded-lg text-sm font-bold transition-all ${filterStatus === '' ? 'bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-100' : 'text-slate-500 hover:text-slate-700'}`}>全部</button>
             <button onClick={() => setFilterStatus('pending_review')} className={`px-4 py-1.5 rounded-lg text-sm font-bold transition-all ${filterStatus === 'pending_review' ? 'bg-amber-50 text-amber-700' : 'text-slate-500 hover:text-slate-700'}`}>待审批</button>
             <button onClick={() => setFilterStatus('approved')} className={`px-4 py-1.5 rounded-lg text-sm font-bold transition-all ${filterStatus === 'approved' ? 'bg-blue-50 text-blue-700' : 'text-slate-500 hover:text-slate-700'}`}>执行中</button>
-            <button onClick={() => setFilterStatus('assessed')} className={`px-4 py-1.5 rounded-lg text-sm font-bold transition-all ${filterStatus === 'assessed' ? 'bg-indigo-50 text-indigo-700' : 'text-slate-500 hover:text-slate-700'}`}>待评分</button>
+            <button onClick={() => setFilterStatus('assessed')} className={`px-4 py-1.5 rounded-lg text-sm font-bold transition-all ${filterStatus === 'assessed' ? 'bg-indigo-50 text-indigo-700' : 'text-slate-500 hover:text-slate-700'}`}>已结案</button>
           </div>
         </div>
 

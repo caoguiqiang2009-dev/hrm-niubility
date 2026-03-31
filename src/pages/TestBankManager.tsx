@@ -30,6 +30,7 @@ export default function TestBankManager({ navigate, isEmbedded }: { navigate?: (
   const [editingBank, setEditingBank] = useState<TestBank>({ title: '', description: '', questions: [] });
   const [selectedBankId, setSelectedBankId] = useState<number | null>(null);
   const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
+  const [searchKeyword, setSearchKeyword] = useState('');
   
   const [resultsBankId, setResultsBankId] = useState<number | null>(null);
   
@@ -220,6 +221,7 @@ export default function TestBankManager({ navigate, isEmbedded }: { navigate?: (
         alert('派发成功！系统已向员工发送通知。');
         setShowAssignModal(false);
         setSelectedUserIds([]);
+        setSearchKeyword('');
       } else {
         alert(data.message);
       }
@@ -475,24 +477,34 @@ export default function TestBankManager({ navigate, isEmbedded }: { navigate?: (
               </button>
             </div>
             <div className="p-6">
-              <p className="text-sm font-bold mb-3">选择派发对象人员：</p>
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-sm font-bold">选择派发对象人员：</p>
+                <div className="relative">
+                  <span className="material-symbols-outlined absolute left-2.5 top-1/2 -translate-y-1/2 text-[16px] text-on-surface-variant">search</span>
+                  <input 
+                    type="text" 
+                    placeholder="搜索人员..." 
+                    value={searchKeyword}
+                    onChange={e => setSearchKeyword(e.target.value)}
+                    className="pl-8 pr-3 py-1.5 text-sm rounded-lg border border-outline-variant focus:border-primary focus:ring-1 focus:ring-primary outline-none w-48 bg-surface-container-lowest"
+                  />
+                </div>
+              </div>
               <div className="h-64 border border-outline-variant/20 rounded-xl overflow-y-auto w-full p-2 bg-surface">
-                 {users.map(u => (
+                 {users.filter(u => u.name.includes(searchKeyword)).map(u => (
                    <label key={u.id} className="flex items-center gap-3 p-2 hover:bg-surface-container rounded-lg cursor-pointer transition-colors">
                      <input type="checkbox" checked={selectedUserIds.includes(u.id)} onChange={e => {
                        if(e.target.checked) setSelectedUserIds([...selectedUserIds, u.id]);
                        else setSelectedUserIds(selectedUserIds.filter(id => id !== u.id));
                      }} className="w-4 h-4 rounded text-primary focus:ring-primary border-outline" />
-                     <div className="w-8 h-8 rounded-full bg-slate-200 overflow-hidden shrink-0">
-                       <img src={u.avatar_url || '/default-avatar.png'} alt="" className="w-full h-full object-cover" />
-                     </div>
-                     <div>
-                       <div className="text-sm font-bold">{u.name}</div>
-                       <div className="text-xs text-on-surface-variant">{u.department || '未分配部门'}</div>
+                     {/* 取消头像 */}
+                     <div className="flex-1 flex items-center justify-between">
+                       <div className="text-sm font-bold text-on-surface">{u.name}</div>
+                       <div className="text-xs text-on-surface-variant bg-surface-container px-2 py-0.5 rounded-md">{u.department || '未分配部门'}</div>
                      </div>
                    </label>
                  ))}
-                 {users.length === 0 && <p className="text-center text-sm text-on-surface-variant p-4">没有可用人员数据</p>}
+                 {users.filter(u => u.name.includes(searchKeyword)).length === 0 && <p className="text-center text-sm text-on-surface-variant p-4">没有匹配的人员</p>}
               </div>
             </div>
             <div className="px-6 py-4 border-t border-outline-variant/20 flex gap-3 justify-end bg-surface shrink-0">

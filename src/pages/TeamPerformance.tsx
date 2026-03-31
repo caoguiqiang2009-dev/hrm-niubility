@@ -469,7 +469,7 @@ export default function TeamPerformance({ navigate }: { navigate: (view: string)
                               task.status === 'pending_review' ? 'bg-amber-100 text-amber-700' :
                               task.status === 'rejected' ? 'bg-rose-100 text-rose-700' : 'bg-slate-100 text-slate-700'
                             }`}>
-                              {task.status === 'completed' || task.status === 'assessed' ? '待考核' :
+                              {task.status === 'completed' || task.status === 'assessed' ? '已结案' :
                                task.status === 'in_progress' ? '进行中' :
                                task.status === 'pending_review' ? '待审批' :
                                task.status === 'rejected' ? '被驳回' : '挂起'}
@@ -500,7 +500,7 @@ export default function TeamPerformance({ navigate }: { navigate: (view: string)
               { id: 'pending', title: '待处理 / 挂起', statuses: ['pending', 'suspended', 'claiming'] },
               { id: 'in_progress', title: '进行中', statuses: ['in_progress'] },
               { id: 'review', title: '待验收', statuses: ['pending_review'] },
-              { id: 'done', title: '已完成 / 已评分', statuses: ['completed', 'assessed', 'rewarded'] }
+              { id: 'done', title: '已结案', statuses: ['completed', 'assessed', 'rewarded'] }
             ].map(col => (
               <div key={col.id} className="flex-none w-80 flex flex-col bg-surface-container-lowest border border-surface-container rounded-2xl overflow-hidden shadow-sm">
                 <div className="px-4 py-3 bg-slate-50 dark:bg-slate-800/50 border-b border-surface-container font-bold text-sm text-slate-700 dark:text-slate-300 flex justify-between items-center">
@@ -596,7 +596,7 @@ export default function TeamPerformance({ navigate }: { navigate: (view: string)
                           task.status === 'pending_review' ? 'bg-amber-100 text-amber-700 border-amber-200' :
                           task.status === 'rejected' ? 'bg-rose-100 text-rose-700 border-rose-200' : 'bg-slate-100 text-slate-600 border-slate-200'
                         }`}>
-                          {task.status === 'completed' || task.status === 'assessed' ? '待考核' :
+                          {task.status === 'completed' || task.status === 'assessed' ? '已结案' :
                            task.status === 'in_progress' ? '进行中' :
                            task.status === 'pending_review' ? '待审批' :
                            task.status === 'rejected' ? '被驳回' : '挂起'}

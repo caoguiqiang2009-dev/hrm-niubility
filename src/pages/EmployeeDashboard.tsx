@@ -23,7 +23,7 @@ const STATUS_MAP: Record<string, { label: string; color: string; bg: string }> =
   submitted: { label: '审批中', color: 'text-blue-600', bg: 'bg-blue-50' },
   approved: { label: '已通过', color: 'text-emerald-600', bg: 'bg-emerald-50' },
   rejected: { label: '已驳回', color: 'text-red-500', bg: 'bg-red-50' },
-  assessed: { label: '已评分', color: 'text-purple-600', bg: 'bg-purple-50' },
+  assessed: { label: '已结案', color: 'text-purple-600', bg: 'bg-purple-50' },
   pending_hr: { label: '待人事审核', color: 'text-amber-600', bg: 'bg-amber-50' },
   pending_admin: { label: '待总经理复核', color: 'text-orange-600', bg: 'bg-orange-50' },
 };

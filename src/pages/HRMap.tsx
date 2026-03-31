@@ -33,7 +33,7 @@ const deptColors = [
 
 const statusLabels: Record<string, { label: string; color: string }> = {
   completed: { label: '已完成', color: 'bg-green-100 text-green-700' },
-  assessed: { label: '已评分', color: 'bg-purple-100 text-purple-700' },
+  assessed: { label: '已结案', color: 'bg-purple-100 text-purple-700' },
   in_progress: { label: '进行中', color: 'bg-blue-100 text-blue-700' },
   pending_review: { label: '待审批', color: 'bg-amber-100 text-amber-700' },
   draft: { label: '草稿', color: 'bg-slate-100 text-slate-600' },

@@ -11,8 +11,9 @@
  */
 import { Router } from 'express';
 import { getDb } from '../config/database';
-import { authMiddleware, AuthRequest } from '../middleware/auth';
+import { authMiddleware, AuthRequest, isGM as isGMFn, isSuperAdmin as isSAFn } from '../middleware/auth';
 import { sendMarkdownMessage } from '../services/message';
+import { logAudit } from '../services/audit-logger';
 
 const router = Router();
 
@@ -90,6 +91,7 @@ router.post('/initiate/:taskId', authMiddleware, (req: AuthRequest, res) => {
   `).run(taskId, userId, task.bonus || 0, task.reward_type || 'money');
 
   const planId = result.lastInsertRowid;
+  logAudit({ businessType: 'reward_plan', businessId: Number(planId), actorId: userId, action: 'create', toStatus: 'draft' });
 
   // 预填每位 R/A 成员（金额0，等 A 填写）
   const insertDist = db.prepare(`
@@ -142,7 +144,7 @@ router.get('/:id', authMiddleware, (req: AuthRequest, res) => {
   if (!plan) return res.status(404).json({ code: 404, message: '分配方案不存在' });
 
   const isOwner = plan.initiator_id === userId;
-  const isHRAdmin = ['hr', 'admin'].includes(user?.role);
+  const isHRAdmin = ['hr', 'admin'].includes(user?.role) || isGMFn(userId) || isSAFn(userId);
   if (!isOwner && !isHRAdmin) return res.status(403).json({ code: 403, message: '无权查看' });
 
   const distributions = db.prepare(
@@ -220,22 +222,101 @@ router.post('/:id/submit', authMiddleware, async (req: AuthRequest, res) => {
     return res.status(400).json({ code: 400, message: '请上传至少一份验收附件后再提交' });
   }
 
-  const now = new Date().toISOString();
-  db.prepare(`UPDATE pool_reward_plans SET status = 'pending_hr', updated_at = ? WHERE id = ?`).run(now, planId);
-
   const task = db.prepare('SELECT title FROM pool_tasks WHERE id = ?').get(plan.pool_task_id) as any;
   const operator = db.prepare('SELECT name FROM users WHERE id = ?').get(userId) as any;
 
-  // 通知所有 HR
-  const hrs = db.prepare(`SELECT id FROM users WHERE role IN ('hr', 'admin')`).all() as any[];
-  try {
-    await sendMarkdownMessage(
-      hrs.map((u: any) => u.id),
-      `**🎯 奖励分配方案待审核**\n\n> **任务：**${task?.title}\n> **发起人：**${operator?.name}\n> **总奖金：**¥${plan.total_bonus}\n\n请在系统中审核此奖励分配方案\n[👉 立即审核](${APP_URL}/pool)`
-    );
-  } catch {}
+  // 1. 获取工作流拦截链路：看看有没有金主 (dt)
+  const { WorkflowEngine, WORKFLOWS } = await import('../services/workflow-engine');
+  const nodes = WorkflowEngine.resolveAssignees(WORKFLOWS.REWARD_PLAN, { initiatorId: plan.initiator_id, poolTaskId: plan.pool_task_id });
+  const dtNode = nodes.find(n => n.seq === 2); // 金主验收 (delivery_target)
+  
+  const now = new Date().toISOString();
+  let status = 'pending_dt';
+  let targetAssignees = dtNode?.assignees || [];
 
-  return res.json({ code: 0, message: '已提交 HR 审核，等待审核结果' });
+  if (!dtNode || dtNode.isSkipped || targetAssignees.length === 0) {
+    status = 'pending_hr'; // 没查到金主直接滚到 HR
+  }
+
+  db.prepare(`UPDATE pool_reward_plans SET status = ?, updated_at = ? WHERE id = ?`).run(status, now, planId);
+  logAudit({ businessType: 'reward_plan', businessId: planId, actorId: plan.initiator_id, action: 'submit', fromStatus: 'draft', toStatus: status });
+
+  try {
+    if (status === 'pending_dt') {
+      await sendMarkdownMessage(
+        targetAssignees,
+        `**📦 悬赏交付物与结项验收**\n\n> **任务：**${task?.title}\n> **发起人：**${operator?.name}\n> **总奖金：**¥${plan.total_bonus}\n\n作为本任务的金主(交付对象)，请在系统中查看执行成果进行验收\n[👉 去验收](${process.env.APP_URL || 'http://localhost:3000'}/pool)`
+      );
+      const { createNotification } = await import('./notifications');
+      createNotification(targetAssignees, 'workflow_pending', '📦 悬赏交付物验收', `${operator?.name} 向您提交了任务 [${task?.title}] 的最终成果，请验收并批准其分账方案。`, '/pool');
+      return res.json({ code: 0, message: '已提交金主(Delivery Target)进行首轮验收' });
+    } else {
+      // 没金主，直发 HR
+      const hrs = db.prepare(`SELECT id FROM users WHERE role IN ('hr', 'admin')`).all() as any[];
+      await sendMarkdownMessage(
+        hrs.map((u: any) => u.id),
+        `**🎯 奖励分配方案待审核**\n\n> **任务：**${task?.title}\n> **发起人：**${operator?.name}\n> **总奖金：**¥${plan.total_bonus}\n\n请在系统中审核此奖励分配方案\n[👉 立即审核](${process.env.APP_URL || 'http://localhost:3000'}/pool)`
+      );
+      return res.json({ code: 0, message: '已提交 HR 审核，等待审核结果' });
+    }
+  } catch {}
+  return res.json({ code: 0, message: `已进入下一个审核阶段` });
+});
+
+// POST /api/pool/rewards/:id/dt-review — 金主验收 (Delivery Target)
+router.post('/:id/dt-review', authMiddleware, async (req: AuthRequest, res) => {
+  const db = getDb();
+  const planId = parseInt(req.params.id);
+  const userId = req.userId!;
+
+  const plan = db.prepare('SELECT * FROM pool_reward_plans WHERE id = ?').get(planId) as any;
+  if (!plan || plan.status !== 'pending_dt') return res.status(400).json({ code: 400, message: '当前方案未在等待金主验货状态' });
+
+  const { isGM, isSuperAdmin } = await import('../middleware/auth');
+  const isAdminOrGM = isGM(userId) || isSuperAdmin(userId);
+
+  const { WorkflowEngine, WORKFLOWS } = await import('../services/workflow-engine');
+  const nodes = WorkflowEngine.resolveAssignees(WORKFLOWS.REWARD_PLAN, { initiatorId: plan.initiator_id, poolTaskId: plan.pool_task_id });
+  const dtAssignees = plan.dt_reviewer_id ? [plan.dt_reviewer_id] : (nodes.find(n => n.seq === 2)?.assignees || []);
+
+  const { action, transfer_to, reason } = req.body;
+
+  // -- 特权转交支持 --
+  if (action === 'transfer' && transfer_to) {
+    db.prepare("UPDATE pool_reward_plans SET dt_reviewer_id = ? WHERE id = ?").run(transfer_to, planId);
+    const { createNotification } = await import('./notifications');
+    const transferUser = db.prepare('SELECT name FROM users WHERE id = ?').get(transfer_to) as any;
+    const operatorUser = db.prepare('SELECT name FROM users WHERE id = ?').get(req.userId) as any;
+    if (transferUser) {
+      createNotification([transfer_to], 'workflow_transfer', '🔄 转办打分验收', `${operatorUser?.name || '管理员'} 将一个悬赏分红审核任务转交给了您，请在工作台中查看。`, '/pool');
+    }
+    return res.json({ code: 0, message: `金主验收节点已转办给 ${transferUser?.name}` });
+  }
+
+  if (!dtAssignees.includes(userId) && !isAdminOrGM) {
+     return res.status(403).json({ code: 403, message: '您不是本悬赏任务的【验收金主】或相关负责人，无权代办该节点' });
+  }
+
+  if (!['approve', 'reject'].includes(action)) return res.status(400).json({ code: 400, message: '无效操作' });
+
+  const now = new Date().toISOString();
+  if (action === 'approve') {
+    db.prepare(`UPDATE pool_reward_plans SET status = 'pending_hr', updated_at = ? WHERE id = ?`).run(now, planId);
+    logAudit({ businessType: 'reward_plan', businessId: planId, actorId: userId, action: 'approve', fromStatus: 'pending_dt', toStatus: 'pending_hr', comment: reason || '金主验收通过' });
+    const hrs = db.prepare(`SELECT id FROM users WHERE role IN ('hr', 'admin')`).all() as any[];
+    try {
+      const { sendMarkdownMessage } = await import('../services/message');
+      await sendMarkdownMessage(
+        hrs.map((u: any) => u.id),
+        `**🎯 奖励分配方案金主已验收通过**\n\n> **总奖金：**¥${plan.total_bonus}\n\n该悬赏的验收对象已经画押确认，请人力专员在系统中合规审核此奖励分配方案\n[👉 去复核](${process.env.APP_URL || 'http://localhost:3000'}/pool)`
+      );
+    } catch {}
+    return res.json({ code: 0, message: '金主已收货！单据转交人力专员(HRBP)合规审计' });
+  } else {
+    db.prepare(`UPDATE pool_reward_plans SET status = 'rejected', updated_at = ? WHERE id = ?`).run(now, planId);
+    logAudit({ businessType: 'reward_plan', businessId: planId, actorId: userId, action: 'reject', fromStatus: 'pending_dt', toStatus: 'rejected', comment: reason || '金主验收拒绝' });
+    return res.json({ code: 0, message: '已打回给负责人，让他们重新切肉' });
+  }
 });
 
 // POST /api/pool/rewards/:id/hr-review — HR 审核
@@ -251,9 +332,23 @@ router.post('/:id/hr-review', authMiddleware, async (req: AuthRequest, res) => {
   const isAdminOrGM = isGM(userId) || isSuperAdmin(userId);
 
   const { WorkflowEngine, WORKFLOWS } = await import('../services/workflow-engine');
-  const nodes = WorkflowEngine.resolveAssignees(WORKFLOWS.REWARD_PLAN, { initiatorId: plan.initiator_id });
-  const node2 = nodes.find(n => n.seq === 2); // HRBP
-  const hrbpIds = node2?.assignees || [];
+  const nodes = WorkflowEngine.resolveAssignees(WORKFLOWS.REWARD_PLAN, { initiatorId: plan.initiator_id, poolTaskId: plan.pool_task_id });
+  const node3 = nodes.find(n => n.seq === 3); // HRBP合规审计
+  const hrbpIds = plan.hr_reviewer_id ? [plan.hr_reviewer_id] : (node3?.assignees || []);
+
+  const { action, transfer_to, comment, distributions } = req.body;
+
+  // -- 特权转交支持 --
+  if (action === 'transfer' && transfer_to) {
+    db.prepare("UPDATE pool_reward_plans SET hr_reviewer_id = ? WHERE id = ?").run(transfer_to, planId);
+    const { createNotification } = await import('./notifications');
+    const transferUser = db.prepare('SELECT name FROM users WHERE id = ?').get(transfer_to) as any;
+    const operatorUser = db.prepare('SELECT name FROM users WHERE id = ?').get(req.userId) as any;
+    if (transferUser) {
+      createNotification([transfer_to], 'workflow_transfer', '🔄 合规审查转办单', `${operatorUser?.name || '管理员'} 将一个悬赏分红审核任务[HRBP]流转交给了您。`, '/pool');
+    }
+    return res.json({ code: 0, message: `合规审计节点已转办给 ${transferUser?.name}` });
+  }
 
   if (!hrbpIds.includes(userId) && !isAdminOrGM) {
      return res.status(403).json({ code: 403, message: '仅分配的 HRBP 或高管可审核' });
@@ -261,7 +356,6 @@ router.post('/:id/hr-review', authMiddleware, async (req: AuthRequest, res) => {
 
   const user = db.prepare('SELECT role, name FROM users WHERE id = ?').get(userId) as any;
 
-  const { action, comment, distributions } = req.body;
   if (!['approve', 'reject'].includes(action)) return res.status(400).json({ code: 400, message: '无效操作' });
 
   const now = new Date().toISOString();
@@ -282,6 +376,7 @@ router.post('/:id/hr-review', authMiddleware, async (req: AuthRequest, res) => {
   db.prepare(`
     UPDATE pool_reward_plans SET status = ?, hr_reviewer_id = ?, hr_comment = ?, hr_reviewed_at = ?, updated_at = ? WHERE id = ?
   `).run(newStatus, userId, comment || '', now, now, planId);
+  logAudit({ businessType: 'reward_plan', businessId: planId, actorId: userId, action: action === 'approve' ? 'approve' : 'reject', fromStatus: 'pending_hr', toStatus: newStatus, comment });
 
   const task = db.prepare('SELECT title FROM pool_tasks WHERE id = ?').get(plan.pool_task_id) as any;
 
@@ -320,17 +415,29 @@ router.post('/:id/admin-confirm', authMiddleware, async (req: AuthRequest, res) 
   const isAdminOrGM = isGM(userId) || isSuperAdmin(userId);
 
   const { WorkflowEngine, WORKFLOWS } = await import('../services/workflow-engine');
-  const nodes = WorkflowEngine.resolveAssignees(WORKFLOWS.REWARD_PLAN, { initiatorId: plan.initiator_id });
-  const node3 = nodes.find(n => n.seq === 3); // GM
-  const adminIds = node3?.assignees || [];
+  const nodes = WorkflowEngine.resolveAssignees(WORKFLOWS.REWARD_PLAN, { initiatorId: plan.initiator_id, poolTaskId: plan.pool_task_id });
+  const adminNode = nodes.find(n => n.seq === 4); // 总经理终审
+  const gms = plan.admin_reviewer_id ? [plan.admin_reviewer_id] : (adminNode?.assignees || []);
 
-  if (!adminIds.includes(userId) && !isAdminOrGM) {
+  const { action, transfer_to, comment } = req.body;
+
+  // -- 特权转交支持 --
+  if (action === 'transfer' && transfer_to) {
+    db.prepare("UPDATE pool_reward_plans SET admin_reviewer_id = ? WHERE id = ?").run(transfer_to, planId);
+    const { createNotification } = await import('./notifications');
+    const transferUser = db.prepare('SELECT name FROM users WHERE id = ?').get(transfer_to) as any;
+    const operatorUser = db.prepare('SELECT name FROM users WHERE id = ?').get(req.userId) as any;
+    if (transferUser) {
+      createNotification([transfer_to], 'workflow_transfer', '🔄 终审确认转办单', `${operatorUser?.name || '高管'} 移交了一个奖金发放终审单给您。`, '/pool');
+    }
+    return res.json({ code: 0, message: `总裁终审节点已转办给 ${transferUser?.name}` });
+  }
+
+  if (!gms.includes(userId) && !isAdminOrGM) {
      return res.status(403).json({ code: 403, message: '仅分配的总经理/高管可最终确认' });
   }
 
   const user = db.prepare('SELECT role, name FROM users WHERE id = ?').get(userId) as any;
-
-  const { action, comment } = req.body;
   if (!['approve', 'reject'].includes(action)) return res.status(400).json({ code: 400, message: '无效操作' });
 
   const now = new Date().toISOString();
@@ -353,6 +460,7 @@ router.post('/:id/admin-confirm', authMiddleware, async (req: AuthRequest, res) 
     SET status = 'approved', admin_reviewer_id = ?, admin_comment = ?, admin_reviewed_at = ?, pay_period = ?, updated_at = ?
     WHERE id = ?
   `).run(userId, comment || '', now, payPeriod, now, planId);
+  logAudit({ businessType: 'reward_plan', businessId: planId, actorId: userId, action: 'approve', fromStatus: 'pending_admin', toStatus: 'approved', comment, extra: { payPeriod } });
 
   // 【风险4修复】Admin 批准奖励 → 同步任务状态为 rewarded
   db.prepare(`UPDATE pool_tasks SET status = 'rewarded' WHERE id = ?`).run(plan.pool_task_id);
@@ -384,7 +492,7 @@ router.post('/:id/mark-paid', authMiddleware, async (req: AuthRequest, res) => {
   const userId = req.userId!;
   const user = db.prepare('SELECT role FROM users WHERE id = ?').get(userId) as any;
 
-  if (!['hr', 'admin'].includes(user?.role)) {
+  if (!['hr', 'admin'].includes(user?.role) && !isGMFn(userId) && !isSAFn(userId)) {
     return res.status(403).json({ code: 403, message: '仅 HR/Admin 可确认发放' });
   }
 
@@ -396,6 +504,7 @@ router.post('/:id/mark-paid', authMiddleware, async (req: AuthRequest, res) => {
 
   const now = new Date().toISOString();
   db.prepare(`UPDATE pool_reward_plans SET status = 'paid', paid_at = ?, updated_at = ? WHERE id = ?`).run(now, now, planId);
+  logAudit({ businessType: 'reward_plan', businessId: planId, actorId: userId, action: 'mark_paid', fromStatus: 'approved', toStatus: 'paid' });
   // 同步每人 paid_at
   db.prepare(`UPDATE pool_reward_distributions SET paid_at = ? WHERE reward_plan_id = ?`).run(now, planId);
 
@@ -424,7 +533,7 @@ router.get('/', authMiddleware, (req: AuthRequest, res) => {
   const userId = req.userId!;
   const user = db.prepare('SELECT role FROM users WHERE id = ?').get(userId) as any;
 
-  const isHRAdmin = ['hr', 'admin'].includes(user?.role);
+  const isHRAdmin = ['hr', 'admin'].includes(user?.role) || isGMFn(userId) || isSAFn(userId);
   if (!isHRAdmin) return res.status(403).json({ code: 403, message: '无权限' });
 
   const { status, pay_period } = req.query;

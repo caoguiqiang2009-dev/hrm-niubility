@@ -6,6 +6,7 @@ import { useAuth } from '../context/AuthContext';
 import { useRTASR } from '../hooks/useRTASR';
 import { useIsMobile } from '../hooks/useIsMobile';
 import WorkflowTrajectory from './WorkflowTrajectory';
+import AuditTimeline from './AuditTimeline';
 
 const SearchableUserDropdown = ({ 
   label, 
@@ -344,6 +345,7 @@ export interface SmartTaskData {
   a: string;
   c: string;
   i: string; // 知情人
+  dt?: string; // 交付对象
   bonus: string;
   rewardType: 'money' | 'score';
   maxParticipants: string;
@@ -379,7 +381,7 @@ export interface SmartTaskModalProps {
   readonly?: boolean;
   customFooter?: React.ReactNode;
   approverMode?: boolean;
-  onApprove?: (comment: string, updatedData?: any) => void;
+  onApprove?: (comment: string, updatedData?: any, action?: 'approve' | 'transfer', targetUser?: string) => void;
   onReject?: (comment: string) => void;
   onDraft?: (data: SmartTaskData) => void;
   onDelete?: () => void;
@@ -392,6 +394,8 @@ export default function SmartTaskModal({ isOpen, onClose, onSubmit, title, type,
   const [aiActivating, setAiActivating] = useState<'full' | null>(null);
   const [tempVoice, setTempVoice] = useState('');
   const [draftSaving, setDraftSaving] = useState(false);
+  const [showTransfer, setShowTransfer] = useState(false);
+  const [transferUserId, setTransferUserId] = useState('');
   
   // New state for approver modifying
   const [isEditingMode, setIsEditingMode] = useState(false);
@@ -497,6 +501,7 @@ export default function SmartTaskModal({ isOpen, onClose, onSubmit, title, type,
     a: (title === '申请新任务' || type === 'personal') ? (initialData?.a || currentUser?.id || '') : (initialData?.a || ''),
     c: initialData?.c || '',
     i: initialData?.i || '',
+    dt: initialData?.dt || '',
     bonus: initialData?.bonus || '0',
     rewardType: initialData?.rewardType || 'money',
     taskType: initialData?.taskType || '常规任务',
@@ -569,6 +574,7 @@ export default function SmartTaskModal({ isOpen, onClose, onSubmit, title, type,
         a: (title === '申请新任务' || type === 'personal') ? (initialData?.a || currentUser?.id || '') : (initialData?.a || ''),
         c: initialData?.c || '',
         i: initialData?.i || '',
+        dt: initialData?.dt || '',
         bonus: initialData?.bonus || '0',
         rewardType: initialData?.rewardType || 'money',
         taskType: initialData?.taskType || '常规任务',
@@ -756,6 +762,7 @@ export default function SmartTaskModal({ isOpen, onClose, onSubmit, title, type,
       a: headerSelections.a,
       c: headerSelections.c,
       i: headerSelections.i,
+      dt: headerSelections.dt,
       summary: formData.summary || formData.s?.substring(0, 30) || '新目标',
     });
   };
@@ -769,6 +776,7 @@ export default function SmartTaskModal({ isOpen, onClose, onSubmit, title, type,
         a: headerSelections.a,
         c: headerSelections.c,
         i: headerSelections.i,
+        dt: headerSelections.dt,
         summary: formData.summary || formData.s?.substring(0, 30) || '新目标草稿',
       });
     }
@@ -911,6 +919,14 @@ export default function SmartTaskModal({ isOpen, onClose, onSubmit, title, type,
                       placeholder="选择执行人"
                       readonly={readonly}
                     />
+                    <SearchableUserDropdown
+                      label="A 负责/验收人"
+                      value={headerSelections.a}
+                      onChange={v => setHeaderSelections({...headerSelections, a: v})}
+                      users={users}
+                      placeholder="选择负责/验收人"
+                      readonly={readonly || title === '申请新任务' || type === 'personal'}
+                    />
                     <MultiSelectUserDropdown
                       label="C 咨询人"
                       value={headerSelections.c}
@@ -932,20 +948,20 @@ export default function SmartTaskModal({ isOpen, onClose, onSubmit, title, type,
                   
                   {type !== 'pool_propose' ? (
                     <SearchableUserDropdown
-                      label="A 负责/验收人"
-                      value={headerSelections.a}
-                      onChange={v => setHeaderSelections({...headerSelections, a: v})}
+                      label="交付对象"
+                      value={headerSelections.dt}
+                      onChange={v => setHeaderSelections({...headerSelections, dt: v})}
                       users={users}
-                      placeholder="选择负责/验收人"
+                      placeholder="选择交付对象"
                       readonly={readonly || title === '申请新任务' || type === 'personal'}
                     />
                   ) : (
-                    <SearchableUserDropdown
-                      label="交付对象(验收人)"
-                      value={headerSelections.a}
-                      onChange={v => setHeaderSelections({...headerSelections, a: v})}
+                    <MultiSelectUserDropdown
+                      label="交付对象"
+                      value={headerSelections.dt}
+                      onChange={v => setHeaderSelections({...headerSelections, dt: v})}
                       users={users}
-                      placeholder="强制必填: 指定交付对象"
+                      placeholder="强制必选: 指定交付"
                       readonly={readonly || !approverMode}
                     />
                   )}
@@ -1393,7 +1409,14 @@ export default function SmartTaskModal({ isOpen, onClose, onSubmit, title, type,
             
             {/* Detail Logs Approval Path — compact */}
             {initialData?.id && (
+              <>
               <WorkflowTrajectory businessType={resolvedFlowType as any} businessId={initialData.id} codePrefix={codePrefix} />
+              <AuditTimeline
+                businessType={resolvedFlowType === 'proposal' ? 'proposal' : resolvedFlowType === 'reward_plan' ? 'reward_plan' : 'perf_plan'}
+                businessId={initialData.id}
+                className="px-4 pb-3"
+              />
+              </>
             )}
         {/* Original Footer */}
         {!approverMode && (
@@ -1467,52 +1490,105 @@ export default function SmartTaskModal({ isOpen, onClose, onSubmit, title, type,
 
           {/* Inline Approver Footer */}
           {approverMode && (
-            <div className="p-4 sm:px-6 sm:py-4 bg-white border-t border-gray-200 flex items-center justify-end gap-3 shrink-0 z-20 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
-              {propReadonly && (
-                <button
-                  type="button"
-                  onClick={() => setIsEditingMode(!isEditingMode)}
-                  disabled={submitting}
-                  className={`px-5 py-2 text-sm font-bold border rounded-lg transition-colors shadow-sm disabled:opacity-50 flex flex-shrink-0 ${isEditingMode ? 'text-gray-600 border-gray-300 bg-gray-50 hover:bg-gray-100' : 'text-blue-600 bg-white border-blue-300 hover:bg-blue-50'}`}
-                >
-                  {isEditingMode ? '取消修改' : '修改内容'}
-                </button>
+            <div className="p-4 sm:px-6 sm:py-4 bg-white border-t border-gray-200 flex items-center justify-end gap-3 shrink-0 z-20 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] transition-all">
+              {showTransfer ? (
+                <div className="flex w-full items-center justify-between animate-in fade-in zoom-in-95 duration-200">
+                  <div className="flex items-center gap-3">
+                    <span className="material-symbols-outlined text-purple-600 text-xl">swap_horiz</span>
+                    <span className="text-sm font-bold text-slate-700">移交审批给：</span>
+                    <select
+                      className="text-sm border-gray-300 rounded-lg focus:ring-purple-500 focus:border-purple-500 min-w-[150px]"
+                      value={transferUserId}
+                      onChange={(e) => setTransferUserId(e.target.value)}
+                    >
+                      <option value="">-- 请选择人员 --</option>
+                      {users.map(u => (
+                        <option key={u.id} value={u.id}>{u.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => { setShowTransfer(false); setTransferUserId(''); }}
+                      className="px-4 py-2 text-sm font-bold text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+                    >
+                      取消
+                    </button>
+                    <button
+                      type="button"
+                      disabled={submitting || !transferUserId}
+                      onClick={() => {
+                        const aggregated = sections.map(s => comments[s.id] ? `[${s.title}]: ${comments[s.id]}` : '').filter(Boolean).join('\n\n');
+                        onApprove?.(aggregated || '请协助处理审批流程', null, 'transfer', transferUserId);
+                      }}
+                      className="px-6 py-2 text-sm font-bold text-white bg-purple-600 hover:bg-purple-700 disabled:opacity-50 disabled:bg-purple-400 rounded-lg transition-colors shadow-md"
+                    >
+                      确认移交
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  {propReadonly && (
+                    <button
+                      type="button"
+                      onClick={() => setIsEditingMode(!isEditingMode)}
+                      disabled={submitting}
+                      className={`px-5 py-2 text-sm font-bold border rounded-lg transition-colors shadow-sm disabled:opacity-50 flex flex-shrink-0 ${isEditingMode ? 'text-gray-600 border-gray-300 bg-gray-50 hover:bg-gray-100' : 'text-blue-600 bg-white border-blue-300 hover:bg-blue-50'}`}
+                    >
+                      {isEditingMode ? '取消修改' : '修改内容'}
+                    </button>
+                  )}
+                  <div className="flex-1" />
+                  
+                  <button
+                    type="button"
+                    onClick={() => setShowTransfer(true)}
+                    disabled={submitting}
+                    className="px-5 py-2 text-sm font-bold text-purple-600 bg-purple-50 hover:bg-purple-100 border border-purple-200 rounded-lg transition-colors disabled:opacity-50 flex items-center gap-1.5"
+                    title="将本环节审批工作移交给其他人办理"
+                  >
+                    <span className="material-symbols-outlined text-[18px]">swap_horiz</span>
+                    转办
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => onReject?.('驳回(终止流程)')}
+                    disabled={submitting}
+                    className="px-5 py-2 text-sm font-bold text-rose-500 hover:text-rose-600 transition-colors disabled:opacity-50"
+                  >
+                    驳回
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const aggregated = sections.map(s => comments[s.id] ? `[${s.letter} ${s.title}]: ${comments[s.id]}` : '').filter(Boolean).join('\n\n');
+                      onReject?.(aggregated || '退回修改');
+                    }}
+                    disabled={submitting}
+                    className="px-6 py-2 text-sm font-bold text-amber-600 bg-white border border-amber-300 hover:bg-amber-50 rounded-lg transition-colors shadow-sm disabled:opacity-50"
+                  >
+                    退回修改
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (type === 'pool_propose' && !headerSelections.dt && approverMode) {
+                        alert('请指定交付对象(出资/验收部门)！[支持多选]');
+                        return;
+                      }
+                      const aggregated = sections.map(s => comments[s.id] ? `[${s.title}]: ${comments[s.id]}` : '').filter(Boolean).join('\n\n');
+                      onApprove?.(aggregated || '同意', { ...formData, bonus: headerSelections.bonus, rewardType: headerSelections.rewardType, maxParticipants: headerSelections.maxParticipants, a: headerSelections.a, r: headerSelections.r, c: headerSelections.c, i: headerSelections.i, dt: headerSelections.dt });
+                    }}
+                    disabled={submitting}
+                    className="px-8 py-2 text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg transition-colors shadow-sm disabled:opacity-50"
+                  >
+                    同意
+                  </button>
+                </>
               )}
-              <div className="flex-1" />
-              <button
-                type="button"
-                onClick={() => onReject?.('驳回(终止流程)')}
-                disabled={submitting}
-                className="px-5 py-2 text-sm font-bold text-rose-500 hover:text-rose-600 transition-colors disabled:opacity-50"
-              >
-                驳回
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  const aggregated = sections.map(s => comments[s.id] ? `[${s.letter} ${s.title}]: ${comments[s.id]}` : '').filter(Boolean).join('\n\n');
-                  onReject?.(aggregated || '退回修改');
-                }}
-                disabled={submitting}
-                className="px-6 py-2 text-sm font-bold text-amber-600 bg-white border border-amber-300 hover:bg-amber-50 rounded-lg transition-colors shadow-sm disabled:opacity-50"
-              >
-                退回修改
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  if (type === 'pool_propose' && !headerSelections.a && approverMode) {
-                    alert('请指定交付对象(验收人)！');
-                    return;
-                  }
-                  const aggregated = sections.map(s => comments[s.id] ? `[${s.letter} ${s.title}]: ${comments[s.id]}` : '').filter(Boolean).join('\n\n');
-                  onApprove?.(aggregated || '同意', { ...formData, bonus: headerSelections.bonus, rewardType: headerSelections.rewardType, maxParticipants: headerSelections.maxParticipants, a: headerSelections.a });
-                }}
-                disabled={submitting}
-                className="px-8 py-2 text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg transition-colors shadow-sm disabled:opacity-50"
-              >
-                同意
-              </button>
             </div>
           )}
 

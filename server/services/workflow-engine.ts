@@ -35,11 +35,12 @@ export function bootstrapWorkflows() {
     insertNodeFunc.run(tpl2Id, 2, 'HRBP审核', 'approve', 'hrbp', 'auto_skip_if_self');
     insertNodeFunc.run(tpl2Id, 3, '总经理终审', 'approve', 'gm', 'auto_skip_if_self');
 
-    // 3. 奖励方案分配
-    const tpl3Id = insertTplFunc.run(WORKFLOWS.REWARD_PLAN, '奖励分配方案审核', '悬赏发起人分配奖金，须经HRBP合规与GM终审').lastInsertRowid;
+    // 3. 奖励方案分配（含金主验收）
+    const tpl3Id = insertTplFunc.run(WORKFLOWS.REWARD_PLAN, '奖励分配方案审核', '金主验收→HRBP合规→GM终审→A分钱').lastInsertRowid;
     insertNodeFunc.run(tpl3Id, 1, '制定分配方案', 'init', 'task_creator', null);
-    insertNodeFunc.run(tpl3Id, 2, '合规审计', 'approve', 'hrbp', 'auto_skip_if_self');
-    insertNodeFunc.run(tpl3Id, 3, '总经理确认', 'approve', 'gm', 'auto_skip_if_self');
+    insertNodeFunc.run(tpl3Id, 2, '交付对象验收', 'approve', 'delivery_target', null);
+    insertNodeFunc.run(tpl3Id, 3, '合规审计', 'approve', 'hrbp', 'auto_skip_if_self');
+    insertNodeFunc.run(tpl3Id, 4, '总经理确认', 'approve', 'gm', 'auto_skip_if_self');
 
     // 4. 工作目标调整/延期
     const tpl4Id = insertTplFunc.run(WORKFLOWS.TASK_MOD, '任务调整与延期', '执行过程中修改截止日期或目标要求').lastInsertRowid;
@@ -65,7 +66,7 @@ export class WorkflowEngine {
   /**
    * 按顺读取模板节点，根据参数上下文（发起人ID等）计算出每一节点的审核人
    */
-  static resolveAssignees(templateCode: string, context: { initiatorId: string, deptId?: number, taskCreatorId?: string }) {
+  static resolveAssignees(templateCode: string, context: { initiatorId: string, deptId?: number, taskCreatorId?: string, poolTaskId?: number | string }) {
     const db = getDb();
     const tpl = db.prepare('SELECT id FROM workflow_templates WHERE code = ? AND is_active = 1').get(templateCode) as any;
     if (!tpl) throw new Error(`Workflow template ${templateCode} not found or inactive`);
@@ -102,13 +103,52 @@ export class WorkflowEngine {
         case 'task_creator':
           if (context.taskCreatorId) assignees.push(context.taskCreatorId);
           break;
+        case 'delivery_target':
+          // 优先从物理字段获取交付对象
+          if (context.poolTaskId) {
+            try {
+              const pt = db.prepare('SELECT delivery_target_id, roles_config FROM pool_tasks WHERE id = ?').get(context.poolTaskId) as any;
+              // 优先使用物理字段
+              if (pt?.delivery_target_id) {
+                assignees = pt.delivery_target_id.split(',').filter(Boolean);
+              }
+              // 兜底：JSON roles_config 解析
+              else if (pt?.roles_config) {
+                const cfg = JSON.parse(pt.roles_config);
+                const dtRole = cfg.find((r: any) => r.name === '交付对象');
+                if (dtRole && dtRole.users) {
+                  assignees = dtRole.users.map((u: any) => u.id);
+                }
+              }
+            } catch (e) {
+              console.error('Failed to resolve delivery_target', e);
+            }
+          }
+          break;
         default:
           break;
       }
 
-      // 规则：auto_skip_if_self -> 如果解决人集合里只有自己，跳过该节点
+      // 【核心风控卡点】防自审拦截与越级转派
       let skipReason = null;
-      if (node.skip_rule === 'auto_skip_if_self') {
+      let escalatedReason = null;
+
+      // 1. 对于必须别人审的常规节点，查出自己就是审批人的，取消“跳过自己”，拉直转交给老总 (防运动员兼裁判)
+      if (node.node_type === 'approve' && assignees.length === 1 && assignees[0] === initiatorId) {
+        const gmUsers = WorkflowEngine.getUsersByRoleTag('gm');
+        if (gmUsers.length > 0 && !gmUsers.includes(initiatorId)) {
+          assignees = gmUsers;
+          escalatedReason = '节点防自审拦截：审核人算法等同于发起人本人，强制升级至总经理';
+        } else if (initiatorId !== 'CaoGuiQiang') {
+          assignees = ['CaoGuiQiang'];
+          escalatedReason = '节点防自审拦截：强制触发兜底高级审核';
+        } else {
+          // 最高统管发起的流程自审时，只能免审跳过
+          skipReason = 'Node skipped: Creator is Super Admin, Auto Skip';
+        }
+      } 
+      // 2. 如果自己是发起人并且触发了 auto_skip_if_self 且并不是因为自审防线补救
+      else if (node.skip_rule === 'auto_skip_if_self' && !escalatedReason) {
         if (assignees.length === 1 && assignees[0] === initiatorId) {
           skipReason = 'Node skipped: Approver equals Initiator (Self-Approval)';
         }
@@ -116,14 +156,16 @@ export class WorkflowEngine {
 
       const isSkipped = skipReason !== null;
 
-      // 向上攀升机制：如果因为某些原因没找到负责审核的人，自动升级给上一级
-      // 这是系统级兜底策略 (Auto-Escalation)
-      if (assignees.length === 0 && node.is_required && !isSkipped && node.node_type === 'approve') {
+      // 向上攀升机制：如果因为某些原因没找到负责审核的人，或者是特殊拦截节点！
+      // 特别注意：如果是 HRBP 节点且名单为空，绝对不能放任跳过
+      if (node.node_type === 'approve' && assignees.length === 0 && !isSkipped) {
         const gmUsers = WorkflowEngine.getUsersByRoleTag('gm');
         if (gmUsers.length > 0) {
           assignees = gmUsers; // 升级为最高权限审批
+          escalatedReason = '流程缺位自动升格：无候选处理人，强制移交总经理';
         } else {
           assignees = [ 'CaoGuiQiang' ]; // 硬底兜底
+          escalatedReason = '流程缺位自动升格：移交最高管理员';
         }
       }
 
@@ -131,7 +173,8 @@ export class WorkflowEngine {
         ...node,
         assignees,
         isSkipped,
-        skipReason
+        skipReason,
+        escalatedReason
       };
     });
 

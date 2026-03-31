@@ -37,8 +37,8 @@ function StatusBadge({ status }: { status: string }) {
     draft: ['草稿', 'bg-slate-100 text-slate-500'], pending_review: ['待审批', 'bg-amber-100 text-amber-700'],
     approved: ['已通过', 'bg-emerald-100 text-emerald-700'], rejected: ['已驳回', 'bg-red-100 text-red-600'],
     completed: ['已完成', 'bg-blue-100 text-blue-700'], in_progress: ['进行中', 'bg-blue-100 text-blue-700'],
-    assessed: ['已评分', 'bg-violet-100 text-violet-700'], pending_assessment: ['待评分', 'bg-purple-100 text-purple-700'],
-    pending_reward: ['待发奖', 'bg-orange-100 text-orange-700'],
+    assessed: ['已结案', 'bg-violet-100 text-violet-700'], pending_assessment: ['待评级', 'bg-purple-100 text-purple-700'],
+    pending_receipt: ['待签收', 'bg-cyan-100 text-cyan-700'],
   };
   const [label, cls] = map[status] || [status, 'bg-slate-100 text-slate-500'];
   return <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${cls}`}>{label}</span>;
@@ -98,13 +98,13 @@ function DashboardTab() {
 
   const statusLabels: Record<string, string> = {
     pending_review: '待审批', in_progress: '进行中', approved: '已通过',
-    rejected: '已驳回', assessed: '已评分', completed: '已完成',
-    pending_assessment: '待评估', pending_reward: '待发奖'
+    rejected: '已驳回', assessed: '已结案', completed: '已完成',
+    pending_assessment: '待评级', pending_receipt: '待签收'
   };
   const statusColors: Record<string, string> = {
     pending_review: '#f59e0b', in_progress: '#3b82f6', approved: '#10b981',
     rejected: '#ef4444', assessed: '#8b5cf6', completed: '#06b6d4',
-    pending_assessment: '#a855f7', pending_reward: '#f97316'
+    pending_assessment: '#a855f7', pending_receipt: '#06b6d4'
   };
 
   const totalStatus = Object.values(data.statusDistribution || {}).reduce((a: number, b: any) => a + (b as number), 0) as number || 1;
@@ -616,15 +616,10 @@ function PlansTab() {
                       </div>
                     )}
 
-                    {tab === 'assess' && plan.status === 'assessed' && (
+                    {tab === 'assess' && (plan.status === 'assessed' || plan.status === 'completed') && plan.score != null && (
                       <div className="flex gap-2 shrink-0 items-center">
                         <span className="text-xs text-violet-600 font-bold">{plan.score}分</span>
-                        <input type="number" min="0" placeholder="奖金 ¥"
-                          value={bonusInputs[plan.id] || ''} onChange={e => setBonusInputs({ ...bonusInputs, [plan.id]: e.target.value })}
-                          className="w-20 border border-slate-200 rounded-lg px-2 py-1.5 text-xs text-center focus:outline-none focus:ring-2 focus:ring-amber-300" />
-                        <button onClick={() => doAction(plan.id, 'reward', { bonus: Number(bonusInputs[plan.id]) })}
-                          disabled={working || !bonusInputs[plan.id]}
-                          className="px-3 py-1.5 bg-amber-600 text-white rounded-lg text-xs font-medium hover:bg-amber-700 disabled:opacity-60">发放</button>
+                        <span className="px-2 py-1 bg-emerald-50 text-emerald-700 rounded-lg text-xs font-bold border border-emerald-200">✅ 已结案</span>
                       </div>
                     )}
                   </div>

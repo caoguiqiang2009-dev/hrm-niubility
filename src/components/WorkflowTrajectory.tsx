@@ -117,12 +117,36 @@ export default function WorkflowTrajectory({ businessType, businessId, codePrefi
                 )}
               </div>
               
-              {/* Arrow */}
-              {idx < steps.length - 1 && (
-                <div className="flex-shrink-0 text-slate-300 material-symbols-outlined text-[16px]">
-                  chevron_right
-                </div>
-              )}
+              {/* Arrow + Duration */}
+              {idx < steps.length - 1 && (() => {
+                const nextStep = steps[idx + 1];
+                let durationStr = '';
+                if (step.timestamp && nextStep.timestamp) {
+                  const ms = new Date(nextStep.timestamp).getTime() - new Date(step.timestamp).getTime();
+                  if (ms > 0) {
+                    const mins = Math.floor(ms / 60000);
+                    if (mins < 60) durationStr = `${mins}m`;
+                    else {
+                      const hrs = Math.floor(mins / 60);
+                      const rm = mins % 60;
+                      if (hrs < 24) durationStr = rm > 0 ? `${hrs}h${rm}m` : `${hrs}h`;
+                      else {
+                        const days = Math.floor(hrs / 24);
+                        const rh = hrs % 24;
+                        durationStr = rh > 0 ? `${days}d${rh}h` : `${days}d`;
+                      }
+                    }
+                  }
+                }
+                return (
+                  <div className="flex-shrink-0 flex flex-col items-center gap-0">
+                    <span className="text-slate-300 material-symbols-outlined text-[16px]">chevron_right</span>
+                    {durationStr && (
+                      <span className="text-[8px] text-slate-400 font-mono -mt-1">{durationStr}</span>
+                    )}
+                  </div>
+                );
+              })()}
             </React.Fragment>
           );
         })}
