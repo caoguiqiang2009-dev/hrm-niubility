@@ -598,5 +598,20 @@ export function initDatabase(): void {
     console.log('✅ Competency library seeded with default presets');
   }
 
+
+  // ── Safe column migrations (idempotent) ───────────────────────
+  const safeAddColumn = (table: string, col: string, type: string) => {
+    try {
+      const cols = db.prepare(`PRAGMA table_info(${table})`).all() as any[];
+      if (!cols.find((c: any) => c.name === col)) {
+        db.exec(`ALTER TABLE ${table} ADD COLUMN ${col} ${type}`);
+        console.log(`  [Migration] Added ${table}.${col}`);
+      }
+    } catch (e) { /* table may not exist yet, safe to ignore */ }
+  };
+
+  safeAddColumn('pool_tasks', 'deadline', 'DATE');
+  safeAddColumn('pool_tasks', 'creator_id', 'TEXT');
+
   console.log('✅ Database tables initialized');
 }
