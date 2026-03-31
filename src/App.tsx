@@ -48,7 +48,7 @@ export default function App() {
   // 若无用户身份：如果非微信环境，自动跳扫码登录。
   if (!currentUser) {
     const isWecom = navigator.userAgent.toLowerCase().includes('wxwork');
-    const isDev = (import.meta as any).env?.DEV;
+    const isDev = (import.meta as any).env?.DEV || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
 
     // 只有在生产环境且非微信浏览器时，才自动跳转兜底
     if (!isDev && !isWecom) {
