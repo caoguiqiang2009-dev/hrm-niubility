@@ -522,7 +522,7 @@ function NotificationsDetail({ data, navigate, onClose }: { data: DashData; navi
    主页组件
    ================================================================ */
 export default function EmployeeDashboard({ navigate }: { navigate: (view: string) => void }) {
-  const { currentUser } = useAuth();
+  const { currentUser, hasPermission } = useAuth();
   const isMobile = useIsMobile();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
@@ -667,15 +667,17 @@ export default function EmployeeDashboard({ navigate }: { navigate: (view: strin
             <PersonalGoalsPanel />
           </div>
 
-          {/* 管理专属入口 (绩效管理 & 工资表管理) */}
-          {(currentUser?.role === 'admin' || currentUser?.role === 'hr' || currentUser?.role === 'supervisor' || currentUser?.role === 'manager') && (
+          {/* 管理专属入口 — 基于权限系统动态显示 */}
+          {(hasPermission('module_monthly_eval') || hasPermission('module_monthly_eval_score') || hasPermission('module_task_mgmt') || hasPermission('module_competency') || hasPermission('module_perf_calc') || hasPermission('module_proposal_review') || currentUser?.is_super_admin) && (
             <div className="mt-10 border-t border-slate-200/60 dark:border-slate-800 pt-8">
               <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100 mb-5 flex items-center gap-2">
                 <span className="material-symbols-outlined text-emerald-500">category</span>
                 管理专属
               </h3>
               <div className={`grid gap-3 ${isMobile ? 'grid-cols-2' : 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5'}`}>
-              {/* 绩效核算 (原月度考评) 放在第一位以保持一致性 - 全角色可见 */}
+
+              {/* 月度考评系统 */}
+              {(hasPermission('module_monthly_eval') || hasPermission('module_monthly_eval_score') || hasPermission('module_monthly_eval_view') || currentUser?.is_super_admin) && (
               <div onClick={() => navigate('monthly-eval')} className={`bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 shadow-sm hover:shadow-xl transition-all cursor-pointer group flex flex-col hover:-translate-y-1 hover:border-blue-200 dark:hover:border-blue-800/50 ${isMobile ? 'rounded-2xl p-4' : 'rounded-3xl p-6'}`}>
                 <div className={`rounded-2xl bg-blue-50 dark:bg-blue-900/30 flex items-center justify-center group-hover:bg-blue-100 transition-colors ${isMobile ? 'w-10 h-10 mb-2' : 'w-12 h-12 mb-5'}`}>
                   <span className="material-symbols-outlined text-[24px] text-blue-600 font-bold" style={{ fontVariationSettings: "'wght' 600" }}>rule</span>
@@ -683,11 +685,7 @@ export default function EmployeeDashboard({ navigate }: { navigate: (view: strin
                 <h4 className={`font-black text-slate-800 dark:text-slate-100 tracking-tight ${isMobile ? 'text-sm mb-0' : 'text-xl mb-3'}`}>月度考评系统</h4>
                 {!isMobile && (
                   <>
-                    <p className="text-sm text-slate-500 dark:text-slate-400 mb-6 font-medium">
-                      {currentUser?.role === 'supervisor' || currentUser?.role === 'manager'
-                        ? '查看与管理本部门员工的月度绩效考评'
-                        : '所有员工必须参与的月底绩效四大维度打分'}
-                    </p>
+                    <p className="text-sm text-slate-500 dark:text-slate-400 mb-6 font-medium">所有员工必须参与的月底绩效四大维度打分</p>
                     <div className="flex gap-3 text-[12px] font-bold text-slate-400 mt-auto">
                       <span className="flex items-center gap-1.5"><div className="w-1.5 h-1.5 rounded-full bg-slate-200 dark:bg-slate-700 group-hover:bg-blue-300"></div>待审阅打分</span>
                       <span className="flex items-center gap-1.5"><div className="w-1.5 h-1.5 rounded-full bg-slate-200 dark:bg-slate-700 group-hover:bg-blue-300"></div>百分制测评</span>
@@ -695,9 +693,10 @@ export default function EmployeeDashboard({ navigate }: { navigate: (view: strin
                   </>
                 )}
               </div>
+              )}
 
-              {(currentUser?.role === 'admin' || currentUser?.role === 'hr') && (<>
-              {/* 绩效管理 */}
+              {/* 任务管理 */}
+              {(hasPermission('module_task_mgmt') || hasPermission('module_task_approval') || hasPermission('module_task_eval') || currentUser?.is_super_admin) && (
               <div onClick={() => navigate('perf-analytics')} className="bg-white dark:bg-slate-900 rounded-3xl p-6 border border-slate-100 dark:border-slate-800 shadow-sm hover:shadow-xl transition-all cursor-pointer group flex flex-col h-full hover:-translate-y-1 hover:border-emerald-200 dark:hover:border-emerald-800/50">
                 <div className="w-12 h-12 rounded-2xl bg-emerald-50 dark:bg-emerald-900/30 flex items-center justify-center mb-5 group-hover:bg-emerald-100 transition-colors">
                   <span className="material-symbols-outlined text-[24px] text-emerald-600 font-bold" style={{ fontVariationSettings: "'wght' 600" }}>trending_up</span>
@@ -709,8 +708,10 @@ export default function EmployeeDashboard({ navigate }: { navigate: (view: strin
                   <span className="flex items-center gap-1.5"><div className="w-1.5 h-1.5 rounded-full bg-slate-200 dark:bg-slate-700 group-hover:bg-emerald-300"></div>评分管理</span>
                 </div>
               </div>
+              )}
 
-              {/* 能力管理 */}
+              {/* 能力大盘 */}
+              {(hasPermission('module_competency') || hasPermission('module_competency_model') || hasPermission('module_competency_eval') || currentUser?.is_super_admin) && (
               <div onClick={() => navigate('competency')} className="bg-white dark:bg-slate-900 rounded-3xl p-6 border border-slate-100 dark:border-slate-800 shadow-sm hover:shadow-xl transition-all cursor-pointer group flex flex-col h-full hover:-translate-y-1 hover:border-indigo-200 dark:hover:border-indigo-800/50">
                 <div className="w-12 h-12 rounded-2xl bg-indigo-50 dark:bg-indigo-900/30 flex items-center justify-center mb-5 group-hover:bg-indigo-100 transition-colors">
                   <span className="material-symbols-outlined text-[24px] text-indigo-600 font-bold" style={{ fontVariationSettings: "'wght' 600" }}>psychology</span>
@@ -722,8 +723,10 @@ export default function EmployeeDashboard({ navigate }: { navigate: (view: strin
                   <span className="flex items-center gap-1.5"><div className="w-1.5 h-1.5 rounded-full bg-slate-200 dark:bg-slate-700 group-hover:bg-indigo-300"></div>综合评估</span>
                 </div>
               </div>
+              )}
 
               {/* 绩效核算 */}
+              {(hasPermission('module_perf_calc') || hasPermission('module_perf_calc_view') || hasPermission('module_perf_calc_drill') || currentUser?.is_super_admin) && (
               <div onClick={() => navigate('perf-accounting')} className="bg-white dark:bg-slate-900 rounded-3xl p-6 border border-slate-100 dark:border-slate-800 shadow-sm hover:shadow-xl transition-all cursor-pointer group flex flex-col h-full hover:-translate-y-1 hover:border-amber-200 dark:hover:border-amber-800/50 relative overflow-hidden">
                 <div className="w-12 h-12 rounded-2xl bg-amber-50 dark:bg-amber-900/30 flex items-center justify-center mb-5 group-hover:bg-amber-100 transition-colors relative z-10">
                   <span className="material-symbols-outlined text-[24px] text-amber-600 font-bold" style={{ fontVariationSettings: "'wght' 600" }}>account_balance_wallet</span>
@@ -735,8 +738,10 @@ export default function EmployeeDashboard({ navigate }: { navigate: (view: strin
                   <span className="flex items-center gap-1.5"><div className="w-1.5 h-1.5 rounded-full bg-slate-200 dark:bg-slate-700 group-hover:bg-amber-300"></div>穿透溯源</span>
                 </div>
               </div>
+              )}
 
               {/* 提案审议 */}
+              {(hasPermission('module_proposal_review') || hasPermission('module_proposal_approve') || hasPermission('module_proposal_pool') || currentUser?.is_super_admin) && (
               <div onClick={() => navigate('admin?module=proposals')} className="bg-white dark:bg-slate-900 rounded-3xl p-6 border border-slate-100 dark:border-slate-800 shadow-sm hover:shadow-xl transition-all cursor-pointer group flex flex-col h-full hover:-translate-y-1 hover:border-indigo-200 dark:hover:border-indigo-800/50">
                 <div className="w-12 h-12 rounded-2xl bg-indigo-50 dark:bg-indigo-900/30 flex items-center justify-center mb-5 group-hover:bg-indigo-100 transition-colors">
                   <span className="material-symbols-outlined text-[24px] text-indigo-600 font-bold" style={{ fontVariationSettings: "'wght' 600" }}>how_to_reg</span>
@@ -748,7 +753,8 @@ export default function EmployeeDashboard({ navigate }: { navigate: (view: strin
                   <span className="flex items-center gap-1.5"><div className="w-1.5 h-1.5 rounded-full bg-slate-200 dark:bg-slate-700 group-hover:bg-indigo-300"></div>奖金池</span>
                 </div>
               </div>
-              </>)}
+              )}
+
             </div>
           </div>
           )}

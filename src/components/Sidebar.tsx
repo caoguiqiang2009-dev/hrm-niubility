@@ -354,7 +354,7 @@ export default function Sidebar({ currentView, navigate }: SidebarProps) {
                   <span className="material-symbols-outlined text-[16px] text-blue-500">manage_accounts</span>
                   个人设置
                 </button>
-                {(currentUser?.role === 'admin' || currentUser?.role === 'hr') && (
+                {(hasPermission('module_competency') || hasPermission('module_competency_eval') || currentUser?.is_super_admin) && (
                   <button onClick={() => { setIsAvatarMenuOpen(false); navigate('competency'); }}
                     className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
                     <span className="material-symbols-outlined text-[16px] text-indigo-500">psychology</span>

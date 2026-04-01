@@ -12,6 +12,7 @@ export default function DevRoleSwitcher() {
   if (!isDev) return null;
 
   const roles = [
+    { id: 'CaoGuiQiang', name: '曹贵强', roleLabel: '最高管理员 (Super Admin)', icon: 'shield_with_house', color: 'bg-red-600' },
     { id: 'admin', name: '管理员', roleLabel: '系统管理员 (Admin)', icon: 'shield_person', color: 'bg-slate-700' },
     { id: 'lifang', name: '李芳', roleLabel: 'HR总监 (HR)', icon: 'group', color: 'bg-rose-500' },
     { id: 'zhangwei', name: '张伟', roleLabel: '高级产品经理 (主管)', icon: 'manage_accounts', color: 'bg-blue-500' },

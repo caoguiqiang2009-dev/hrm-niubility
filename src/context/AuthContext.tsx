@@ -14,7 +14,9 @@ interface AuthContextType {
   currentUser: User | null;
   isAuthenticating: boolean;
   userPerms: string[];          // ← 当前用户的有效权限 key 列表
+  userScopes: Record<string, any>;
   hasPermission: (key: string) => boolean;
+  getPermissionScope: (key: string) => any | null;
   loginWithMock: (userId: string) => Promise<void>;
   logout: () => void;
 }
@@ -23,7 +25,9 @@ const AuthContext = createContext<AuthContextType>({
   currentUser: null,
   isAuthenticating: true,
   userPerms: [],
+  userScopes: {},
   hasPermission: () => true,
+  getPermissionScope: () => null,
   loginWithMock: async () => {},
   logout: () => {},
 });
@@ -34,6 +38,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isAuthenticating, setIsAuthenticating] = useState(true);
   const [userPerms, setUserPerms] = useState<string[]>([]);
+  const [userScopes, setUserScopes] = useState<Record<string, any>>({});
 
   const fetchPerms = async () => {
     try {
@@ -42,7 +47,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         headers: { Authorization: `Bearer ${token}` },
       });
       const json = await res.json();
-      if (json.code === 0) setUserPerms(json.data);
+      if (json.code === 0 && json.data) {
+        if (Array.isArray(json.data)) {
+          // Fallback to old format (if any stale API is used)
+          setUserPerms(json.data);
+          setUserScopes({});
+        } else {
+          setUserPerms(json.data.keys || []);
+          setUserScopes(json.data.scopes || {});
+        }
+      }
     } catch {
       // 网络错误时沿用空权限列表
     }
@@ -202,8 +216,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return userPerms.includes(key);
   };
 
+  const getPermissionScope = (key: string): any | null => {
+    // If super admin or not fully loaded, allow global access (no scope limits)
+    if (currentUser?.is_super_admin) return null;
+    return userScopes[key] || null;
+  };
+
   return (
-    <AuthContext.Provider value={{ currentUser, isAuthenticating, userPerms, hasPermission, loginWithMock, logout }}>
+    <AuthContext.Provider value={{ currentUser, isAuthenticating, userPerms, userScopes, hasPermission, getPermissionScope, loginWithMock, logout }}>
       {children}
     </AuthContext.Provider>
   );

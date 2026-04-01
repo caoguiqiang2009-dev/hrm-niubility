@@ -191,20 +191,34 @@ export class WorkflowEngine {
     const db = getDb();
     const u = db.prepare('SELECT department_id FROM users WHERE id = ?').get(userId) as any;
     if (!u || !u.department_id) return null;
-    const d = db.prepare('SELECT leader_user_id FROM departments WHERE id = ?').get(u.department_id) as any;
-    return d?.leader_user_id || null;
+
+    let currentDeptId = u.department_id;
+    let isSelfLeader = false;
+
+    // 如果本人就是所在部门的 leader，则向上找一层作为起点
+    const currentDept = db.prepare('SELECT parent_id, leader_user_id FROM departments WHERE id = ?').get(currentDeptId) as any;
+    if (currentDept && currentDept.leader_user_id === userId) {
+      isSelfLeader = true;
+      currentDeptId = currentDept.parent_id;
+    }
+
+    // 向上朔源寻找第一个实体 Leader
+    while (currentDeptId && currentDeptId !== 0) {
+      const d = db.prepare('SELECT parent_id, leader_user_id FROM departments WHERE id = ?').get(currentDeptId) as any;
+      if (!d) break;
+      if (d.leader_user_id && d.leader_user_id !== userId) {
+        return d.leader_user_id; // 找到了最近的业务经理
+      }
+      currentDeptId = d.parent_id; // 继续跨级找
+    }
+    return null;
   }
 
   static getParentDeptHead(userId: string): string | null {
-    const db = getDb();
-    const u = db.prepare('SELECT department_id FROM users WHERE id = ?').get(userId) as any;
-    if (!u || !u.department_id) return null;
+    const firstHead = WorkflowEngine.getDeptHead(userId);
+    if (!firstHead) return null;
 
-    // 获取上级部门的 ID
-    const d = db.prepare('SELECT parent_id FROM departments WHERE id = ?').get(u.department_id) as any;
-    if (!d || !d.parent_id || d.parent_id === 0) return null;
-
-    const pd = db.prepare('SELECT leader_user_id FROM departments WHERE id = ?').get(d.parent_id) as any;
-    return pd?.leader_user_id || null;
+    // 跨级主管本质上就是「直属主管的直属主管」
+    return WorkflowEngine.getDeptHead(firstHead);
   }
 }

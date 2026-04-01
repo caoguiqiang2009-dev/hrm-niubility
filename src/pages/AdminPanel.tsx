@@ -955,6 +955,9 @@ function PermissionsModule() {
 
   const [selectedUsers, setSelectedUsers] = useState<Set<string>>(new Set());
   const [grantedKeys, setGrantedKeys] = useState<Set<string>>(new Set());
+  const [grantedScopes, setGrantedScopes] = useState<Record<string, {users: string[]}>>({});
+  const [scopeModalKey, setScopeModalKey] = useState<string | null>(null);
+  const [editingScopeUsers, setEditingScopeUsers] = useState<Set<string>>(new Set());
   const [loadingPerms, setLoadingPerms] = useState(false);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState('');
@@ -1031,7 +1034,15 @@ function PermissionsModule() {
       const token = localStorage.getItem('token');
       const firstId = [...selectedUsers][0];
       const res = await fetch(`/api/permissions/user/${firstId}`, { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json());
-      setGrantedKeys(new Set(res.data || []));
+      if (res.data) {
+        if (Array.isArray(res.data)) {
+          setGrantedKeys(new Set(res.data));
+          setGrantedScopes({});
+        } else {
+          setGrantedKeys(new Set(res.data.keys || []));
+          setGrantedScopes(res.data.scopes || {});
+        }
+      }
       setLoadingPerms(false);
     };
     load();
@@ -1049,28 +1060,47 @@ function PermissionsModule() {
     const token = localStorage.getItem('token');
     const grantedKeysArr = [...grantedKeys];
     let ok = 0, fail = 0;
-    for (const userId of selectedUsers) {
-      const res = await fetch(`/api/permissions/user/${userId}`, {
-        method: 'PUT',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ grantedKeys: grantedKeysArr }),
-      }).then(r => r.json());
-      res.code === 0 ? ok++ : fail++;
+    try {
+      for (const userId of selectedUsers) {
+        const res = await fetch(`/api/permissions/user/${userId}`, {
+          method: 'PUT',
+          headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ grantedKeys: grantedKeysArr, grantedScopes }),
+        }).then(r => r.json());
+        res.code === 0 ? ok++ : fail++;
+      }
+    } catch (err) {
+      console.error('Save failed:', err);
+      fail += selectedUsers.size - ok;
+    } finally {
+      setSaving(false);
+      setMsg(fail === 0 ? `✅ 已保存 ${ok} 人的权限` : `⚠️ ${ok} 成功，${fail} 失败`);
     }
-    setSaving(false);
-    setMsg(fail === 0 ? `✅ 已保存 ${ok} 人的权限` : `⚠️ ${ok} 成功，${fail} 失败`);
   };
 
-  const renderTree = (nodes: any[]): React.ReactNode => nodes.map(dept => {
+  const renderTree = (nodes: any[], targetSet: Set<string>, toggleFn: (id: string) => void): React.ReactNode => nodes.map(dept => {
     const members = deptMembers[dept.id] || [];
     const isExpanded = expandedDepts.has(dept.id);
-    const allSel = members.length > 0 && members.every((m: any) => selectedUsers.has(m.id));
-    const someSel = members.some((m: any) => selectedUsers.has(m.id));
+    const allSel = members.length > 0 && members.every((m: any) => targetSet.has(m.id));
+    const someSel = members.some((m: any) => targetSet.has(m.id));
     return (
       <div key={dept.id}>
         <div className="flex items-center gap-2 py-2 px-2 rounded-lg hover:bg-slate-100 cursor-pointer group" onClick={() => toggleDept(dept.id)}>
           <span className={`material-symbols-outlined text-[14px] text-slate-400 transition-transform ${isExpanded ? 'rotate-90' : ''}`}>chevron_right</span>
-          <button onClick={e => { e.stopPropagation(); loadDeptMembers(dept.id).then(() => toggleAllInDept(dept.id)); }}
+          <button onClick={e => { 
+              e.stopPropagation(); 
+              loadDeptMembers(dept.id).then(() => {
+                const innerMembers = deptMembers[dept.id] || [];
+                const ids = innerMembers.map((m: any) => m.id);
+                const isAllSelected = ids.every(id => targetSet.has(id));
+                // Call toggleFn for each id that needs to change
+                ids.forEach(id => {
+                  if (targetSet.has(id) === isAllSelected) {
+                    toggleFn(id); // Either mass add or mass remove
+                  }
+                });
+              }); 
+            }}
             className={`w-4 h-4 rounded flex items-center justify-center border-2 transition-all shrink-0 ${allSel ? 'bg-violet-600 border-violet-600' : someSel ? 'bg-violet-200 border-violet-400' : 'border-slate-300 bg-white hover:border-violet-400'}`}>
             {allSel && <span className="material-symbols-outlined text-white text-[10px]">check</span>}
             {someSel && !allSel && <div className="w-1.5 h-1.5 bg-violet-500 rounded-sm"/>}
@@ -1082,10 +1112,10 @@ function PermissionsModule() {
         {isExpanded && (
           <div className="ml-6">
             {members.map((m: any) => (
-              <div key={m.id} onClick={() => toggleUser(m.id)}
+              <div key={m.id} onClick={() => toggleFn(m.id)}
                 className="flex items-center gap-2 py-1.5 px-2 rounded-lg hover:bg-slate-100 cursor-pointer">
-                <button className={`w-4 h-4 rounded flex items-center justify-center border-2 transition-all shrink-0 ${selectedUsers.has(m.id) ? 'bg-violet-600 border-violet-600' : 'border-slate-300 bg-white hover:border-violet-400'}`}>
-                  {selectedUsers.has(m.id) && <span className="material-symbols-outlined text-white text-[10px]">check</span>}
+                <button className={`w-4 h-4 rounded flex items-center justify-center border-2 transition-all shrink-0 ${targetSet.has(m.id) ? 'bg-violet-600 border-violet-600' : 'border-slate-300 bg-white hover:border-violet-400'}`}>
+                  {targetSet.has(m.id) && <span className="material-symbols-outlined text-white text-[10px]">check</span>}
                 </button>
                 <div className="w-6 h-6 rounded-full bg-violet-100 text-violet-700 flex items-center justify-center text-xs font-bold shrink-0">{m.name[0]}</div>
                 <div className="flex-1 min-w-0">
@@ -1095,7 +1125,7 @@ function PermissionsModule() {
               </div>
             ))}
             {members.length === 0 && <p className="text-xs text-slate-400 px-2 py-1">暂无直属成员</p>}
-            {dept.children?.length > 0 && renderTree(dept.children)}
+            {dept.children?.length > 0 && renderTree(dept.children, targetSet, toggleFn)}
           </div>
         )}
       </div>
@@ -1117,7 +1147,7 @@ function PermissionsModule() {
         </div>
         {loading ? <div className="text-sm text-slate-400 text-center py-8">加载中...</div> : (
           <div className="space-y-0.5 max-h-[430px] overflow-y-auto">
-            {orgTree?.length ? renderTree(orgTree) : <p className="text-sm text-slate-400 text-center py-4">暂无组织数据</p>}
+            {orgTree?.length ? renderTree(orgTree, selectedUsers, toggleUser) : <p className="text-sm text-slate-400 text-center py-4">暂无组织数据</p>}
           </div>
         )}
       </div>
@@ -1250,10 +1280,22 @@ function PermissionsModule() {
                   <div className="bg-slate-50 rounded-xl overflow-hidden">
                     {(permDefs || []).filter((p: any) => p.module === mod).map((perm: any) => {
                       const on = grantedKeys.has(perm.key);
+                      const supportsScope = perm.key === 'module_monthly_eval'; // Define scalable check here for keys that support scoping
+                      const hasScope = grantedScopes[perm.key]?.users?.length > 0;
+                      
                       return (
                         <div key={perm.key} onClick={() => togglePerm(perm.key)}
-                          className="flex items-center justify-between px-4 py-2.5 border-b border-slate-100 last:border-0 hover:bg-white cursor-pointer transition-colors">
-                          <span className="text-sm text-slate-700">{perm.label}</span>
+                          className="flex items-center justify-between px-4 py-2.5 border-b border-slate-100 last:border-0 hover:bg-white cursor-pointer transition-colors group">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm text-slate-700">{perm.label}</span>
+                            {supportsScope && on && (
+                              <button onClick={(e) => { e.stopPropagation(); setEditingScopeUsers(new Set(grantedScopes[perm.key]?.users || [])); setScopeModalKey(perm.key); }}
+                                className={`text-[11px] font-bold px-2 py-0.5 rounded flex items-center gap-0.5 border transition-colors ${hasScope ? 'bg-amber-50 text-amber-600 border-amber-200 hover:bg-amber-100' : 'bg-slate-50 text-slate-500 border-slate-200 hover:bg-slate-100 hover:text-slate-700'}`}>
+                                <span className="material-symbols-outlined text-[12px]">settings</span>
+                                {hasScope ? `特定范围 (${grantedScopes[perm.key].users.length}人)` : '配置范围'}
+                              </button>
+                            )}
+                          </div>
                           <div className={`relative w-10 h-5 rounded-full transition-all duration-200 ${on ? 'bg-violet-500' : 'bg-slate-200'}`}
                             onClick={e => { e.stopPropagation(); togglePerm(perm.key); }}>
                             <span className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform duration-200 ${on ? 'translate-x-5' : ''}`}/>
@@ -1268,6 +1310,68 @@ function PermissionsModule() {
           </div>
         )}
       </div>
+
+      {/* Scope Settings Modal */}
+      {scopeModalKey && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setScopeModalKey(null)} />
+          <div className="relative bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden animate-in fade-in zoom-in-95 duration-200 flex flex-col max-h-[85vh]">
+            <div className="shrink-0 px-6 py-4 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
+              <div>
+                <h3 className="text-base font-bold text-slate-800">配置管辖范围</h3>
+                <p className="text-xs text-slate-500 mt-1">
+                  选择当用户行使此权限时，能够查看或管理的特定人员。如果不选，则拥有基础管辖权。
+                </p>
+              </div>
+              <button onClick={() => setScopeModalKey(null)} className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg bg-white shadow-sm border border-slate-200 transition-colors">
+                <span className="material-symbols-outlined text-[18px]">close</span>
+              </button>
+            </div>
+            
+            <div className="flex-1 overflow-y-auto p-6 bg-white min-h-[300px]">
+              {loading ? <div className="text-sm text-slate-400 text-center py-8">加载中...</div> : (
+                <div className="space-y-0.5">
+                  <div className="flex items-center justify-between mb-3 border-b border-slate-100 pb-2">
+                    <span className="text-xs font-bold text-slate-500 uppercase">组织架构</span>
+                    {editingScopeUsers.size > 0 && (
+                      <button onClick={() => setEditingScopeUsers(new Set())} className="text-xs text-red-500 hover:text-red-700 font-medium">清空所选</button>
+                    )}
+                  </div>
+                  {orgTree?.length ? renderTree(orgTree, editingScopeUsers, (id) => {
+                    const next = new Set(editingScopeUsers);
+                    next.has(id) ? next.delete(id) : next.add(id);
+                    setEditingScopeUsers(next);
+                  }) : <p className="text-sm text-slate-400 text-center py-4">暂无组织数据</p>}
+                </div>
+              )}
+            </div>
+
+            <div className="shrink-0 p-4 border-t border-slate-100 bg-slate-50 flex items-center justify-between">
+              <span className="text-sm font-medium text-slate-600">已选 {editingScopeUsers.size} 人</span>
+              <div className="flex gap-2">
+                <button onClick={() => setScopeModalKey(null)} className="px-4 py-2 text-sm font-medium border border-slate-200 text-slate-600 rounded-xl hover:bg-slate-100 transition-colors">取消</button>
+                <button 
+                  onClick={() => {
+                    setGrantedScopes(prev => {
+                      const updated = { ...prev };
+                      if (editingScopeUsers.size === 0) {
+                        delete updated[scopeModalKey];
+                      } else {
+                        updated[scopeModalKey] = { users: Array.from(editingScopeUsers) };
+                      }
+                      return updated;
+                    });
+                    setScopeModalKey(null);
+                  }}
+                  className="px-5 py-2 text-sm font-bold bg-violet-600 text-white rounded-xl hover:bg-violet-700 transition-all shadow-sm">
+                  确认并关窗
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

@@ -1160,15 +1160,7 @@ export default function SmartTaskModal({ isOpen, onClose, onSubmit, title, type,
                               )}
                             </div>
                             
-                            {!isActive && (
-                              <div className="text-xs text-gray-500 truncate mt-1">
-                                {value ? (
-                                  <span>{value.replace(/<[^>]+>/g, '').substring(0, 100)}</span>
-                                ) : (
-                                  <span className="text-gray-400 italic">点击编辑详细内容...</span>
-                                )}
-                              </div>
-                            )}
+
                           </div>
                         </motion.div>
 

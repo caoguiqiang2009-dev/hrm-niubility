@@ -5,7 +5,7 @@ import TestBankManager from './TestBankManager';
 import TestTakingModal from '../components/TestTakingModal';
 
 export default function CompetencyManager({ navigate, initialTestId, initialTab }: { navigate: (v: string) => void; initialTestId?: number; initialTab?: any; }) {
-  const { currentUser } = useAuth();
+  const { currentUser, hasPermission } = useAuth();
   const [activeTab, setActiveTab] = useState<'models' | 'evaluations' | 'library' | 'gap' | 'my_tests' | 'test_bank'>(initialTab || 'evaluations');
   const [loading, setLoading] = useState(false);
 
@@ -272,7 +272,7 @@ export default function CompetencyManager({ navigate, initialTestId, initialTab 
     );
   };
 
-  const isManagerOrAdmin = currentUser?.role === 'admin' || currentUser?.role === 'hr';
+  const isManagerOrAdmin = hasPermission('module_competency') || hasPermission('module_competency_model') || currentUser?.is_super_admin;
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 font-['Inter']">

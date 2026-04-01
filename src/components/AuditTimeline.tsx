@@ -148,13 +148,13 @@ export default function AuditTimeline({ businessType, businessId, className = ''
 
   return (
     <div className={`${className}`}>
-      {/* Header */}
+      {/* Header - click to toggle */}
       <button
         onClick={() => setCollapsed(!collapsed)}
-        className="flex items-center gap-1.5 mb-3 group cursor-pointer w-full text-left"
+        className="flex items-center gap-1.5 group cursor-pointer w-full text-left py-1"
       >
-        <span className="material-symbols-outlined text-[13px] text-indigo-400">history</span>
-        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+        <span className="material-symbols-outlined text-[11px] text-indigo-400">history</span>
+        <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">
           审计轨迹
         </span>
         <span className="text-[9px] bg-slate-100 text-slate-400 px-1.5 py-0.5 rounded-full font-bold">
@@ -165,108 +165,99 @@ export default function AuditTimeline({ businessType, businessId, className = ''
         </span>
       </button>
 
-      {/* Timeline */}
-      <div className="relative pl-5">
-        {/* Vertical line */}
-        <div className="absolute left-[7px] top-1 bottom-1 w-[2px] bg-gradient-to-b from-indigo-200 via-slate-200 to-transparent rounded-full"></div>
+      {/* Timeline - only visible when expanded */}
+      {!collapsed && (
+        <div className="relative pl-5 mt-2">
+          {/* Vertical line */}
+          <div className="absolute left-[7px] top-1 bottom-1 w-[2px] bg-gradient-to-b from-indigo-200 via-slate-200 to-transparent rounded-full"></div>
 
-        {displayLogs.map((log, idx) => {
-          const { icon, color } = getActionIcon(log.action);
-          const ts = formatTimestamp(log.created_at);
-          const actionLabel = ACTION_LABELS[log.action] || log.action;
+          {displayLogs.map((log, idx) => {
+            const { icon, color } = getActionIcon(log.action);
+            const ts = formatTimestamp(log.created_at);
+            const actionLabel = ACTION_LABELS[log.action] || log.action;
 
-          // Compute duration to next step
-          let duration = '';
-          const nextLog = logs[logs.indexOf(log) + 1];
-          if (nextLog) {
-            const ms = new Date(nextLog.created_at).getTime() - new Date(log.created_at).getTime();
-            if (ms > 60000) duration = formatDuration(ms);
-          }
+            // Compute duration to next step
+            let duration = '';
+            const nextLog = logs[logs.indexOf(log) + 1];
+            if (nextLog) {
+              const ms = new Date(nextLog.created_at).getTime() - new Date(log.created_at).getTime();
+              if (ms > 60000) duration = formatDuration(ms);
+            }
 
-          // Status transition text
-          let statusText = '';
-          if (log.from_status && log.to_status) {
-            statusText = `${STATUS_LABELS[log.from_status] || log.from_status} → ${STATUS_LABELS[log.to_status] || log.to_status}`;
-          } else if (log.to_status) {
-            statusText = STATUS_LABELS[log.to_status] || log.to_status;
-          }
+            // Status transition text
+            let statusText = '';
+            if (log.from_status && log.to_status) {
+              statusText = `${STATUS_LABELS[log.from_status] || log.from_status} → ${STATUS_LABELS[log.to_status] || log.to_status}`;
+            } else if (log.to_status) {
+              statusText = STATUS_LABELS[log.to_status] || log.to_status;
+            }
 
-          // Extra info
-          let extraInfo = '';
-          if (log.extra_json) {
-            try {
-              const extra = JSON.parse(log.extra_json);
-              if (extra.score != null) extraInfo = `评分: ${extra.score}`;
-              if (extra.from != null && extra.to != null) extraInfo = `${extra.from}% → ${extra.to}%`;
-              if (extra.payPeriod) extraInfo = `发放月份: ${extra.payPeriod}`;
-            } catch {}
-          }
+            // Extra info
+            let extraInfo = '';
+            if (log.extra_json) {
+              try {
+                const extra = JSON.parse(log.extra_json);
+                if (extra.score != null) extraInfo = `评分: ${extra.score}`;
+                if (extra.from != null && extra.to != null) extraInfo = `${extra.from}% → ${extra.to}%`;
+                if (extra.payPeriod) extraInfo = `发放月份: ${extra.payPeriod}`;
+              } catch {}
+            }
 
-          return (
-            <div key={log.id || idx} className="relative mb-3 last:mb-0 group">
-              {/* Dot */}
-              <div className={`absolute -left-5 top-0.5 w-4 h-4 rounded-full bg-white border-2 flex items-center justify-center ${
-                idx === displayLogs.length - 1 ? 'border-indigo-400 shadow-sm shadow-indigo-200' : 'border-slate-200'
-              }`}>
-                <span className={`material-symbols-outlined text-[10px] ${color}`}>{icon}</span>
-              </div>
+            return (
+              <div key={log.id || idx} className="relative mb-3 last:mb-0 group">
+                {/* Dot */}
+                <div className={`absolute -left-5 top-0.5 w-4 h-4 rounded-full bg-white border-2 flex items-center justify-center ${
+                  idx === displayLogs.length - 1 ? 'border-indigo-400 shadow-sm shadow-indigo-200' : 'border-slate-200'
+                }`}>
+                  <span className={`material-symbols-outlined text-[10px] ${color}`}>{icon}</span>
+                </div>
 
-              {/* Content */}
-              <div className="ml-1 pb-1">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-[11px] font-bold text-slate-700">{log.actor_name || log.actor_id}</span>
-                  <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
-                    log.action === 'approve' || log.action === 'confirm_receipt' ? 'bg-emerald-50 text-emerald-600' :
-                    log.action === 'reject' || log.action === 'reject_receipt' ? 'bg-red-50 text-red-500' :
-                    'bg-slate-100 text-slate-500'
-                  }`}>
-                    {actionLabel}
-                  </span>
-                  {statusText && (
-                    <span className="text-[9px] text-slate-400 font-medium font-mono">{statusText}</span>
+                {/* Content */}
+                <div className="ml-1 pb-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-[11px] font-bold text-slate-700">{log.actor_name || log.actor_id}</span>
+                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                      log.action === 'approve' || log.action === 'confirm_receipt' ? 'bg-emerald-50 text-emerald-600' :
+                      log.action === 'reject' || log.action === 'reject_receipt' ? 'bg-red-50 text-red-500' :
+                      'bg-slate-100 text-slate-500'
+                    }`}>
+                      {actionLabel}
+                    </span>
+                    {statusText && (
+                      <span className="text-[9px] text-slate-400 font-medium font-mono">{statusText}</span>
+                    )}
+                  </div>
+
+                  {/* Timestamp */}
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <span className="text-[9px] text-slate-400 font-mono tabular-nums">{ts.date} {ts.time}</span>
+                    <span className="text-[9px] text-slate-300">({ts.relative})</span>
+                  </div>
+
+                  {/* Comment */}
+                  {log.comment && (
+                    <div className="mt-1 text-[10px] text-slate-500 bg-slate-50 rounded px-2 py-1 border-l-2 border-slate-200">
+                      {log.comment}
+                    </div>
+                  )}
+
+                  {/* Extra */}
+                  {extraInfo && (
+                    <span className="text-[9px] text-indigo-500 font-bold mt-0.5 inline-block">{extraInfo}</span>
+                  )}
+
+                  {/* Duration to next */}
+                  {duration && idx < displayLogs.length - 1 && (
+                    <div className="mt-1 flex items-center gap-1 text-[9px] text-slate-300">
+                      <span className="material-symbols-outlined text-[10px]">timer</span>
+                      <span className="font-medium">{duration}</span>
+                    </div>
                   )}
                 </div>
-
-                {/* Timestamp */}
-                <div className="flex items-center gap-2 mt-0.5">
-                  <span className="text-[9px] text-slate-400 font-mono tabular-nums">{ts.date} {ts.time}</span>
-                  <span className="text-[9px] text-slate-300">({ts.relative})</span>
-                </div>
-
-                {/* Comment */}
-                {log.comment && (
-                  <div className="mt-1 text-[10px] text-slate-500 bg-slate-50 rounded px-2 py-1 border-l-2 border-slate-200">
-                    {log.comment}
-                  </div>
-                )}
-
-                {/* Extra */}
-                {extraInfo && (
-                  <span className="text-[9px] text-indigo-500 font-bold mt-0.5 inline-block">{extraInfo}</span>
-                )}
-
-                {/* Duration to next */}
-                {duration && idx < displayLogs.length - 1 && (
-                  <div className="mt-1 flex items-center gap-1 text-[9px] text-slate-300">
-                    <span className="material-symbols-outlined text-[10px]">timer</span>
-                    <span className="font-medium">{duration}</span>
-                  </div>
-                )}
               </div>
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Show more toggle */}
-      {collapsed && significantLogs.length > 5 && (
-        <button
-          onClick={() => setCollapsed(false)}
-          className="text-[10px] text-indigo-500 font-bold mt-2 ml-5 hover:underline flex items-center gap-1"
-        >
-          <span className="material-symbols-outlined text-[12px]">expand_more</span>
-          展开全部 {logs.length} 条记录
-        </button>
+            );
+          })}
+        </div>
       )}
     </div>
   );

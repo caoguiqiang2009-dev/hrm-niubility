@@ -909,45 +909,8 @@ export default function CompanyPerformance({ navigate }: { navigate: (view: stri
               );
             })()}
 
-            {/* ── 我的认领审批状态 ── */}
-            {(() => {
-              const myClaimsList = (selectedTask?.role_claims || []).filter((c: any) => c.user_id === currentUser?.id);
-              if (myClaimsList.length === 0) return null;
-              return (
-                <div className="w-full mb-3 space-y-2">
-                  {myClaimsList.map((myClaim: any) => {
-                    const isPending = myClaim.status === 'pending';
-                    const isApproved = myClaim.status === 'approved';
-                    const isRejected = myClaim.status === 'rejected';
-                    
-                    return (
-                      <div key={myClaim.id} className={`w-full p-3 rounded-xl border ${isPending ? 'bg-amber-50 border-amber-200' : isApproved ? 'bg-emerald-50 border-emerald-200' : 'bg-rose-50 border-rose-200'}`}>
-                        <div className="flex items-center gap-2 mb-1.5">
-                          <span className={`material-symbols-outlined text-[16px] ${isPending ? 'text-amber-600' : isApproved ? 'text-emerald-600' : 'text-rose-600'}`}>
-                            {isPending ? 'pending_actions' : isApproved ? 'check_circle' : 'cancel'}
-                          </span>
-                          <span className="text-xs font-bold text-slate-700">我申请的 [{myClaim.role_name}] 角色审批进度</span>
-                          <span className={`ml-auto text-[10px] font-bold px-2 py-0.5 rounded-full ${isPending ? 'bg-amber-100 text-amber-700' : isApproved ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
-                            {isPending ? 'HR / 管理员审核中' : isApproved ? '已批准' : '已驳回'}
-                          </span>
-                        </div>
-                        {isPending && (
-                           <div className="text-[11px] text-amber-700 ml-6 flex items-center gap-1">
-                             <span className="material-symbols-outlined text-[12px] animate-pulse">schedule</span>
-                             该认领申请已提交，等待人事(HR)或总经办审批。
-                           </div>
-                        )}
-                        {myClaim.review_comment && (
-                          <div className={`text-[11px] ml-6 mt-1.5 p-1.5 rounded-md ${isApproved ? 'bg-emerald-100/50 text-emerald-700' : 'bg-rose-100/50 text-rose-700'}`}>
-                            <span className="font-bold">审批人批注：</span>{myClaim.review_comment}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              );
-            })()}
+
+
 
             {/* ── 操作按钮 ── */}
             <div className="flex gap-3 w-full flex-wrap">

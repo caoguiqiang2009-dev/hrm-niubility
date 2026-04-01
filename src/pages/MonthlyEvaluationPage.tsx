@@ -114,7 +114,7 @@ function SearchableUserSelect({
 }
 
 export default function MonthlyEvaluationPage({ navigate }: { navigate: (view: string) => void }) {
-  const { currentUser } = useAuth();
+  const { currentUser, hasPermission } = useAuth();
   const [tasks, setTasks] = useState<EvalTask[]>([]);
   const [loading, setLoading] = useState(true);
   const [triggerMonth, setTriggerMonth] = useState(() => {
@@ -166,7 +166,7 @@ export default function MonthlyEvaluationPage({ navigate }: { navigate: (view: s
   };
 
   const fetchHrData = async () => {
-    const isManagementRole = ['hr', 'admin', 'supervisor', 'manager'].includes(currentUser?.role || '') || currentUser?.is_super_admin;
+    const isManagementRole = hasPermission('module_monthly_eval') || hasPermission('module_monthly_eval_score') || currentUser?.is_super_admin;
     if (!isManagementRole) return;
     setHrLoading(true);
     const token = localStorage.getItem('token');
@@ -414,7 +414,7 @@ export default function MonthlyEvaluationPage({ navigate }: { navigate: (view: s
         </div>
 
         {/* --- HR/管理员/主管 全景控制台 --- */}
-        {(['hr', 'admin', 'supervisor', 'manager'].includes(currentUser?.role || '') || currentUser?.is_super_admin) && (
+        {(hasPermission('module_monthly_eval') || hasPermission('module_monthly_eval_score') || currentUser?.is_super_admin) && (
           <div className="mt-10 mb-20 animate-in slide-in-from-bottom-5">
             <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-6">
               <div>
@@ -433,7 +433,7 @@ export default function MonthlyEvaluationPage({ navigate }: { navigate: (view: s
               <div className="flex items-center gap-3 bg-indigo-50 dark:bg-indigo-900/20 p-2 rounded-xl border border-indigo-100 dark:border-indigo-800 flex-wrap">
                 <input type="month" value={triggerMonth} onChange={e => setTriggerMonth(e.target.value)} className="px-3 py-2 rounded-lg border border-indigo-200 dark:border-indigo-700 font-bold bg-white dark:bg-slate-800 outline-none w-48" />
                 {/* 截止日设置 */}
-                {(currentUser?.role === 'hr' || currentUser?.role === 'admin' || currentUser?.is_super_admin) && (
+                {(hasPermission('module_monthly_eval') || hasPermission('module_monthly_eval_score') || currentUser?.is_super_admin) && (
                   <div className="flex items-center gap-2">
                     <input
                       type="date"
@@ -464,7 +464,7 @@ export default function MonthlyEvaluationPage({ navigate }: { navigate: (view: s
                     )}
                   </div>
                 )}
-                {(currentUser?.role === 'hr' || currentUser?.role === 'admin' || currentUser?.is_super_admin) && (
+                {(hasPermission('module_monthly_eval') || hasPermission('module_monthly_eval_view') || currentUser?.is_super_admin) && (
                   <div className="px-5 py-2 bg-slate-200 text-slate-500 font-bold rounded-lg text-sm flex items-center gap-1.5 cursor-not-allowed" title="根据最新业务流程，已剥离一键发布功能，请下方逐一核实。">
                     <span className="material-symbols-outlined text-[18px]">block</span>
                     一键发布已停用
@@ -506,7 +506,7 @@ export default function MonthlyEvaluationPage({ navigate }: { navigate: (view: s
                             </td>
                             <td className="px-6 py-4">{statusEl}</td>
                             <td className="px-6 py-4 text-right">
-                              {(currentUser?.role === 'hr' || currentUser?.role === 'admin' || currentUser?.is_super_admin) ? (
+                              {(hasPermission('module_monthly_eval') || currentUser?.is_super_admin) ? (
                                 <button onClick={() => openPreview(u)} className="px-4 py-1.5 bg-white text-indigo-600 font-bold rounded-lg border border-indigo-200 hover:bg-indigo-50 hover:border-indigo-300 text-xs transition-all shadow-sm">
                                   {u.eval_status ? '覆盖重设考评人' : '核定考评人'}
                                 </button>

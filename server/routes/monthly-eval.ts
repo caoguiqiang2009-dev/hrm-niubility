@@ -2,7 +2,7 @@ import express from 'express';
 import { getDb } from '../config/database';
 import { v4 as uuidv4 } from 'uuid';
 import { authMiddleware, AuthRequest } from '../middleware/auth';
-
+import { getUserPermScopes } from './permissions';
 
 const router = express.Router();
 
@@ -68,16 +68,26 @@ router.get('/hr/employees-status', authMiddleware, (req: AuthRequest, res) => {
       SELECT u.id as user_id, u.name as user_name, u.department_id, d.name as department_name,
              e.status as eval_status, e.final_score
       FROM users u
-      LEFT JOIN departments d ON u.department_id = d.id
+      LEFT JOIN departments d ON u.department_id = d.id AND d.deleted_at IS NULL
       LEFT JOIN monthly_evaluations e ON u.id = e.user_id AND e.month = ?
-      WHERE u.status = 'active'
+      WHERE u.status = 'active' AND u.deleted_at IS NULL
     `;
     const params: any[] = [month];
 
-    // 主管/主管只看自己部门
-    if (isSupervisor && caller?.department_id) {
-      sql += ' AND u.department_id = ?';
-      params.push(caller.department_id);
+    const scopes = getUserPermScopes(req.userId!);
+    const scopedUsers = scopes['module_monthly_eval']?.users as string[] | undefined;
+
+    if (scopedUsers && scopedUsers.length > 0) {
+      // 拥有精准设定的管理名单
+      const ph = scopedUsers.map(() => '?').join(',');
+      sql += ` AND u.id IN (${ph})`;
+      params.push(...scopedUsers);
+    } else {
+      // 主管只看自己部分
+      if (isSupervisor && caller?.department_id) {
+        sql += ' AND u.department_id = ?';
+        params.push(caller.department_id);
+      }
     }
     sql += ' ORDER BY d.id, u.id';
 
@@ -114,10 +124,22 @@ router.get('/hr/preview-reviewers', authMiddleware, (req: AuthRequest, res) => {
 });
 
 // 3. 辅助接口：获取用于下拉框选人的简版通讯录
-router.get('/hr/all-users', (req, res) => {
+router.get('/hr/all-users', authMiddleware, (req: AuthRequest, res) => {
   const db = getDb();
   try {
-    const users = db.prepare("SELECT id, name FROM users WHERE status = 'active' ORDER BY name").all();
+    const scopes = getUserPermScopes(req.userId!);
+    const scopedUsers = scopes['module_monthly_eval']?.users as string[] | undefined;
+
+    let sql = "SELECT id, name FROM users WHERE status = 'active' AND deleted_at IS NULL";
+    const params: any[] = [];
+    if (scopedUsers && scopedUsers.length > 0) {
+      const ph = scopedUsers.map(() => '?').join(',');
+      sql += ` AND id IN (${ph})`;
+      params.push(...scopedUsers);
+    }
+    sql += " ORDER BY name";
+
+    const users = db.prepare(sql).all(...params);
     res.json({ code: 0, data: users });
   } catch (err: any) {
     res.status(500).json({ code: 1, message: err.message });
@@ -129,6 +151,16 @@ router.get('/hr/all-users', (req, res) => {
 router.post('/hr/publish', authMiddleware, (req: AuthRequest, res) => {
   const { month, userIds, manualReviewers, deadline } = req.body;
   if (!month || !userIds || !userIds.length) return res.status(400).json({ code: 1, message: '缺少参数' });
+
+  const scopes = getUserPermScopes(req.userId!);
+  const scopedUsers = scopes['module_monthly_eval']?.users as string[] | undefined;
+  
+  if (scopedUsers && scopedUsers.length > 0) {
+    const invalidIds = userIds.filter((id: string) => !scopedUsers.includes(id));
+    if (invalidIds.length > 0) {
+      return res.status(403).json({ code: 403, message: '无权操作部分指定员工的考评数据' });
+    }
+  }
 
   const db = getDb();
   try {

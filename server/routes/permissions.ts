@@ -15,6 +15,22 @@ export const ALL_PERMISSIONS = [
   { key: 'view_panorama',     label: '全景仪表盘',      module: '功能模块', defaultRoles: ['admin','hr','manager'] },
   { key: 'view_admin',        label: '管理后台',        module: '功能模块', defaultRoles: ['admin','hr'] },
   { key: 'view_org_chart',    label: '组织关系图',      module: '功能模块', defaultRoles: ['admin','hr','manager','employee'] },
+  // 管理专属模块
+  { key: 'module_monthly_eval',      label: '月度考评系统',          module: '管理专属模块', defaultRoles: ['admin','hr'] },
+  { key: 'module_monthly_eval_score',label: '月度考评 - 待审阅打分', module: '管理专属模块', defaultRoles: ['admin','hr','manager'] },
+  { key: 'module_monthly_eval_view', label: '月度考评 - 百分制测评', module: '管理专属模块', defaultRoles: ['admin','hr'] },
+  { key: 'module_task_mgmt',         label: '任务管理',              module: '管理专属模块', defaultRoles: ['admin','hr','manager'] },
+  { key: 'module_task_approval',     label: '任务管理 - 审批流程',   module: '管理专属模块', defaultRoles: ['admin','hr','manager'] },
+  { key: 'module_task_eval',         label: '任务管理 - 评分管理',   module: '管理专属模块', defaultRoles: ['admin','hr'] },
+  { key: 'module_competency',        label: '能力大盘',              module: '管理专属模块', defaultRoles: ['admin','hr'] },
+  { key: 'module_competency_model',  label: '能力大盘 - 自定义模型', module: '管理专属模块', defaultRoles: ['admin'] },
+  { key: 'module_competency_eval',   label: '能力大盘 - 综合评估',   module: '管理专属模块', defaultRoles: ['admin','hr','manager'] },
+  { key: 'module_perf_calc',         label: '绩效核算',              module: '管理专属模块', defaultRoles: ['admin','hr'] },
+  { key: 'module_perf_calc_view',    label: '绩效核算 - 汇总计算',   module: '管理专属模块', defaultRoles: ['admin','hr'] },
+  { key: 'module_perf_calc_drill',   label: '绩效核算 - 穿透溯源',   module: '管理专属模块', defaultRoles: ['admin','hr','manager'] },
+  { key: 'module_proposal_review',   label: '提案审议',              module: '管理专属模块', defaultRoles: ['admin','hr','manager'] },
+  { key: 'module_proposal_approve',  label: '提案审议 - 提案审批',   module: '管理专属模块', defaultRoles: ['admin','hr','manager'] },
+  { key: 'module_proposal_pool',     label: '提案审议 - 奖金池管理', module: '管理专属模块', defaultRoles: ['admin','hr'] },
   // 操作权限
   { key: 'create_perf_plan',  label: '发起绩效目标',    module: '操作权限', defaultRoles: ['admin','hr','manager','employee'] },
   { key: 'approve_perf_plan', label: '审批绩效计划',    module: '操作权限', defaultRoles: ['admin','hr','manager'] },
@@ -56,6 +72,19 @@ export function getUserEffectivePerms(userId: string): string[] {
   return [...result];
 }
 
+// ── 获取某用户的权限管辖范围配置 ───────────────────────────────────────
+export function getUserPermScopes(userId: string): Record<string, any> {
+  const db = getDb();
+  const overrides = db.prepare('SELECT perm_key, scope_config FROM user_perm_overrides WHERE user_id = ? AND allowed = 1 AND scope_config IS NOT NULL').all(userId) as any[];
+  const scopes: Record<string, any> = {};
+  for (const o of overrides) {
+    try {
+      scopes[o.perm_key] = JSON.parse(o.scope_config);
+    } catch { /* ignore bad JSON */ }
+  }
+  return scopes;
+}
+
 // ── GET /api/permissions/definitions ─────────────────────────────────
 // 返回所有权限项列表（给前端渲染用）
 router.get('/definitions', authMiddleware, requireRole('admin', 'hr'), (_req, res) => {
@@ -66,21 +95,23 @@ router.get('/definitions', authMiddleware, requireRole('admin', 'hr'), (_req, re
 // 返回当前登录用户自己的有效权限 key 列表（不限角色，任何登录用户可用）
 router.get('/me', authMiddleware, (req: AuthRequest, res) => {
   const effective = getUserEffectivePerms(req.userId!);
-  return res.json({ code: 0, data: effective });
+  const scopes = getUserPermScopes(req.userId!);
+  return res.json({ code: 0, data: { keys: effective, scopes } });
 });
 
 // ── GET /api/permissions/user/:userId ────────────────────────────────
 // 返回某用户的有效权限 key 列表
 router.get('/user/:userId', authMiddleware, requireRole('admin', 'hr'), (req, res) => {
   const effective = getUserEffectivePerms(req.params.userId);
-  return res.json({ code: 0, data: effective });
+  const scopes = getUserPermScopes(req.params.userId);
+  return res.json({ code: 0, data: { keys: effective, scopes } });
 });
 
 
 // ── PUT /api/permissions/user/:userId ────────────────────────────────
 // 保存某用户的权限覆盖（传入该用户最终拥有的 key 列表）
 router.put('/user/:userId', authMiddleware, requireRole('admin', 'hr'), (req: AuthRequest, res) => {
-  const { grantedKeys } = req.body as { grantedKeys: string[] };
+  const { grantedKeys, grantedScopes = {} } = req.body as { grantedKeys: string[], grantedScopes?: Record<string, any> };
   if (!Array.isArray(grantedKeys)) return res.status(400).json({ code: 400, message: '参数错误' });
 
   const db = getDb();
@@ -96,14 +127,16 @@ router.put('/user/:userId', authMiddleware, requireRole('admin', 'hr'), (req: Au
   // 删除旧的覆盖记录，重新写入
   db.prepare('DELETE FROM user_perm_overrides WHERE user_id = ?').run(req.params.userId);
 
-  const insert = db.prepare('INSERT INTO user_perm_overrides (user_id, perm_key, allowed) VALUES (?, ?, ?)');
+  const insert = db.prepare('INSERT INTO user_perm_overrides (user_id, perm_key, allowed, scope_config) VALUES (?, ?, ?, ?)');
   const tx = db.transaction(() => {
     for (const perm of ALL_PERMISSIONS) {
       const inGranted = grantedSet.has(perm.key);
       const inDefault = roleDefaults.has(perm.key);
-      // 只有在与角色默认不同时才写入覆盖记录
-      if (inGranted !== inDefault) {
-        insert.run(req.params.userId, perm.key, inGranted ? 1 : 0);
+      const scopeStr = grantedScopes[perm.key] ? JSON.stringify(grantedScopes[perm.key]) : null;
+      
+      // 只有在与角色默认不同，或者有自定义范围时，才需要记录在 override 表里
+      if (inGranted !== inDefault || (inGranted && scopeStr)) {
+        insert.run(req.params.userId, perm.key, inGranted ? 1 : 0, scopeStr);
       }
     }
   });
@@ -124,7 +157,7 @@ router.put('/department/:deptId', authMiddleware, requireRole('admin', 'hr'), (r
 
   const grantedSet = new Set(grantedKeys);
   const deleteStmt = db.prepare('DELETE FROM user_perm_overrides WHERE user_id = ?');
-  const insertStmt = db.prepare('INSERT INTO user_perm_overrides (user_id, perm_key, allowed) VALUES (?, ?, ?)');
+  const insertStmt = db.prepare('INSERT INTO user_perm_overrides (user_id, perm_key, allowed, scope_config) VALUES (?, ?, ?, ?)');
 
   const tx = db.transaction(() => {
     for (const member of members) {
@@ -136,7 +169,7 @@ router.put('/department/:deptId', authMiddleware, requireRole('admin', 'hr'), (r
         const inGranted = grantedSet.has(perm.key);
         const inDefault = roleDefaults.has(perm.key);
         if (inGranted !== inDefault) {
-          insertStmt.run(member.id, perm.key, inGranted ? 1 : 0);
+          insertStmt.run(member.id, perm.key, inGranted ? 1 : 0, null);
         }
       }
     }

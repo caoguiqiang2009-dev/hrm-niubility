@@ -39,7 +39,7 @@ interface Subordinate {
 }
 
 export default function TeamPerformance({ navigate }: { navigate: (view: string) => void }) {
-  const { currentUser } = useAuth();
+  const { currentUser, hasPermission } = useAuth();
   const [subordinates, setSubordinates] = useState<Subordinate[]>([]);
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
   const [isApplyModalOpen, setIsApplyModalOpen] = useState(false);
@@ -383,7 +383,7 @@ export default function TeamPerformance({ navigate }: { navigate: (view: string)
               />
             </div>
             {/* 团队可视范围配置入口 — 仅 HR / 管理员可见 */}
-            {(currentUser?.role === 'hr' || currentUser?.role === 'admin' || (currentUser as any)?.is_super_admin) && (
+            {(hasPermission('module_task_mgmt') || hasPermission('edit_org_info') || currentUser?.is_super_admin) && (
               <button
                 onClick={() => setIsScopeModalOpen(true)}
                 title="配置团队可视范围"

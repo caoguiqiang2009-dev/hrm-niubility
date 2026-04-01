@@ -30,7 +30,7 @@ router.get('/stuck', authMiddleware, hrGuard, (req: AuthRequest, res) => {
 
   const stuckItems: any[] = [];
 
-  // 1. 卡住的绩效计划
+  // 1. 卡住的绩效计划 (超时 OR 无审批人)
   const stuckPlans = db.prepare(`
     SELECT 
       pp.id, pp.title, pp.status, pp.updated_at, pp.creator_id, pp.approver_id, pp.deadline,
@@ -41,11 +41,15 @@ router.get('/stuck', authMiddleware, hrGuard, (req: AuthRequest, res) => {
       'perf_plan' as flow_type,
       CAST((julianday('now') - julianday(pp.updated_at)) AS INTEGER) as stuck_days
     FROM perf_plans pp
-    LEFT JOIN users cu ON pp.creator_id = cu.id
-    LEFT JOIN users au ON pp.approver_id = au.id
+    LEFT JOIN users cu ON pp.creator_id = cu.id AND cu.deleted_at IS NULL
+    LEFT JOIN users au ON pp.approver_id = au.id AND au.deleted_at IS NULL
     LEFT JOIN departments d ON cu.department_id = d.id
     WHERE pp.status IN ('pending_review', 'pending_dept_review', 'submitted')
-      AND pp.updated_at < ?
+      AND (
+        pp.updated_at < ?          -- 超时卡点
+        OR pp.approver_id IS NULL  -- 无审批人（无需等时间，立即显示）
+        OR au.status = 'resigned'  -- 审批人已离职
+      )
     ORDER BY pp.updated_at ASC
   `).all(cutoff) as any[];
 
