@@ -418,6 +418,43 @@ export default function CompetencyManager({ navigate, initialTestId, initialTab 
                           采用模型: {ev.model_name}
                         </p>
 
+                        {/* 具体流程展示 */}
+                        <div className="bg-slate-50 dark:bg-slate-800/50 rounded-lg p-3 mb-4">
+                          <div className="flex items-center justify-between relative">
+                            {/* 轨道背景线 */}
+                            <div className="absolute top-1/2 left-0 right-0 h-[2px] bg-slate-200 dark:bg-slate-700 -translate-y-1/2 z-0" />
+                            {/* 进度动态线 */}
+                            <div 
+                              className="absolute top-1/2 left-0 h-[2px] bg-indigo-500 transition-all duration-500 -translate-y-1/2 z-0" 
+                              style={{ width: ev.status === 'pending_self' ? '0%' : ev.status === 'pending_manager' ? '50%' : '100%' }} 
+                            />
+                            
+                            {/* 节点 1: 个人自评 */}
+                            <div className="relative z-10 flex flex-col items-center gap-1.5 w-1/3">
+                              <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center transition-colors ${ev.status === 'pending_self' ? 'border-indigo-500 bg-white dark:bg-slate-900' : 'border-indigo-500 bg-indigo-500'}`}>
+                                {ev.status !== 'pending_self' && <span className="material-symbols-outlined text-[10px] text-white">check</span>}
+                              </div>
+                              <span className={`text-[10px] font-bold ${ev.status === 'pending_self' ? 'text-indigo-600' : 'text-slate-500'}`}>{ev.user_name} 自评</span>
+                            </div>
+
+                            {/* 节点 2: 主管复评 */}
+                            <div className="relative z-10 flex flex-col items-center gap-1.5 w-1/3">
+                              <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center transition-colors ${ev.status === 'pending_self' ? 'border-slate-200 bg-white dark:bg-slate-900 dark:border-slate-700' : ev.status === 'pending_manager' ? 'border-indigo-500 bg-white dark:bg-slate-900' : 'border-indigo-500 bg-indigo-500'}`}>
+                                {ev.status === 'completed' && <span className="material-symbols-outlined text-[10px] text-white">check</span>}
+                              </div>
+                              <span className={`text-[10px] font-bold ${ev.status === 'pending_manager' ? 'text-indigo-600' : 'text-slate-500'}`}>{ev.evaluator_name || '主管'} 打分</span>
+                            </div>
+
+                            {/* 节点 3: 归档完成 */}
+                            <div className="relative z-10 flex flex-col items-center gap-1.5 w-1/3">
+                              <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center transition-colors ${ev.status === 'completed' ? 'border-emerald-500 bg-emerald-500' : 'border-slate-200 bg-white dark:bg-slate-900 dark:border-slate-700'}`}>
+                                {ev.status === 'completed' && <span className="material-symbols-outlined text-[10px] text-white">check</span>}
+                              </div>
+                              <span className={`text-[10px] font-bold ${ev.status === 'completed' ? 'text-emerald-600' : 'text-slate-500'}`}>结果归档</span>
+                            </div>
+                          </div>
+                        </div>
+
                         <div className="border-t border-slate-100 dark:border-slate-800 pt-4 mt-auto">
                           <button 
                             onClick={() => openScoreModal(ev)}
@@ -790,11 +827,48 @@ export default function CompetencyManager({ navigate, initialTestId, initialTab 
               </div>
 
               <div className="flex-1 overflow-y-auto p-6 custom-scrollbar bg-slate-50/30">
-                 <p className="text-xs text-slate-500 mb-6 bg-slate-100 px-3 py-2 rounded-lg border border-slate-200">
+                 <p className="text-xs text-slate-500 mb-4 bg-slate-100 px-3 py-2 rounded-lg border border-slate-200">
                    当前阶段：{getStatusUI(showScoreModal.status)} | 基于 <span className="font-bold text-slate-700">{showScoreModal.model_name}</span> 模型。
                    {showScoreModal.status === 'completed' && ' 评估已闭环，以下为双方数据留底与雷达生成依据。'}
                    {showScoreModal.status === 'pending_manager' && ' 员工已自评完成，请主管客观公正复核打分。'}
                  </p>
+
+                 {/* 弹窗内的具体流程展示 (与卡片保持一致的视觉) */}
+                 <div className="bg-white border border-slate-100 dark:bg-slate-800/50 rounded-lg p-3 mb-6 shadow-sm">
+                   <div className="flex items-center justify-between relative max-w-lg mx-auto">
+                     {/* 轨道背景线 */}
+                     <div className="absolute top-1/2 left-0 right-0 h-[2px] bg-slate-200 dark:bg-slate-700 -translate-y-1/2 z-0" />
+                     {/* 进度动态线 */}
+                     <div 
+                       className="absolute top-1/2 left-0 h-[2px] bg-indigo-500 transition-all duration-500 -translate-y-1/2 z-0" 
+                       style={{ width: showScoreModal.status === 'pending_self' ? '0%' : showScoreModal.status === 'pending_manager' ? '50%' : '100%' }} 
+                     />
+                     
+                     {/* 节点 1: 个人自评 */}
+                     <div className="relative z-10 flex flex-col items-center gap-1.5 w-1/3">
+                       <div className={`w-5 h-5 rounded-full border-[3px] flex items-center justify-center transition-colors ${showScoreModal.status === 'pending_self' ? 'border-indigo-500 bg-white shadow-[0_0_0_2px_rgba(99,102,241,0.2)]' : 'border-indigo-500 bg-indigo-500'}`}>
+                         {showScoreModal.status !== 'pending_self' && <span className="material-symbols-outlined text-[12px] font-black text-white">check</span>}
+                       </div>
+                       <span className={`text-xs font-bold ${showScoreModal.status === 'pending_self' ? 'text-indigo-600' : 'text-slate-500'}`}>{showScoreModal.user_name} 自评</span>
+                     </div>
+
+                     {/* 节点 2: 主管复评 */}
+                     <div className="relative z-10 flex flex-col items-center gap-1.5 w-1/3">
+                       <div className={`w-5 h-5 rounded-full border-[3px] flex items-center justify-center transition-colors ${showScoreModal.status === 'pending_self' ? 'border-slate-200 bg-white' : showScoreModal.status === 'pending_manager' ? 'border-indigo-500 bg-white shadow-[0_0_0_2px_rgba(99,102,241,0.2)]' : 'border-indigo-500 bg-indigo-500'}`}>
+                         {showScoreModal.status === 'completed' && <span className="material-symbols-outlined text-[12px] font-black text-white">check</span>}
+                       </div>
+                       <span className={`text-xs font-bold ${showScoreModal.status === 'pending_manager' ? 'text-indigo-600' : 'text-slate-500'}`}>{showScoreModal.evaluator_name || '主管'} 打分</span>
+                     </div>
+
+                     {/* 节点 3: 归档完成 */}
+                     <div className="relative z-10 flex flex-col items-center gap-1.5 w-1/3">
+                       <div className={`w-5 h-5 rounded-full border-[3px] flex items-center justify-center transition-colors ${showScoreModal.status === 'completed' ? 'border-emerald-500 bg-emerald-500 shadow-[0_0_0_2px_rgba(16,185,129,0.2)]' : 'border-slate-200 bg-white'}`}>
+                         {showScoreModal.status === 'completed' && <span className="material-symbols-outlined text-[12px] font-black text-white">check</span>}
+                       </div>
+                       <span className={`text-xs font-bold ${showScoreModal.status === 'completed' ? 'text-emerald-600' : 'text-slate-500'}`}>结果归档</span>
+                     </div>
+                   </div>
+                 </div>
 
                  {showScoreModal.status === 'completed' && renderSimpleRadar(showScoreModal.scores)}
 
