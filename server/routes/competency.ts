@@ -136,9 +136,9 @@ router.delete('/models/:id', authMiddleware, (req: any, res) => {
 // 4. Get Evaluations
 router.get('/evaluations', authMiddleware, (req: any, res) => {
   try {
-    const userId = req.user?.id;
+    const userId = req.userId;
     // user = user being evaluated OR user = manager evaluating
-    const userRole = req.user?.role;
+    const userRole = req.userRole;
     
     let query = `
       SELECT e.*, m.name as model_name 
@@ -173,7 +173,7 @@ router.get('/evaluations', authMiddleware, (req: any, res) => {
 // 5. Create Evaluation
 router.post('/evaluations', authMiddleware, (req: any, res) => {
   const { user_userIds, model_id } = req.body;
-  const evaluator_id = req.user?.id;
+  const evaluator_id = req.userId;
   
   if (!user_userIds || !Array.isArray(user_userIds) || !model_id) {
     return res.status(400).json({ code: 400, message: 'Missing parameters' });
@@ -244,8 +244,8 @@ router.get('/evaluations/:id', authMiddleware, (req: any, res) => {
 router.post('/evaluations/:id/score', authMiddleware, (req: any, res) => {
   const eId = req.params.id;
   const { scores } = req.body; // array of { dimension_id, score, comment }
-  const userId = req.user?.id;
-  const userRole = req.user?.role;
+  const userId = req.userId;
+  const userRole = req.userRole;
   
   if (!scores || !Array.isArray(scores)) {
     return res.status(400).json({ code: 400, message: 'Invalid payload' });
