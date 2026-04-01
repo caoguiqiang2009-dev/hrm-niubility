@@ -778,6 +778,29 @@ export default function PersonalGoals({ navigate }: { navigate: (view: string) =
                     退回
                   </button>
                 )}
+                {/* 发起验收总结 (仅限 A 或 管理员) */}
+                {sp.status === 'in_progress' && (currentUser?.id === (sp as any).approver_id || currentUser?.role === 'admin' || currentUser?.role === 'gm') && (
+                  <button onClick={async () => {
+                    if (!confirm('确定发起验收总结吗？发起后将流转至上级进行最终评级结案。')) return;
+                    try {
+                      const res = await fetch(`/api/perf/plans/${sp.id}/review`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+                        body: JSON.stringify({ action: 'assess' })
+                      });
+                      const data = await res.json();
+                      if (data.code === 0) {
+                        alert('已发起验收流程，等待评级考评。');
+                        setSelectedPlan(null);
+                        fetchPlans();
+                      } else { alert(data.message || '操作失败'); }
+                    } catch { alert('网络异常'); }
+                  }}
+                    className="flex items-center gap-1.5 px-5 py-2.5 bg-purple-600 text-white text-sm font-bold rounded-lg hover:bg-purple-700 transition-colors shadow-sm">
+                    <span className="material-symbols-outlined text-[16px]">how_to_reg</span>
+                    提交验收总结
+                  </button>
+                )}
                 <button onClick={() => setSelectedPlan(null)}
                   className="px-6 py-2.5 bg-slate-100 text-slate-700 text-sm font-bold rounded-lg hover:bg-slate-200 transition-colors">
                   关闭
