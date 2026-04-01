@@ -111,10 +111,6 @@ export default function MyWorkflows({ navigate, initialTab }: MyWorkflowsProps) 
       const json = await res.json();
       if (json.code === 0) {
         let items = json.data || [];
-        // ── 前端防走: 「待我审核」 Tab 中过滤掉自己发起的条目 ──
-        if (tab === 'pending' && currentUser?.id) {
-          items = items.filter((item: any) => item.creator_id !== currentUser.id && item.created_by !== currentUser.id);
-        }
         setData(items);
       }
     } catch {}
@@ -136,10 +132,6 @@ export default function MyWorkflows({ navigate, initialTab }: MyWorkflowsProps) 
       const newCounts: Record<string, number> = {};
       allTabs.forEach((t, i) => {
         let items: any[] = results[i]?.data || [];
-        // 「待我审核」计数与列表保持一致：排除自己发起的
-        if (t === 'pending' && currentUser?.id) {
-          items = items.filter((item: any) => item.creator_id !== currentUser.id && item.created_by !== currentUser.id);
-        }
         newCounts[t] = items.length;
       });
       setCounts(newCounts as any);

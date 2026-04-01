@@ -631,6 +631,19 @@ export default function CompanyPerformance({ navigate }: { navigate: (view: stri
                           <span className={`text-[10px] px-1 rounded ${DIFFICULTY_COLOR[task.difficulty] || 'bg-slate-100 text-slate-600'}`}>
                             {DIFFICULTY_MAP[task.difficulty] || task.difficulty}
                           </span>
+                          {/* 截止日期倒计时 */}
+                          {task.deadline && (() => {
+                            const daysLeft = Math.ceil((new Date(task.deadline).getTime() - Date.now()) / 86400000);
+                            const isOverdue = daysLeft < 0;
+                            return (
+                              <span className={`text-[9px] font-bold px-1.5 py-px rounded-full flex items-center gap-0.5 shrink-0 ${
+                                isOverdue ? 'bg-red-50 text-red-600' : daysLeft <= 3 ? 'bg-amber-50 text-amber-600' : 'bg-emerald-50 text-emerald-600'
+                              }`}>
+                                <span className="material-symbols-outlined text-[9px]">{isOverdue ? 'event_busy' : 'schedule'}</span>
+                                {isOverdue ? `逾${Math.abs(daysLeft)}天` : daysLeft === 0 ? '今截' : `${daysLeft}天`}
+                              </span>
+                            );
+                          })()}
                           {/* 进度条 (内联迷你) */}
                           <div className="flex-1 flex items-center gap-1 ml-auto">
                             <div className="flex-1 max-w-[60px] bg-surface-container-highest h-1 rounded-full overflow-hidden">
@@ -680,6 +693,21 @@ export default function CompanyPerformance({ navigate }: { navigate: (view: stri
                       <span className={`px-2 py-0.5 text-[10px] rounded border border-transparent ${DIFFICULTY_COLOR[task.difficulty] || 'bg-slate-100 text-slate-600'}`}>
                         难度: {DIFFICULTY_MAP[task.difficulty] || task.difficulty}
                       </span>
+                      {task.deadline && (() => {
+                        const daysLeft = Math.ceil((new Date(task.deadline).getTime() - Date.now()) / 86400000);
+                        const isOverdue = daysLeft < 0;
+                        const isUrgent = daysLeft >= 0 && daysLeft <= 3;
+                        return (
+                          <span className={`px-2 py-0.5 text-[10px] rounded border font-bold flex items-center gap-0.5 ${
+                            isOverdue ? 'bg-red-50 text-red-600 border-red-200' :
+                            isUrgent ? 'bg-amber-50 text-amber-600 border-amber-200' :
+                            'bg-emerald-50 text-emerald-600 border-emerald-200'
+                          }`}>
+                            <span className="material-symbols-outlined text-[10px]">{isOverdue ? 'event_busy' : 'schedule'}</span>
+                            {isOverdue ? `已逾期${Math.abs(daysLeft)}天` : daysLeft === 0 ? '今日截止' : `还剩${daysLeft}天`}
+                          </span>
+                        );
+                      })()}
                     </div>
                     <div className="mt-auto">
                       <div className="flex justify-between items-center text-[10px] text-on-surface-variant mb-1.5">

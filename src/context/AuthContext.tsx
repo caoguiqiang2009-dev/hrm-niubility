@@ -122,7 +122,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         } else if (!token) {
           // No token and no code — need to login
           const isDev = (import.meta as any).env?.DEV || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-          if (isDev) {
+          // 测试环境 (端口 4001) 也跳过企微 OAuth，使用账号选择器
+          const isTestServer = window.location.port === '4001';
+          if (isDev || isTestServer) {
             setIsAuthenticating(false);
             return;
           }

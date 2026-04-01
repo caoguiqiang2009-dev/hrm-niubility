@@ -341,6 +341,8 @@ export interface SmartTaskData {
   approver_id?: string;
   dept_head_id?: string;
   department_id?: number | string;
+  collaborators?: string;
+  department?: string;
   r: string;
   a: string;
   c: string;
@@ -510,14 +512,14 @@ export default function SmartTaskModal({ isOpen, onClose, onSubmit, title, type,
   }, [voiceError]);
 
   const [headerSelections, setHeaderSelections] = useState({
-    r: initialData?.r || '',
-    a: (title === '申请新任务' || type === 'personal') ? (initialData?.a || currentUser?.id || '') : (initialData?.a || ''),
-    c: initialData?.c || '',
+    r: initialData?.r || initialData?.assignee_id || '',
+    a: (title === '申请新任务' || type === 'personal') ? (initialData?.a || initialData?.approver_id || currentUser?.id || '') : (initialData?.a || initialData?.approver_id || ''),
+    c: initialData?.c || initialData?.collaborators || '',
     i: initialData?.i || '',
     dt: initialData?.dt || '',
     bonus: initialData?.bonus || '0',
     rewardType: initialData?.rewardType || 'money',
-    taskType: initialData?.taskType || '常规任务',
+    taskType: initialData?.taskType || initialData?.department || '常规任务',
     maxParticipants: initialData?.maxParticipants || '5',
     quarter: initialData?.quarter || ''
   });

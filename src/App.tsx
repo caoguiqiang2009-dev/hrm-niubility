@@ -49,9 +49,10 @@ export default function App() {
   if (!currentUser) {
     const isWecom = navigator.userAgent.toLowerCase().includes('wxwork');
     const isDev = (import.meta as any).env?.DEV || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+    const isTestServer = window.location.port === '4001';
 
     // 只有在生产环境且非微信浏览器时，才自动跳转兜底
-    if (!isDev && !isWecom) {
+    if (!isDev && !isTestServer && !isWecom) {
       setTimeout(() => {
         if (!localStorage.getItem('token')) {
           window.location.href = '/api/auth/wecom-qr-url';

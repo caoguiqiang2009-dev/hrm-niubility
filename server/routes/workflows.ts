@@ -91,7 +91,7 @@ router.get('/pending', authMiddleware, (req: AuthRequest, res) => {
     return items;
   };
 
-  // 1. 待我审批的绩效计划（【风隖7修复】服务端过滤自己发起的）
+  // 1. 待我审批的绩效计划
   let perfPending = db.prepare(
     `SELECT pp.*, u.name as creator_name, au.name as approver_name, 'perf_plan' as flow_type
      FROM perf_plans pp
@@ -99,13 +99,12 @@ router.get('/pending', authMiddleware, (req: AuthRequest, res) => {
      LEFT JOIN users au ON pp.approver_id = au.id
      WHERE ((pp.approver_id = ? AND pp.status = 'pending_review')
          OR (pp.dept_head_id = ? AND pp.status = 'pending_dept_review'))
-       AND pp.creator_id != ?
      ORDER BY pp.created_at DESC`
-  ).all(userId, userId, userId);
+  ).all(userId, userId);
   perfPending = attachLogs(perfPending, 'perf_plan');
   items.push(...perfPending);
 
-  // 2. 待我审核的提案 (HR可审 pending_hr, Admin可审 pending_admin)【风隖7修复：过滤自己提交的提案】
+  // 2. 待我审核的提案 (HR可审 pending_hr, Admin可审 pending_admin)
   if (isUserHRBP || isUserGM) {
     const hrPending = db.prepare(
       `SELECT pt.*, u.name as creator_name, 'proposal' as flow_type,
@@ -115,9 +114,8 @@ router.get('/pending', authMiddleware, (req: AuthRequest, res) => {
        LEFT JOIN users hr_u ON pt.hr_reviewer_id = hr_u.id
        LEFT JOIN users admin_u ON pt.admin_reviewer_id = admin_u.id
        WHERE pt.proposal_status = 'pending_hr'
-         AND pt.created_by != ?
        ORDER BY pt.created_at DESC`
-    ).all(userId);
+    ).all();
     hrPending.forEach((p: any) => { p.pending_reviewer_name = currentUserName; });
     items.push(...hrPending);
   }
@@ -130,9 +128,8 @@ router.get('/pending', authMiddleware, (req: AuthRequest, res) => {
        LEFT JOIN users hr_u ON pt.hr_reviewer_id = hr_u.id
        LEFT JOIN users admin_u ON pt.admin_reviewer_id = admin_u.id
        WHERE pt.proposal_status = 'pending_admin'
-         AND pt.created_by != ?
        ORDER BY pt.created_at DESC`
-    ).all(userId);
+    ).all();
     adminPending.forEach((p: any) => { p.pending_reviewer_name = currentUserName; });
     items.push(...adminPending);
   }
@@ -167,9 +164,8 @@ router.get('/pending', authMiddleware, (req: AuthRequest, res) => {
            LEFT JOIN pool_tasks pt ON prp.pool_task_id = pt.id
            LEFT JOIN users u ON prp.initiator_id = u.id
            WHERE prp.status = 'pending_hr'
-             AND prp.initiator_id != ?
            ORDER BY prp.updated_at DESC`
-        ).all(userId);
+        ).all();
         rewardHrPending.forEach((r: any) => {
           r.title = `「${r.task_title}」奖励分配方案 (HR审核)`;
           r.pending_reviewer_name = currentUserName;
@@ -183,9 +179,8 @@ router.get('/pending', authMiddleware, (req: AuthRequest, res) => {
            LEFT JOIN pool_tasks pt ON prp.pool_task_id = pt.id
            LEFT JOIN users u ON prp.initiator_id = u.id
            WHERE prp.status = 'pending_admin'
-             AND prp.initiator_id != ?
            ORDER BY prp.updated_at DESC`
-        ).all(userId);
+        ).all();
         rewardAdminPending.forEach((r: any) => {
           r.title = `「${r.task_title}」奖励分配方案 (总经理确认)`;
           r.pending_reviewer_name = currentUserName;
