@@ -402,7 +402,7 @@ export default function CompetencyManager({ navigate, initialTestId, initialTab 
                   <div className="col-span-full py-20 text-center text-slate-400">目前没有任何能力评估记录</div>
                 ) : (
                   evaluations.map(ev => {
-                    const amIUser = ev.user_id.toString() === currentUser?.id?.toString();
+                    const amIUser = String(ev.user_id) === String(currentUser?.id);
                     const actionName = ev.status === 'pending_self' && amIUser ? '立即自评' : 
                                       (ev.status === 'pending_manager' && isManagerOrAdmin) ? '主管打分' : '查看报告';
                     return (
@@ -800,7 +800,7 @@ export default function CompetencyManager({ navigate, initialTestId, initialTab 
 
                  <form id="scoreForm" onSubmit={submitScores} className="space-y-4 mt-6">
                     {showScoreModal.scores?.map((s: any, idx: number) => {
-                      const amIUser = showScoreModal.user_id.toString() === currentUser?.id?.toString();
+                      const amIUser = String(showScoreModal.user_id) === String(currentUser?.id);
                       const amIManager = isManagerOrAdmin && !amIUser; // simplify logic for view
                       
                       const canEdit = (showScoreModal.status === 'pending_self' && amIUser) ||

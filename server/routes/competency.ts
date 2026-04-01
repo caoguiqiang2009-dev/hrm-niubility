@@ -219,9 +219,10 @@ router.get('/evaluations/:id', authMiddleware, (req: any, res) => {
   try {
     const eId = req.params.id;
     const evaluation = db.prepare(`
-      SELECT e.*, m.name as model_name 
+      SELECT e.*, m.name as model_name, u.name as user_name
       FROM competency_evaluations e
       JOIN competency_models m ON e.model_id = m.id
+      LEFT JOIN users u ON e.user_id = u.id
       WHERE e.id = ?
     `).get(eId) as any;
     
@@ -255,8 +256,8 @@ router.post('/evaluations/:id/score', authMiddleware, (req: any, res) => {
     const evaluation = db.prepare('SELECT * FROM competency_evaluations WHERE id = ?').get(eId) as any;
     if (!evaluation) return res.status(404).json({ code: 404, message: 'Not found' });
     
-    const isSelf = evaluation.user_id.toString() === userId?.toString();
-    const isManager = evaluation.evaluator_id.toString() === userId?.toString() || userRole === 'admin' || userRole === 'hr';
+    const isSelf = String(evaluation.user_id) === String(userId);
+    const isManager = String(evaluation.evaluator_id) === String(userId) || userRole === 'admin' || userRole === 'hr';
     
     if (!isSelf && !isManager) {
       return res.status(403).json({ code: 403, message: 'Unauthorized' });
