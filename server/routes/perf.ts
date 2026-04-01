@@ -479,9 +479,12 @@ router.post('/plans/:id/review', authMiddleware, async (req: AuthRequest, res) =
 
       // 仅负责人A可发起验收（但评分操作是上级做的）
       if (plan4assess.status === 'in_progress') {
-        // 发起验收总结 → 仅限A
-        if (String(req.userId).toLowerCase() !== String(plan4assess.approver_id).toLowerCase() && !isGM(req.userId) && !isSuperAdmin(req.userId)) {
-          return res.status(403).json({ code: 403, message: '仅责任人(A)可发起验收总结' });
+        // 发起验收总结 → 限执行人(R)或责任人(A)
+        const isR = typeof plan4assess.assignee_id === 'string' && plan4assess.assignee_id.toLowerCase().includes(String(req.userId).toLowerCase());
+        const isA = typeof plan4assess.approver_id === 'string' && plan4assess.approver_id.toLowerCase() === String(req.userId).toLowerCase();
+
+        if (!isR && !isA && !isGM(req.userId) && !isSuperAdmin(req.userId)) {
+          return res.status(403).json({ code: 403, message: '仅执行人(R)或责任人(A)可发起验收总结' });
         }
         const step1 = await transitionPlan(planId, 'pending_assessment', req.userId!);
         return res.json({ code: step1.success ? 0 : 400, message: step1.success ? '已发起验收总结，等待上级评级' : step1.message });
@@ -647,9 +650,12 @@ router.post('/plans/:id/start-task', authMiddleware, async (req: AuthRequest, re
   if (!plan) return res.status(404).json({ code: 404, message: '计划不存在' });
   if (plan.status !== 'pending_receipt') return res.status(400).json({ code: 400, message: '当前状态非待签收' });
 
-  // 仅负责人A可发车
-  if (req.userId !== plan.approver_id && !isGM(req.userId) && !isSuperAdmin(req.userId)) {
-    return res.status(403).json({ code: 403, message: '仅负责人(A)可发起任务' });
+  // 发车权限: 允许负责人(A)或执行人(R)发车
+  const isR = typeof plan.assignee_id === 'string' && plan.assignee_id.toLowerCase().includes(String(req.userId).toLowerCase());
+  const isA = typeof plan.approver_id === 'string' && plan.approver_id.toLowerCase() === String(req.userId).toLowerCase();
+  
+  if (!isR && !isA && !isGM(req.userId) && !isSuperAdmin(req.userId)) {
+    return res.status(403).json({ code: 403, message: '仅执行人(R)或负责人(A)可发起任务' });
   }
 
   // 检查全员签收

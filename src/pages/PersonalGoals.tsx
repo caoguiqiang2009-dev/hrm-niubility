@@ -778,9 +778,10 @@ export default function PersonalGoals({ navigate }: { navigate: (view: string) =
                     退回
                   </button>
                 )}
-                {/* 发起验收总结 (仅限 A 或 管理员) */}
+                {/* 发起验收总结 (仅限 A/R 或 管理员) */}
                 {sp.status === 'in_progress' && (
                   (typeof (sp as any).approver_id === 'string' && typeof currentUser?.id === 'string' && (sp as any).approver_id.toLowerCase() === currentUser.id.toLowerCase()) || 
+                  (typeof (sp as any).assignee_id === 'string' && typeof currentUser?.id === 'string' && (sp as any).assignee_id.toLowerCase().includes(currentUser.id.toLowerCase())) ||
                   currentUser?.role === 'admin' || 
                   currentUser?.role === 'gm'
                 ) && (
