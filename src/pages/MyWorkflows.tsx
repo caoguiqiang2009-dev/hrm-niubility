@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import Sidebar from '../components/Sidebar';
 import { useAuth } from '../context/AuthContext';
 import SmartTaskModal from '../components/SmartTaskModal';
+import WorkflowTrajectory from '../components/WorkflowTrajectory';
 import { useIsMobile } from '../hooks/useIsMobile';
 import { PoolModule } from './AdminPanel';
 import AuditTimeline from '../components/AuditTimeline';
@@ -155,7 +156,7 @@ export default function MyWorkflows({ navigate, initialTab }: MyWorkflowsProps) 
         realEndpoint = action === 'transfer' ? `/api/perf/plans/${id}/review` : `/api/perf/plans/${id}/${action}`;
         payload = { action, reason: comment, transfer_to };
       } else if (isJoin) {
-        realEndpoint = `/api/pool/join-requests/${id}/review`;
+        realEndpoint = `/api/pool/role-claims/${id}/review`;
         payload = { action, comment };
       } else if (isRewardPlan) {
         // 根据当前状态判断审核端点
@@ -846,75 +847,77 @@ function WorkflowCard({ item, tab, onClick }: { item: any; tab: TabKey; onClick:
 
       {/* Approval Path — hide on mobile */}
       {!isMobile && (
-      <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex flex-col gap-2">
-        <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
-          <span className="material-symbols-outlined text-[12px]">route</span>
-          审批路径
-        </h4>
-        <div className="flex flex-wrap items-center gap-2 text-[11px]">
-          {item.logs && item.logs.length > 0 ? (
-            <>
-              {item.logs.map((log: any, i: number) => {
-                const isReject = log.new_value === 'rejected' || log.action === 'reject';
-                const isApprove = log.new_value === 'approved' || log.action === 'approve';
-                return (
-                  <React.Fragment key={i}>
-                    <div className={`flex flex-col rounded-lg px-2 py-1 border ${
-                      isReject ? 'bg-red-50 border-red-100 text-red-700' : 
-                      isApprove ? 'bg-emerald-50 border-emerald-100 text-emerald-700' : 
-                      'bg-slate-50 border-slate-200 text-slate-600'
-                    }`}>
-                      <span className="font-bold">{log.user_name || log.user_id}</span>
-                      <span className="text-[9px] opacity-70">
-                        {log.action === 'submit' ? '发起申请' : 
-                         isReject ? '已驳回' : 
-                         isApprove ? '已通过' : '审阅中'}
-                      </span>
-                    </div>
-                    {i < item.logs.length - 1 && (
-                      <span className="material-symbols-outlined text-[14px] text-slate-300">arrow_right_alt</span>
-                    )}
-                  </React.Fragment>
-                );
-              })}
-              {/* If last log is not an end state, show pending text */}
-              {!['approved', 'rejected', 'completed', 'assessed'].includes(status) && (
+        ['perf_plan', 'proposal', 'reward_plan'].includes(flowType) ? (
+          <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800">
+            <WorkflowTrajectory 
+              businessType={flowType as any} 
+              businessId={item.id} 
+              codePrefix={codePrefix} 
+              className="!mx-0 !mb-0 !border-none !bg-transparent !px-0" 
+            />
+          </div>
+        ) : (
+          <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex flex-col gap-2">
+            <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
+              <span className="material-symbols-outlined text-[12px]">route</span>
+              审批路径
+            </h4>
+            <div className="flex flex-wrap items-center gap-2 text-[11px]">
+              {item.logs && item.logs.length > 0 ? (
                 <>
+                  {item.logs.map((log: any, i: number) => {
+                    const isReject = log.new_value === 'rejected' || log.action === 'reject';
+                    const isApprove = log.new_value === 'approved' || log.action === 'approve';
+                    return (
+                      <React.Fragment key={i}>
+                        <div className={`flex flex-col rounded-lg px-2 py-1 border ${
+                          isReject ? 'bg-red-50 border-red-100 text-red-700' : 
+                          isApprove ? 'bg-emerald-50 border-emerald-100 text-emerald-700' : 
+                          'bg-slate-50 border-slate-200 text-slate-600'
+                        }`}>
+                          <span className="font-bold">{log.user_name || log.user_id}</span>
+                          <span className="text-[9px] opacity-70">
+                            {log.action === 'submit' ? '发起申请' : 
+                             isReject ? '已驳回' : 
+                             isApprove ? '已通过' : '审阅中'}
+                          </span>
+                        </div>
+                        {i < item.logs.length - 1 && (
+                          <span className="material-symbols-outlined text-[14px] text-slate-300">arrow_right_alt</span>
+                        )}
+                      </React.Fragment>
+                    );
+                  })}
+                  {!['approved', 'rejected', 'completed', 'assessed'].includes(status) && (
+                    <>
+                      <span className="material-symbols-outlined text-[14px] text-slate-300">arrow_right_alt</span>
+                      <div className="flex flex-col rounded-lg px-2 py-1 border border-dashed border-amber-300 bg-amber-50 text-amber-600">
+                        <span className="font-bold">{approver || '待指定'}</span>
+                        <span className="text-[9px] opacity-80">待审核</span>
+                      </div>
+                    </>
+                  )}
+                </>
+              ) : (
+                <>
+                  <div className="flex flex-col rounded-lg px-2 py-1 border bg-slate-50 border-slate-200 text-slate-600">
+                    <span className="font-bold">{creator || '发起人'}</span>
+                    <span className="text-[9px] opacity-70">发起申请</span>
+                  </div>
                   <span className="material-symbols-outlined text-[14px] text-slate-300">arrow_right_alt</span>
-                  <div className="flex flex-col rounded-lg px-2 py-1 border border-dashed border-amber-300 bg-amber-50 text-amber-600">
-                    <span className="font-bold">{approver || '待指定'}</span>
-                    <span className="text-[9px] opacity-80">待审核</span>
+                  <div className={`flex flex-col rounded-lg px-2 py-1 border border-dashed border-amber-300 bg-amber-50 text-amber-600`}>
+                    <span className="font-bold">
+                      {item.pending_reviewer_name || approver || '待指定'}
+                    </span>
+                    <span className="text-[9px] opacity-80">
+                      待处理
+                    </span>
                   </div>
                 </>
               )}
-            </>
-          ) : (
-            <>
-              <div className="flex flex-col rounded-lg px-2 py-1 border bg-slate-50 border-slate-200 text-slate-600">
-                <span className="font-bold">{creator || '发起人'}</span>
-                <span className="text-[9px] opacity-70">发起申请</span>
-              </div>
-              <span className="material-symbols-outlined text-[14px] text-slate-300">arrow_right_alt</span>
-              <div className={`flex flex-col rounded-lg px-2 py-1 border ${
-                status === 'rejected' ? 'bg-red-50 border-red-100 text-red-700' :
-                status === 'approved' ? 'bg-emerald-50 border-emerald-100 text-emerald-700' :
-                'border-dashed border-amber-300 bg-amber-50 text-amber-600'
-              }`}>
-                <span className="font-bold">
-                  {item.pending_reviewer_name || approver || 
-                    (status === 'pending_admin' ? '总经理' : 
-                   status === 'pending_dt' ? '金主' :
-                   status === 'pending_hr' ? 'HR' : 
-                     status === 'pending_review' ? '审批人' : '待指定')}
-                </span>
-                <span className="text-[9px] opacity-80">
-                  {status === 'rejected' ? '已驳回' : status === 'approved' ? '已完成' : '待处理'}
-                </span>
-              </div>
-            </>
-          )}
-        </div>
-      </div>
+            </div>
+          </div>
+        )
       )}
     </div>
   );

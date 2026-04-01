@@ -62,8 +62,28 @@ router.get('/initiated', authMiddleware, (req: AuthRequest, res) => {
      ORDER BY pt.created_at DESC`
   ).all(userId);
 
+  // 3. 我提交的角色认领
+  let myRoleClaims: any[] = [];
+  try {
+    myRoleClaims = db.prepare(
+      `SELECT prc.*, pt.title as task_title, u.name as creator_name, 'pool_join' as flow_type, prc.role_name as role,
+       'initiated' as source_type
+       FROM pool_role_claims prc
+       LEFT JOIN pool_tasks pt ON prc.pool_task_id = pt.id
+       LEFT JOIN users u ON prc.user_id = u.id
+       WHERE prc.user_id = ? AND prc.status IN ('pending', 'rejected')
+       ORDER BY prc.created_at DESC`
+    ).all(userId);
+    myRoleClaims.forEach((c: any) => {
+      c.title = `申请认领「${c.task_title || '任务#' + c.pool_task_id}」${c.role}角`;
+      c.proposal_status = c.status;
+    });
+  } catch (e) {
+    console.warn('[workflows/initiated] pool_role_claims querying skipped:', (e as any)?.message);
+  }
+
   // 合并并排序
-  const all = [...perfPlans, ...proposals].sort((a: any, b: any) =>
+  const all = [...perfPlans, ...proposals, ...myRoleClaims].sort((a: any, b: any) =>
     new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
   );
   return res.json({ code: 0, data: all });
@@ -138,21 +158,21 @@ router.get('/pending', authMiddleware, (req: AuthRequest, res) => {
   if (isUserHRBP || isUserGM) {
     try {
       const joinPending = db.prepare(
-        `SELECT jr.*, u.name as creator_name, pt.title as task_title, 'pool_join' as flow_type
-         FROM pool_join_requests jr
+        `SELECT jr.*, u.name as creator_name, pt.title as task_title, 'pool_join' as flow_type, jr.role_name as role
+         FROM pool_role_claims jr
          LEFT JOIN users u ON jr.user_id = u.id
          LEFT JOIN pool_tasks pt ON jr.pool_task_id = pt.id
          WHERE jr.status = 'pending'
          ORDER BY jr.created_at DESC`
       ).all();
       joinPending.forEach((j: any) => {
-        j.title = `${j.creator_name || j.user_id} 申请加入「${j.task_title || '任务#' + j.pool_task_id}」`;
+        j.title = `${j.creator_name || j.user_id} 申请认领「${j.task_title || '任务#' + j.pool_task_id}」${j.role}角`;
         j.proposal_status = 'pending';
         j.pending_reviewer_name = currentUserName;
       });
       items.push(...joinPending);
     } catch (e) {
-      console.warn('[workflows/pending] pool_join_requests查询跳过:', (e as any)?.message);
+      console.warn('[workflows/pending] pool_role_claims查询跳过:', (e as any)?.message);
     }
 
     // 4. 奖励分配方案审核（HR审 pending_hr / Admin审 pending_admin）
@@ -240,19 +260,19 @@ router.get('/reviewed', authMiddleware, (req: AuthRequest, res) => {
   let joinReviewed: any[] = [];
   try {
     joinReviewed = db.prepare(
-      `SELECT jr.*, u.name as creator_name, pt.title as task_title, 'pool_join' as flow_type
-       FROM pool_join_requests jr
+      `SELECT jr.*, u.name as creator_name, pt.title as task_title, 'pool_join' as flow_type, jr.role_name as role
+       FROM pool_role_claims jr
        LEFT JOIN users u ON jr.user_id = u.id
        LEFT JOIN pool_tasks pt ON jr.pool_task_id = pt.id
        WHERE jr.reviewer_id = ? AND jr.status IN ('approved', 'rejected')
        ORDER BY jr.reviewed_at DESC`
     ).all(userId);
     joinReviewed.forEach((j: any) => {
-      j.title = `${j.creator_name || j.user_id} 申请加入「${j.task_title || '任务#' + j.pool_task_id}」`;
+      j.title = `${j.creator_name || j.user_id} 申请认领「${j.task_title || '任务#' + j.pool_task_id}」${j.role}角`;
       j.proposal_status = j.status;
     });
   } catch (e) {
-    console.warn('[workflows/reviewed] pool_join_requests查询跳过:', (e as any)?.message);
+    console.warn('[workflows/reviewed] pool_role_claims查询跳过:', (e as any)?.message);
   }
 
   const all = [...perfReviewed, ...proposalReviewed, ...joinReviewed].sort((a: any, b: any) =>
