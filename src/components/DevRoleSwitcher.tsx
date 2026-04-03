@@ -2,6 +2,33 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useIsMobile } from '../hooks/useIsMobile';
 
+const APP_VERSION = 'v2.5.0';
+const CHANGELOG = [
+  {
+    version: 'v2.5.0',
+    date: '2026-04-03',
+    tag: '新功能',
+    tagColor: 'bg-violet-500',
+    items: [
+      '🚀 测试环境免密登录：4001及局域网3000端口直接进入，无需企微认证',
+      '💬 新增任务复盘讨论广场：支持聊天流、附件/图片上传',
+      '🎨 UI升级：紫色渐变主题，移除边框改用阴影',
+      '🔧 修复部门404、SmartTaskModal空白页崩溃等问题',
+    ]
+  },
+  {
+    version: 'v2.4.3',
+    date: '2026-03-28',
+    tag: '优化',
+    tagColor: 'bg-blue-500',
+    items: [
+      '能力评估维度描述与权重百分比展示',
+      '评估卡片内联流程步骤可视化',
+      '修复SQLite语法错误与null引用崩溃',
+    ]
+  },
+];
+
 interface OrgUser {
   id: string;
   name: string;
@@ -43,7 +70,7 @@ export default function DevRoleSwitcher() {
   const isMobile = useIsMobile();
 
   // 在开发模式或测试服务器 (端口 4001) 显示
-  const isDev = (import.meta as any).env?.DEV || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+  const isDev = (import.meta as any).env?.DEV || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.port === '3000';
   const isTestServer = window.location.port === '4001';
   const shouldShow = isDev || isTestServer;
 
@@ -127,11 +154,10 @@ export default function DevRoleSwitcher() {
         title={isTestServer ? '测试环境 · 账号切换器' : '开发测试 · 账号切换器'}
       >
         <span className="material-symbols-outlined text-[28px] group-hover:rotate-12 transition-transform">swap_horizontal_circle</span>
-        {isTestServer && (
-          <span className="absolute -top-1 -right-1 w-5 h-5 bg-yellow-400 rounded-full text-[8px] font-black text-yellow-900 flex items-center justify-center">
-            TEST
-          </span>
-        )}
+        {/* 版本号角标 */}
+        <span className="absolute -bottom-1 -right-1 bg-slate-800 text-white text-[7px] font-black px-1 py-0.5 rounded-full border border-slate-600 leading-none">
+          {APP_VERSION}
+        </span>
       </button>
 
       {/* 侧边弹出菜单 */}
@@ -239,6 +265,28 @@ export default function DevRoleSwitcher() {
                 );
               })
             )}
+          </div>
+
+          {/* 版本更新日志 */}
+          <div className="px-3 py-2 border-t border-slate-100 dark:border-slate-800 max-h-48 overflow-y-auto">
+            <div className="flex items-center gap-1.5 mb-2">
+              <span className="material-symbols-outlined text-[13px] text-slate-400">new_releases</span>
+              <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">更新日志</span>
+            </div>
+            {CHANGELOG.map(log => (
+              <div key={log.version} className="mb-3">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className={`text-[9px] font-black text-white px-1.5 py-0.5 rounded-full ${log.tagColor}`}>{log.version}</span>
+                  <span className={`text-[9px] font-bold text-white px-1.5 py-0.5 rounded-full bg-slate-400`}>{log.tag}</span>
+                  <span className="text-[9px] text-slate-400">{log.date}</span>
+                </div>
+                <ul className="space-y-0.5">
+                  {log.items.map((item, i) => (
+                    <li key={i} className="text-[10px] text-slate-600 dark:text-slate-400 leading-relaxed pl-1">{item}</li>
+                  ))}
+                </ul>
+              </div>
+            ))}
           </div>
 
           {/* 底部工具 */}
