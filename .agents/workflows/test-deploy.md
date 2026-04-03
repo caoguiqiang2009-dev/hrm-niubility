@@ -34,24 +34,12 @@ node -e "console.log(require('./package.json').version)"
 
 用 `replace_file_content` 工具修改 `package.json` 中的 `"version"` 字段。
 
-### 第 3 步：更新 DevRoleSwitcher 中的版本号和更新日志
+### 第 3 步：更新 DevRoleSwitcher 中的版本号
 
-打开 `src/components/DevRoleSwitcher.tsx`，更新文件顶部的以下两处内容：
-
-1. `APP_VERSION` 常量改为新版本号
-2. 在 `CHANGELOG` 数组的**最前面**插入一条新记录，格式如下：
+打开 `src/components/DevRoleSwitcher.tsx`，将顶部的 `APP_VERSION` 常量改为新版本号。
 
 ```ts
-{
-  version: 'vX.Y.Z',
-  date: 'YYYY-MM-DD',
-  tag: '新功能' | '优化' | 'Bug修复',
-  tagColor: 'bg-violet-500' | 'bg-blue-500' | 'bg-green-500',
-  items: [
-    '📝 变更说明1',
-    '🔧 变更说明2',
-  ]
-},
+const APP_VERSION = 'vX.Y.Z';
 ```
 
 ### 第 4 步：提交并推送到 GitHub（打版本 tag）

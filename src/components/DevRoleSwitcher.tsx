@@ -3,42 +3,6 @@ import { useAuth } from '../context/AuthContext';
 import { useIsMobile } from '../hooks/useIsMobile';
 
 const APP_VERSION = 'v2.5.1';
-const CHANGELOG = [
-  {
-    version: 'v2.5.1',
-    date: '2026-04-03',
-    tag: '修复',
-    tagColor: 'bg-green-500',
-    items: [
-      '🩹 修复 PersonalGoals 看板报错及状态映射不一致的问题',
-      '🤖 后端 API perf.ts 预查询所有 role_claims 解决 N+1 性能问题',
-      '🚀 SmartTaskModal 弹窗数据清理'
-    ]
-  },
-  {
-    version: 'v2.5.0',
-    date: '2026-04-03',
-    tag: '新功能',
-    tagColor: 'bg-violet-500',
-    items: [
-      '🚀 测试环境免密登录：4001及局域网3000端口直接进入，无需企微认证',
-      '💬 新增任务复盘讨论广场：支持聊天流、附件/图片上传',
-      '🎨 UI升级：紫色渐变主题，移除边框改用阴影',
-      '🔧 修复部门404、SmartTaskModal空白页崩溃等问题',
-    ]
-  },
-  {
-    version: 'v2.4.3',
-    date: '2026-03-28',
-    tag: '优化',
-    tagColor: 'bg-blue-500',
-    items: [
-      '能力评估维度描述与权重百分比展示',
-      '评估卡片内联流程步骤可视化',
-      '修复SQLite语法错误与null引用崩溃',
-    ]
-  },
-];
 
 interface OrgUser {
   id: string;
@@ -278,27 +242,6 @@ export default function DevRoleSwitcher() {
             )}
           </div>
 
-          {/* 版本更新日志 */}
-          <div className="px-3 py-2 border-t border-slate-100 dark:border-slate-800 max-h-48 overflow-y-auto">
-            <div className="flex items-center gap-1.5 mb-2">
-              <span className="material-symbols-outlined text-[13px] text-slate-400">new_releases</span>
-              <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">更新日志</span>
-            </div>
-            {CHANGELOG.map(log => (
-              <div key={log.version} className="mb-3">
-                <div className="flex items-center gap-2 mb-1">
-                  <span className={`text-[9px] font-black text-white px-1.5 py-0.5 rounded-full ${log.tagColor}`}>{log.version}</span>
-                  <span className={`text-[9px] font-bold text-white px-1.5 py-0.5 rounded-full bg-slate-400`}>{log.tag}</span>
-                  <span className="text-[9px] text-slate-400">{log.date}</span>
-                </div>
-                <ul className="space-y-0.5">
-                  {log.items.map((item, i) => (
-                    <li key={i} className="text-[10px] text-slate-600 dark:text-slate-400 leading-relaxed pl-1">{item}</li>
-                  ))}
-                </ul>
-              </div>
-            ))}
-          </div>
 
           {/* 底部工具 */}
           <div className="p-2 border-t border-slate-100 dark:border-slate-800 flex gap-2">
