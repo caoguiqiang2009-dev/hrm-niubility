@@ -902,7 +902,7 @@ export default function SmartTaskModal({ isOpen, onClose, onSubmit, title, type,
                            </div>
 
                            {/* PDCA 时间规划节点 */}
-                           {(!readonly || formData.planTime || formData.doTime || formData.checkTime || formData.actTime) && (
+                           {(isHeaderEditable || formData.planTime || formData.doTime || formData.checkTime || formData.actTime) && (
                            <div className="bg-white border-0 rounded-xl overflow-hidden shadow-sm p-4">
                               <label className="text-[11px] font-black text-rose-600 uppercase tracking-widest block mb-4 flex items-center gap-2">
                                 <span className="material-symbols-outlined text-[18px]">calendar_month</span>
@@ -911,19 +911,19 @@ export default function SmartTaskModal({ isOpen, onClose, onSubmit, title, type,
                               <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                                 <div>
                                   <label className="block text-xs font-bold text-slate-500 mb-1">Plan <span className="font-normal">(计划达成)</span></label>
-                                  {readonly ? <div className="text-sm font-bold text-slate-800 tracking-wide">{formData.planTime ? formData.planTime.replace('T', ' ').substring(0, 16) : '-'}</div> : <input type="datetime-local" className="w-full text-sm border-0 bg-slate-50 rounded-lg p-2 focus:ring-2 focus:ring-rose-200 outline-none font-medium text-slate-700 font-mono" value={formData.planTime ? formData.planTime.replace(' ', 'T').substring(0, 16) : ''} onChange={e => setFormData({...formData, planTime: e.target.value.replace('T', ' ')})} />}
+                                  {!isHeaderEditable ? <div className="text-sm font-bold text-slate-800 tracking-wide">{formData.planTime ? formData.planTime.replace('T', ' ').substring(0, 16) : '-'}</div> : <input type="datetime-local" className="w-full text-sm border-0 bg-slate-50 rounded-lg p-2 focus:ring-2 focus:ring-rose-200 outline-none font-medium text-slate-700 font-mono" value={formData.planTime ? formData.planTime.replace(' ', 'T').substring(0, 16) : ''} onChange={e => setFormData({...formData, planTime: e.target.value.replace('T', ' ')})} />}
                                 </div>
                                 <div>
                                   <label className="block text-xs font-bold text-slate-500 mb-1">Do <span className="font-normal">(执行节点)</span></label>
-                                  {readonly ? <div className="text-sm font-bold text-slate-800 tracking-wide">{formData.doTime ? formData.doTime.replace('T', ' ').substring(0, 16) : '-'}</div> : <input type="datetime-local" className="w-full text-sm border-0 bg-slate-50 rounded-lg p-2 focus:ring-2 focus:ring-rose-200 outline-none font-medium text-slate-700 font-mono" value={formData.doTime ? formData.doTime.replace(' ', 'T').substring(0, 16) : ''} onChange={e => setFormData({...formData, doTime: e.target.value.replace('T', ' ')})} />}
+                                  {!isHeaderEditable ? <div className="text-sm font-bold text-slate-800 tracking-wide">{formData.doTime ? formData.doTime.replace('T', ' ').substring(0, 16) : '-'}</div> : <input type="datetime-local" className="w-full text-sm border-0 bg-slate-50 rounded-lg p-2 focus:ring-2 focus:ring-rose-200 outline-none font-medium text-slate-700 font-mono" value={formData.doTime ? formData.doTime.replace(' ', 'T').substring(0, 16) : ''} onChange={e => setFormData({...formData, doTime: e.target.value.replace('T', ' ')})} />}
                                 </div>
                                 <div>
                                   <label className="block text-xs font-bold text-slate-500 mb-1">Check <span className="font-normal">(检查反馈)</span></label>
-                                  {readonly ? <div className="text-sm font-bold text-slate-800 tracking-wide">{formData.checkTime ? formData.checkTime.replace('T', ' ').substring(0, 16) : '-'}</div> : <input type="datetime-local" className="w-full text-sm border-0 bg-slate-50 rounded-lg p-2 focus:ring-2 focus:ring-rose-200 outline-none font-medium text-slate-700 font-mono" value={formData.checkTime ? formData.checkTime.replace(' ', 'T').substring(0, 16) : ''} onChange={e => setFormData({...formData, checkTime: e.target.value.replace('T', ' ')})} />}
+                                  {!isHeaderEditable ? <div className="text-sm font-bold text-slate-800 tracking-wide">{formData.checkTime ? formData.checkTime.replace('T', ' ').substring(0, 16) : '-'}</div> : <input type="datetime-local" className="w-full text-sm border-0 bg-slate-50 rounded-lg p-2 focus:ring-2 focus:ring-rose-200 outline-none font-medium text-slate-700 font-mono" value={formData.checkTime ? formData.checkTime.replace(' ', 'T').substring(0, 16) : ''} onChange={e => setFormData({...formData, checkTime: e.target.value.replace('T', ' ')})} />}
                                 </div>
                                 <div>
                                   <label className="block text-xs font-bold text-slate-500 mb-1">Act <span className="font-normal">(调整复盘)</span></label>
-                                  {readonly ? <div className="text-sm font-bold text-slate-800 tracking-wide">{formData.actTime ? formData.actTime.replace('T', ' ').substring(0, 16) : '-'}</div> : <input type="datetime-local" className="w-full text-sm border-0 bg-slate-50 rounded-lg p-2 focus:ring-2 focus:ring-rose-200 outline-none font-medium text-slate-700 font-mono" value={formData.actTime ? formData.actTime.replace(' ', 'T').substring(0, 16) : ''} onChange={e => setFormData({...formData, actTime: e.target.value.replace('T', ' ')})} />}
+                                  {!isHeaderEditable ? <div className="text-sm font-bold text-slate-800 tracking-wide">{formData.actTime ? formData.actTime.replace('T', ' ').substring(0, 16) : '-'}</div> : <input type="datetime-local" className="w-full text-sm border-0 bg-slate-50 rounded-lg p-2 focus:ring-2 focus:ring-rose-200 outline-none font-medium text-slate-700 font-mono" value={formData.actTime ? formData.actTime.replace(' ', 'T').substring(0, 16) : ''} onChange={e => setFormData({...formData, actTime: e.target.value.replace('T', ' ')})} />}
                                 </div>
                               </div>
                            </div>
