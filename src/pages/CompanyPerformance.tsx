@@ -754,8 +754,8 @@ export default function CompanyPerformance({ navigate }: { navigate: (view: stri
                           {(task.status === 'approved' || task.status === 'published') ? (
                             canManagePool ? (
                               <button onClick={(e) => { e.stopPropagation(); handlePublishTaskPool(task.id); }} 
-                                className="text-[10px] text-slate-500 border border-slate-200 px-2.5 py-0.5 rounded-md font-medium shrink-0 hover:text-blue-600 hover:border-blue-300 transition-colors ml-auto">
-                                等待发布
+                                className="text-[10px] text-white bg-sky-500 hover:bg-sky-600 px-2.5 py-0.5 rounded-md font-bold shrink-0 shadow-sm transition-colors focus:ring-2 focus:ring-sky-500/50 ml-auto">
+                                发布认领
                               </button>
                             ) : (
                               <span className="text-[10px] text-slate-400 bg-slate-50 border border-slate-200 px-2.5 py-0.5 rounded-md font-bold shrink-0 ml-auto flex items-center gap-0.5">
@@ -859,8 +859,8 @@ export default function CompanyPerformance({ navigate }: { navigate: (view: stri
                       {(task.status === 'approved' || task.status === 'published') ? (
                          canManagePool ? (
                            <button onClick={(e) => { e.stopPropagation(); handlePublishTaskPool(task.id); }} 
-                             className="w-full text-xs text-slate-500 font-medium py-2.5 rounded-xl border border-slate-200 hover:border-blue-300 hover:text-blue-600 transition-all flex items-center justify-center gap-1.5">
-                             <span className="material-symbols-outlined text-[16px]">schedule</span> 等待发布
+                             className="w-full text-xs text-white bg-sky-500 hover:bg-sky-600 font-bold py-2.5 rounded-xl shadow-sm transition-all flex items-center justify-center gap-1.5">
+                             <span className="material-symbols-outlined text-[16px]">campaign</span> 发布认领
                            </button>
                          ) : (
                            <button disabled className="w-full text-xs bg-slate-100 text-slate-400 font-bold py-2.5 rounded-xl cursor-not-allowed flex items-center justify-center gap-1.5">
@@ -1078,9 +1078,9 @@ export default function CompanyPerformance({ navigate }: { navigate: (view: stri
               </>
             ) : (selectedTask?.status === 'approved' || selectedTask?.status === 'published') && canManagePool ? (
               <button onClick={() => handlePublishTaskPool(selectedTask.id)}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-white/90 border border-white/30 bg-white/10 hover:bg-white/20 hover:text-white transition-colors shrink-0">
-                <span className="material-symbols-outlined text-[14px]">schedule</span>
-                等待发布
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-white bg-sky-500 hover:bg-sky-600 shadow-sm transition-colors shrink-0">
+                <span className="material-symbols-outlined text-[14px]">campaign</span>
+                发布认领
               </button>
             ) : selectedTask?.status === 'proposing' && canManagePool ? (
               <button onClick={() => { setSelectedTask(null); navigate('workflows'); }}

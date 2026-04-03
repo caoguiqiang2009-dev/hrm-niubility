@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useIsMobile } from '../hooks/useIsMobile';
 
-const APP_VERSION = 'v2.5.2';
+const APP_VERSION = 'v2.5.3';
 
 interface OrgUser {
   id: string;
