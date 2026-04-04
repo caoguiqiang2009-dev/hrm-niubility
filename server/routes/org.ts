@@ -387,27 +387,49 @@ router.get('/departments/:id/stats', authMiddleware, (req: AuthRequest, res) => 
   const db = getDb();
   const deptId = parseInt(req.params.id);
 
-  // Get member IDs in this department
-  const members = db.prepare('SELECT id, name FROM users WHERE department_id = ? AND status = ?').all(deptId, 'active') as any[];
-  const memberIds = members.map((m: any) => m.id);
+  // ── 递归收集该部门及所有子部门的 ID
+  function getAllDeptIds(id: number): number[] {
+    const children = db.prepare('SELECT id FROM departments WHERE parent_id = ?').all(id) as any[];
+    return [id, ...children.flatMap((c: any) => getAllDeptIds(c.id))];
+  }
+  const allDeptIds = getAllDeptIds(deptId);
+
+  // 直属成员（仅当前部门）
+  const directMembers = db.prepare(
+    `SELECT id, name FROM users WHERE department_id = ? AND status = 'active'`
+  ).all(deptId) as any[];
+
+  // 含子部门的全部成员
+  const deptPlaceholders = allDeptIds.map(() => '?').join(',');
+  const allMembers = db.prepare(
+    `SELECT id, name FROM users WHERE department_id IN (${deptPlaceholders}) AND status = 'active'`
+  ).all(...allDeptIds) as any[];
+
+  const memberIds = allMembers.map((m: any) => m.id);
+  const directMemberCount = directMembers.length;
+  const totalMemberCount = memberIds.length;
 
   if (memberIds.length === 0) {
     return res.json({
       code: 0,
-      data: { memberCount: 0, totalTasks: 0, completed: 0, inProgress: 0, pending: 0, completionRate: 0, avgProgress: 0, recentTasks: [] }
+      data: {
+        memberCount: 0, directMemberCount: 0,
+        totalTasks: 0, completed: 0, inProgress: 0, pending: 0,
+        completionRate: 0, avgProgress: 0, recentTasks: []
+      }
     });
   }
 
   const placeholders = memberIds.map(() => '?').join(',');
 
-  // Task statistics
-  const totalTasks = (db.prepare(`SELECT COUNT(*) as c FROM perf_plans WHERE assignee_id IN (${placeholders})`).get(...memberIds) as any)?.c || 0;
-  const completed = (db.prepare(`SELECT COUNT(*) as c FROM perf_plans WHERE assignee_id IN (${placeholders}) AND status IN ('completed', 'assessed')`).get(...memberIds) as any)?.c || 0;
-  const inProgress = (db.prepare(`SELECT COUNT(*) as c FROM perf_plans WHERE assignee_id IN (${placeholders}) AND status = 'in_progress'`).get(...memberIds) as any)?.c || 0;
-  const pending = (db.prepare(`SELECT COUNT(*) as c FROM perf_plans WHERE assignee_id IN (${placeholders}) AND status IN ('pending_review', 'draft')`).get(...memberIds) as any)?.c || 0;
+  // Task statistics（基于含子部门的全员范围）
+  const totalTasks = (db.prepare(`SELECT COUNT(*) as c FROM perf_plans WHERE assignee_id IN (${placeholders}) AND deleted_at IS NULL`).get(...memberIds) as any)?.c || 0;
+  const completed = (db.prepare(`SELECT COUNT(*) as c FROM perf_plans WHERE assignee_id IN (${placeholders}) AND status IN ('completed', 'assessed') AND deleted_at IS NULL`).get(...memberIds) as any)?.c || 0;
+  const inProgress = (db.prepare(`SELECT COUNT(*) as c FROM perf_plans WHERE assignee_id IN (${placeholders}) AND status = 'in_progress' AND deleted_at IS NULL`).get(...memberIds) as any)?.c || 0;
+  const pending = (db.prepare(`SELECT COUNT(*) as c FROM perf_plans WHERE assignee_id IN (${placeholders}) AND status IN ('pending_review', 'draft', 'pending_receipt') AND deleted_at IS NULL`).get(...memberIds) as any)?.c || 0;
 
   // Average progress
-  const avgRow = db.prepare(`SELECT AVG(progress) as avg FROM perf_plans WHERE assignee_id IN (${placeholders}) AND status NOT IN ('completed', 'assessed')`).get(...memberIds) as any;
+  const avgRow = db.prepare(`SELECT AVG(progress) as avg FROM perf_plans WHERE assignee_id IN (${placeholders}) AND status NOT IN ('completed', 'assessed') AND deleted_at IS NULL`).get(...memberIds) as any;
   const avgProgress = Math.round(avgRow?.avg || 0);
 
   // Recent tasks (top 5)
@@ -415,14 +437,15 @@ router.get('/departments/:id/stats', authMiddleware, (req: AuthRequest, res) => 
     SELECT pp.id, pp.title, pp.status, pp.progress, pp.deadline, u.name as assignee_name
     FROM perf_plans pp
     LEFT JOIN users u ON pp.assignee_id = u.id
-    WHERE pp.assignee_id IN (${placeholders})
+    WHERE pp.assignee_id IN (${placeholders}) AND pp.deleted_at IS NULL
     ORDER BY pp.created_at DESC LIMIT 5
   `).all(...memberIds);
 
   return res.json({
     code: 0,
     data: {
-      memberCount: memberIds.length,
+      memberCount: totalMemberCount,
+      directMemberCount,
       totalTasks,
       completed,
       inProgress,
@@ -433,6 +456,7 @@ router.get('/departments/:id/stats', authMiddleware, (req: AuthRequest, res) => 
     }
   });
 });
+
 
 // ── 获取我的直属上级（用于申请任务时动态填充审批人）
 // 查找逻辑优先级：

@@ -12,6 +12,7 @@ interface DeptNode {
 
 interface DeptStats {
   memberCount: number;
+  directMemberCount: number;
   totalTasks: number;
   completed: number;
   inProgress: number;
@@ -214,6 +215,11 @@ export default function HRMap({ navigate }: { navigate: (view: string) => void }
                 <div className="bg-gradient-to-br from-blue-50 to-cyan-50 border border-blue-100 rounded-2xl p-4">
                   <p className="text-[10px] text-blue-500 font-bold uppercase">部门成员</p>
                   <p className="text-3xl font-black text-blue-700 mt-1">{deptStats.memberCount}</p>
+                  {deptStats.directMemberCount !== deptStats.memberCount && (
+                    <p className="text-[9px] text-blue-400 mt-1">
+                      直属 {deptStats.directMemberCount} 人 · 含子部门
+                    </p>
+                  )}
                 </div>
                 <div className="bg-gradient-to-br from-emerald-50 to-teal-50 border border-emerald-100 rounded-2xl p-4">
                   <p className="text-[10px] text-emerald-500 font-bold uppercase">完成率</p>
