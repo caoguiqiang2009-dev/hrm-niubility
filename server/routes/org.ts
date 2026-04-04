@@ -121,9 +121,17 @@ router.get('/tree', authMiddleware, (_req, res) => {
   const countMap: Record<number, number> = {};
   for (const uc of userCounts) countMap[uc.department_id] = uc.count;
 
+  // 递归计算子树内的总成员数（用于过滤幽灵部门）
+  function subtotalMembers(id: number): number {
+    const children = departments.filter((d) => d.parent_id === id);
+    return (countMap[id] || 0) + children.reduce((sum, c) => sum + subtotalMembers(c.id), 0);
+  }
+
   function buildTree(parentId: number): any[] {
     return departments
       .filter((d) => d.parent_id === parentId)
+      // 过滤掉整个子树都没有成员的幽灵部门
+      .filter((d) => subtotalMembers(d.id) > 0)
       .map((d) => ({
         ...d,
         member_count: countMap[d.id] || 0,
@@ -133,6 +141,7 @@ router.get('/tree', authMiddleware, (_req, res) => {
 
   return res.json({ code: 0, data: buildTree(0) });
 });
+
 
 // 部门详情 + 成员
 router.get('/departments/:id', authMiddleware, (req, res) => {
@@ -423,13 +432,13 @@ router.get('/departments/:id/stats', authMiddleware, (req: AuthRequest, res) => 
   const placeholders = memberIds.map(() => '?').join(',');
 
   // Task statistics（基于含子部门的全员范围）
-  const totalTasks = (db.prepare(`SELECT COUNT(*) as c FROM perf_plans WHERE assignee_id IN (${placeholders}) AND deleted_at IS NULL`).get(...memberIds) as any)?.c || 0;
-  const completed = (db.prepare(`SELECT COUNT(*) as c FROM perf_plans WHERE assignee_id IN (${placeholders}) AND status IN ('completed', 'assessed') AND deleted_at IS NULL`).get(...memberIds) as any)?.c || 0;
-  const inProgress = (db.prepare(`SELECT COUNT(*) as c FROM perf_plans WHERE assignee_id IN (${placeholders}) AND status = 'in_progress' AND deleted_at IS NULL`).get(...memberIds) as any)?.c || 0;
-  const pending = (db.prepare(`SELECT COUNT(*) as c FROM perf_plans WHERE assignee_id IN (${placeholders}) AND status IN ('pending_review', 'draft', 'pending_receipt') AND deleted_at IS NULL`).get(...memberIds) as any)?.c || 0;
+  const totalTasks = (db.prepare(`SELECT COUNT(*) as c FROM perf_plans WHERE assignee_id IN (${placeholders})`).get(...memberIds) as any)?.c || 0;
+  const completed = (db.prepare(`SELECT COUNT(*) as c FROM perf_plans WHERE assignee_id IN (${placeholders}) AND status IN ('completed', 'assessed')`).get(...memberIds) as any)?.c || 0;
+  const inProgress = (db.prepare(`SELECT COUNT(*) as c FROM perf_plans WHERE assignee_id IN (${placeholders}) AND status = 'in_progress'`).get(...memberIds) as any)?.c || 0;
+  const pending = (db.prepare(`SELECT COUNT(*) as c FROM perf_plans WHERE assignee_id IN (${placeholders}) AND status IN ('pending_review', 'draft', 'pending_receipt')`).get(...memberIds) as any)?.c || 0;
 
   // Average progress
-  const avgRow = db.prepare(`SELECT AVG(progress) as avg FROM perf_plans WHERE assignee_id IN (${placeholders}) AND status NOT IN ('completed', 'assessed') AND deleted_at IS NULL`).get(...memberIds) as any;
+  const avgRow = db.prepare(`SELECT AVG(progress) as avg FROM perf_plans WHERE assignee_id IN (${placeholders}) AND status NOT IN ('completed', 'assessed')`).get(...memberIds) as any;
   const avgProgress = Math.round(avgRow?.avg || 0);
 
   // Recent tasks (top 5)
@@ -437,9 +446,10 @@ router.get('/departments/:id/stats', authMiddleware, (req: AuthRequest, res) => 
     SELECT pp.id, pp.title, pp.status, pp.progress, pp.deadline, u.name as assignee_name
     FROM perf_plans pp
     LEFT JOIN users u ON pp.assignee_id = u.id
-    WHERE pp.assignee_id IN (${placeholders}) AND pp.deleted_at IS NULL
+    WHERE pp.assignee_id IN (${placeholders})
     ORDER BY pp.created_at DESC LIMIT 5
   `).all(...memberIds);
+
 
   return res.json({
     code: 0,
